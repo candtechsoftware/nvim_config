@@ -19,3 +19,7 @@ to install them while in vim
 :PackerSync
 ```
 This should install all plugins 
+
+
+To install an lsp for you language just type `:Mason` and should open a window for you to 
+pick the correct lsp of if you know the name of the lsp `:MasonInstall <name-of-lsp` ex (`:MasonInstall gopls`)
