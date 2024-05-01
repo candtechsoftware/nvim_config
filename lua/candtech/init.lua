@@ -2,10 +2,6 @@ require("candtech.set")
 require("candtech.remap")
 require("candtech.packer")
 
--- DO NOT INCLUDE THIS
-vim.opt.rtp:append("~/personal/streamer-tools")
--- DO NOT INCLUDE THIS
-
 local augroup = vim.api.nvim_create_augroup
 local ThePrimeagenGroup = augroup('ThePrimeagen', {})
 
