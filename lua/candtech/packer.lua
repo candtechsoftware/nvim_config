@@ -1,30 +1,48 @@
--- This file can be loaded by calling `lua require('plugins')` from your init.vim
-
--- Only required if you have packer configured as `opt`
 vim.cmd.packadd('packer.nvim')
 
 return require('packer').startup(function(use)
     -- Packer can manage itself
+    use {
+        "chrisgrieser/nvim-lsp-endhints",
+    }
+    use "https://github.com/sainnhe/gruvbox-material"
     use 'wbthomason/packer.nvim'
+    use 'lewis6991/gitsigns.nvim'
+    use ('nvimtools/none-ls.nvim')
+    use('cryptomilk/nightcity.nvim')
+    use("srcery-colors/srcery-vim")
 
+    use('ziglang/zig.vim')
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
     }
+    use('RRethy/base16-nvim')
+
+    use('glepnir/oceanic-material')
+    use('EdenEast/nightfox.nvim')
+    use('github/copilot.vim')
+    use('sainnhe/everforest')
 
     use('lifepillar/vim-solarized8')
     use('nvim-lua/plenary.nvim')
+    use('jose-elias-alvarez/null-ls.nvim')
 
-    use { "sainnhe/everforest" }
+    use ({ 'projekt0n/github-nvim-theme' })
 
 
     use({
         "folke/trouble.nvim",
         config = function()
             require("trouble").setup {
-                icons = false,
-                -- your configuration comes here
+                -- your configuration comes hee
                 -- or leave it empty to use the default settings
                 -- refer to the configuration section below
+                --  keys = {
+                    keys = {
+                        "<leader>xx",
+                        "<cmd>Trouble diagnostics toggle<cr>",
+                        desc = "Diagnostics (Trouble)",
+                    },
             }
         end
     })

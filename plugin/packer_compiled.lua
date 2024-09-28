@@ -49,8 +49,8 @@ local function save_profiles(threshold)
 end
 
 time([[Luarocks path setup]], true)
-local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1713517273/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1713517273/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1713517273/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1713517273/lib/luarocks/rocks-5.1/?/init.lua"
-local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1713517273/lib/lua/5.1/?.so"
+local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/luarocks/rocks-5.1/?/init.lua"
+local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/lua/5.1/?.so"
 if not string.find(package.path, package_path_str, 1, true) then
   package.path = package.path .. ';' .. package_path_str
 end
@@ -79,6 +79,11 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
   },
+  ["base16-nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/base16-nvim",
+    url = "https://github.com/RRethy/base16-nvim"
+  },
   ["cmp-buffer"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/cmp-buffer",
@@ -104,6 +109,11 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/cmp_luasnip",
     url = "https://github.com/saadparwaiz1/cmp_luasnip"
   },
+  ["copilot.vim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/copilot.vim",
+    url = "https://github.com/github/copilot.vim"
+  },
   delimitMate = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/delimitMate",
@@ -118,6 +128,21 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/friendly-snippets",
     url = "https://github.com/rafamadriz/friendly-snippets"
+  },
+  ["github-nvim-theme"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/github-nvim-theme",
+    url = "https://github.com/projekt0n/github-nvim-theme"
+  },
+  ["gitsigns.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gitsigns.nvim",
+    url = "https://github.com/lewis6991/gitsigns.nvim"
+  },
+  ["gruvbox-material"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gruvbox-material",
+    url = "https://github.com/sainnhe/gruvbox-material"
   },
   ["lsp-zero.nvim"] = {
     loaded = true,
@@ -141,10 +166,35 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/mason.nvim",
     url = "https://github.com/williamboman/mason.nvim"
   },
+  ["nightcity.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nightcity.nvim",
+    url = "https://github.com/cryptomilk/nightcity.nvim"
+  },
+  ["nightfox.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nightfox.nvim",
+    url = "https://github.com/EdenEast/nightfox.nvim"
+  },
+  ["none-ls.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/none-ls.nvim",
+    url = "https://github.com/nvimtools/none-ls.nvim"
+  },
+  ["null-ls.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/null-ls.nvim",
+    url = "https://github.com/jose-elias-alvarez/null-ls.nvim"
+  },
   ["nvim-cmp"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-cmp",
     url = "https://github.com/hrsh7th/nvim-cmp"
+  },
+  ["nvim-lsp-endhints"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-lsp-endhints",
+    url = "https://github.com/chrisgrieser/nvim-lsp-endhints"
   },
   ["nvim-lspconfig"] = {
     loaded = true,
@@ -165,6 +215,11 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-treesitter-textobjects",
     url = "https://github.com/nvim-treesitter/nvim-treesitter-textobjects"
+  },
+  ["oceanic-material"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/oceanic-material",
+    url = "https://github.com/glepnir/oceanic-material"
   },
   ["odin.vim"] = {
     loaded = true,
@@ -191,6 +246,11 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/refactoring.nvim",
     url = "https://github.com/theprimeagen/refactoring.nvim"
   },
+  ["srcery-vim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/srcery-vim",
+    url = "https://github.com/srcery-colors/srcery-vim"
+  },
   ["telescope-fzf-native.nvim"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/telescope-fzf-native.nvim",
@@ -207,7 +267,7 @@ _G.packer_plugins = {
     url = "https://github.com/ap29600/tree-sitter-odin"
   },
   ["trouble.nvim"] = {
-    config = { "\27LJ\2\nC\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0B\0\2\1K\0\1\0\1\0\1\nicons\1\nsetup\ftrouble\frequire\0" },
+    config = { "\27LJ\2\nù\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\tkeys\1\0\1\tkeys\0\1\3\1\0\15<leader>xx(<cmd>Trouble diagnostics toggle<cr>\tdesc\26Diagnostics (Trouble)\nsetup\ftrouble\frequire\0" },
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/trouble.nvim",
     url = "https://github.com/folke/trouble.nvim"
@@ -236,6 +296,11 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/vim-surround",
     url = "https://github.com/tpope/vim-surround"
+  },
+  ["zig.vim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/zig.vim",
+    url = "https://github.com/ziglang/zig.vim"
   }
 }
 
@@ -246,7 +311,7 @@ try_loadstring("\27LJ\2\n=\0\0\2\0\4\0\0056\0\0\0009\0\1\0005\1\3\0=\1\2\0K\0\1\
 time([[Setup for markdown-preview.nvim]], false)
 -- Config for: trouble.nvim
 time([[Config for trouble.nvim]], true)
-try_loadstring("\27LJ\2\nC\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0B\0\2\1K\0\1\0\1\0\1\nicons\1\nsetup\ftrouble\frequire\0", "config", "trouble.nvim")
+try_loadstring("\27LJ\2\nù\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\tkeys\1\0\1\tkeys\0\1\3\1\0\15<leader>xx(<cmd>Trouble diagnostics toggle<cr>\tdesc\26Diagnostics (Trouble)\nsetup\ftrouble\frequire\0", "config", "trouble.nvim")
 time([[Config for trouble.nvim]], false)
 vim.cmd [[augroup packer_load_aucmds]]
 vim.cmd [[au!]]
