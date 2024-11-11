@@ -49,8 +49,8 @@ local function save_profiles(threshold)
 end
 
 time([[Luarocks path setup]], true)
-local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/luarocks/rocks-5.1/?/init.lua"
-local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1725453128/lib/lua/5.1/?.so"
+local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/luarocks/rocks-5.1/?/init.lua"
+local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/lua/5.1/?.so"
 if not string.find(package.path, package_path_str, 1, true) then
   package.path = package.path .. ';' .. package_path_str
 end
@@ -78,11 +78,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
-  },
-  ["base16-nvim"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/base16-nvim",
-    url = "https://github.com/RRethy/base16-nvim"
   },
   ["cmp-buffer"] = {
     loaded = true,
@@ -119,30 +114,30 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/delimitMate",
     url = "https://github.com/Raimondi/delimitMate"
   },
-  everforest = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/everforest",
-    url = "https://github.com/sainnhe/everforest"
-  },
   ["friendly-snippets"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/friendly-snippets",
     url = "https://github.com/rafamadriz/friendly-snippets"
-  },
-  ["github-nvim-theme"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/github-nvim-theme",
-    url = "https://github.com/projekt0n/github-nvim-theme"
   },
   ["gitsigns.nvim"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gitsigns.nvim",
     url = "https://github.com/lewis6991/gitsigns.nvim"
   },
+  ["gruvbox-baby"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gruvbox-baby",
+    url = "https://github.com/luisiacc/gruvbox-baby"
+  },
   ["gruvbox-material"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gruvbox-material",
     url = "https://github.com/sainnhe/gruvbox-material"
+  },
+  ["lazygit.nvim"] = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/lazygit.nvim",
+    url = "https://github.com/kdheepak/lazygit.nvim"
   },
   ["lsp-zero.nvim"] = {
     loaded = true,
@@ -171,11 +166,6 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nightcity.nvim",
     url = "https://github.com/cryptomilk/nightcity.nvim"
   },
-  ["nightfox.nvim"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nightfox.nvim",
-    url = "https://github.com/EdenEast/nightfox.nvim"
-  },
   ["none-ls.nvim"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/none-ls.nvim",
@@ -190,11 +180,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-cmp",
     url = "https://github.com/hrsh7th/nvim-cmp"
-  },
-  ["nvim-lsp-endhints"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-lsp-endhints",
-    url = "https://github.com/chrisgrieser/nvim-lsp-endhints"
   },
   ["nvim-lspconfig"] = {
     loaded = true,
@@ -215,11 +200,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-treesitter-textobjects",
     url = "https://github.com/nvim-treesitter/nvim-treesitter-textobjects"
-  },
-  ["oceanic-material"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/oceanic-material",
-    url = "https://github.com/glepnir/oceanic-material"
   },
   ["odin.vim"] = {
     loaded = true,
@@ -246,10 +226,10 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/refactoring.nvim",
     url = "https://github.com/theprimeagen/refactoring.nvim"
   },
-  ["srcery-vim"] = {
+  sonokai = {
     loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/srcery-vim",
-    url = "https://github.com/srcery-colors/srcery-vim"
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/sonokai",
+    url = "https://github.com/sainnhe/sonokai"
   },
   ["telescope-fzf-native.nvim"] = {
     loaded = true,
@@ -286,16 +266,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/vim-gitgutter",
     url = "https://github.com/airblade/vim-gitgutter"
-  },
-  ["vim-solarized8"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/vim-solarized8",
-    url = "https://github.com/lifepillar/vim-solarized8"
-  },
-  ["vim-surround"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/vim-surround",
-    url = "https://github.com/tpope/vim-surround"
   },
   ["zig.vim"] = {
     loaded = true,

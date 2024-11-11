@@ -7,15 +7,6 @@ lsp.ensure_installed({
 })
 
 
-require('lsp-endhints').setup({
-    label = {
-        padding = 1,
-        marginLeft = 0,
-        bracketedParameters = true,
-    },
-})
-
-
 
 local lsp_attach = function(client, bufnr)
     if client.server_capabilities.inlayHintProvider then
@@ -75,7 +66,7 @@ lsp.on_attach(function(client, bufnr)
   vim.keymap.set("n", "<leader>vca", function() vim.lsp.buf.code_action() end, opts)
   vim.keymap.set("n", "<leader>vrr", function() vim.lsp.buf.references() end, opts)
   vim.keymap.set("n", "<leader>vrn", function() vim.lsp.buf.rename() end, opts)
-  vim.keymap.set("n", "<leader>h", function() require('lsp-endhints').toggle() end, opts)
+  vim.keymap.set("n", "<leader>vi", function() vim.lsp.buf.incoming_calls() end, opts)
   vim.keymap.set("i", "<C-h>", function() vim.lsp.buf.signature_help() end, opts)
 end)
 

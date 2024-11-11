@@ -1,34 +1,34 @@
 vim.cmd.packadd('packer.nvim')
 
 return require('packer').startup(function(use)
-    -- Packer can manage itself
-    use {
-        "chrisgrieser/nvim-lsp-endhints",
-    }
-    use "https://github.com/sainnhe/gruvbox-material"
+    -- nvim v0.7.2
+    use({
+        "kdheepak/lazygit.nvim",
+        -- optional for floating window border decoration
+        requires = {
+            "nvim-lua/plenary.nvim",
+        },
+    })
+
+    use('sainnhe/sonokai')
+    use("luisiacc/gruvbox-baby")
+    use("sainnhe/gruvbox-material")
+
+   -- nvim v0.7.2
     use 'wbthomason/packer.nvim'
     use 'lewis6991/gitsigns.nvim'
     use ('nvimtools/none-ls.nvim')
     use('cryptomilk/nightcity.nvim')
-    use("srcery-colors/srcery-vim")
 
     use('ziglang/zig.vim')
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
     }
-    use('RRethy/base16-nvim')
 
-    use('glepnir/oceanic-material')
-    use('EdenEast/nightfox.nvim')
     use('github/copilot.vim')
-    use('sainnhe/everforest')
 
-    use('lifepillar/vim-solarized8')
     use('nvim-lua/plenary.nvim')
     use('jose-elias-alvarez/null-ls.nvim')
-
-    use ({ 'projekt0n/github-nvim-theme' })
-
 
     use({
         "folke/trouble.nvim",
@@ -42,7 +42,7 @@ return require('packer').startup(function(use)
                         "<leader>xx",
                         "<cmd>Trouble diagnostics toggle<cr>",
                         desc = "Diagnostics (Trouble)",
-                    },
+                   },
             }
         end
     })
@@ -62,7 +62,6 @@ return require('packer').startup(function(use)
     use('Tetralux/odin.vim')
     use('nvim-telescope/telescope-fzf-native.nvim')
     use('airblade/vim-gitgutter')
-    use('tpope/vim-surround')
 
 
      use {
