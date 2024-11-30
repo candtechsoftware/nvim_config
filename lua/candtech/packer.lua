@@ -19,6 +19,15 @@ return require('packer').startup(function(use)
     use 'lewis6991/gitsigns.nvim'
     use ('nvimtools/none-ls.nvim')
     use('cryptomilk/nightcity.nvim')
+    -- Packer can manage itself
+    use {
+        "chrisgrieser/nvim-lsp-endhints",
+    }
+    use 'yorickpeterse/happy_hacking.vim'
+    use 'wbthomason/packer.nvim'
+    use 'lewis6991/gitsigns.nvim'
+    use ('nvimtools/none-ls.nvim')
+    use ('sainnhe/sonokai')
 
     use('ziglang/zig.vim')
     use {
@@ -27,6 +36,9 @@ return require('packer').startup(function(use)
 
     use('github/copilot.vim')
 
+    use('github/copilot.vim')
+
+    use('neanias/everforest-nvim')
     use('nvim-lua/plenary.nvim')
     use('jose-elias-alvarez/null-ls.nvim')
 
