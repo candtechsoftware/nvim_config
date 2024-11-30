@@ -11,8 +11,6 @@ return require('packer').startup(function(use)
     })
 
     use('sainnhe/sonokai')
-    use("luisiacc/gruvbox-baby")
-    use("sainnhe/gruvbox-material")
 
    -- nvim v0.7.2
     use 'wbthomason/packer.nvim'
@@ -34,11 +32,9 @@ return require('packer').startup(function(use)
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
     }
 
-    use('github/copilot.vim')
 
     use('github/copilot.vim')
 
-    use('neanias/everforest-nvim')
     use('nvim-lua/plenary.nvim')
     use('jose-elias-alvarez/null-ls.nvim')
 
@@ -61,7 +57,7 @@ return require('packer').startup(function(use)
 
     use 'Raimondi/delimitMate'
     use({ "iamcco/markdown-preview.nvim", run = "cd app && npm install", setup = function() vim.g.mkdp_filetypes = {
-            "markdown" } end, ft = { "markdown" }, })
+          "markdown" } end, ft = { "markdown" }, })
     use('nvim-treesitter/nvim-treesitter')
     use('nvim-treesitter/nvim-treesitter-textobjects')
 
