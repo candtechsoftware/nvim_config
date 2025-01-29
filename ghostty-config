@@ -1,0 +1,9 @@
+theme = "Seti"
+font-family = "Consolas"
+font-size = 14
+font-feature = -calt
+cursor-style = block
+shell-integration-features = no-cursor
+
+background = "#072626"
+
