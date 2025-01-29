@@ -49,8 +49,8 @@ local function save_profiles(threshold)
 end
 
 time([[Luarocks path setup]], true)
-local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/luarocks/rocks-5.1/?/init.lua"
-local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1727870382/lib/lua/5.1/?.so"
+local package_path_str = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1732813678/share/lua/5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1732813678/share/lua/5.1/?/init.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1732813678/lib/luarocks/rocks-5.1/?.lua;/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1732813678/lib/luarocks/rocks-5.1/?/init.lua"
+local install_cpath_pattern = "/Users/alexmatthewcandelario/.cache/nvim/packer_hererocks/2.1.1732813678/lib/lua/5.1/?.so"
 if not string.find(package.path, package_path_str, 1, true) then
   package.path = package.path .. ';' .. package_path_str
 end
@@ -134,6 +134,11 @@ _G.packer_plugins = {
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/gruvbox-material",
     url = "https://github.com/sainnhe/gruvbox-material"
   },
+  harpoon = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/harpoon",
+    url = "https://github.com/ThePrimeagen/harpoon"
+  },
   ["lazygit.nvim"] = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/lazygit.nvim",
@@ -160,6 +165,11 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/mason.nvim",
     url = "https://github.com/williamboman/mason.nvim"
+  },
+  naysayer = {
+    loaded = true,
+    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/naysayer",
+    url = "https://github.com/alljokecake/naysayer-theme.nvim"
   },
   ["nightcity.nvim"] = {
     loaded = true,
@@ -190,11 +200,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-treesitter",
     url = "https://github.com/nvim-treesitter/nvim-treesitter"
-  },
-  ["nvim-treesitter-context"] = {
-    loaded = true,
-    path = "/Users/alexmatthewcandelario/.local/share/nvim/site/pack/packer/start/nvim-treesitter-context",
-    url = "https://github.com/nvim-treesitter/nvim-treesitter-context"
   },
   ["nvim-treesitter-textobjects"] = {
     loaded = true,

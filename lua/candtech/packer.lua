@@ -7,9 +7,9 @@ return require('packer').startup(function(use)
         -- optional for floating window border decoration
         requires = {
             "nvim-lua/plenary.nvim",
-        },
+        }
     })
-
+    use( "whizikxd/naysayer-colors.nvim")
     use('sainnhe/sonokai')
     use("luisiacc/gruvbox-baby")
     use("sainnhe/gruvbox-material")
@@ -24,6 +24,8 @@ return require('packer').startup(function(use)
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
     }
+
+    use('ThePrimeagen/harpoon')
 
     use('github/copilot.vim')
 
@@ -57,7 +59,6 @@ return require('packer').startup(function(use)
     use("theprimeagen/refactoring.nvim")
     use("mbbill/undotree")
     use("tpope/vim-fugitive")
-    use("nvim-treesitter/nvim-treesitter-context");
     use('ap29600/tree-sitter-odin')
     use('Tetralux/odin.vim')
     use('nvim-telescope/telescope-fzf-native.nvim')

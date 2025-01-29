@@ -1,0 +1,8 @@
+theme = "Builtin Solarized Dark"
+font-family = "Fira Code"
+font-size = 16
+font-feature = -calt
+cursor-style = block
+shell-integration-features = no-cursor
+
+background = #062329
