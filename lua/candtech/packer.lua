@@ -11,15 +11,10 @@ return require('packer').startup(function(use)
     })
 
     use('sainnhe/sonokai')
-    use("luisiacc/gruvbox-baby")
-    use("sainnhe/gruvbox-material")
-
    -- nvim v0.7.2
     use 'wbthomason/packer.nvim'
     use 'lewis6991/gitsigns.nvim'
     use ('nvimtools/none-ls.nvim')
-    use('cryptomilk/nightcity.nvim')
-
     use('ziglang/zig.vim')
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
