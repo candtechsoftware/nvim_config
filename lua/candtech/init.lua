@@ -1,6 +1,7 @@
 require("candtech.set")
 require("candtech.remap")
 require("candtech.packer")
+require("candtech.color").setup()
 
 local augroup = vim.api.nvim_create_augroup
 local ThePrimeagenGroup = augroup('ThePrimeagen', {})
