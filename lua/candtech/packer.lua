@@ -20,6 +20,7 @@ return require('packer').startup(function(use)
         'nvim-telescope/telescope.nvim', tag = '0.1.3',
     }
 
+
     use('github/copilot.vim')
 
     use('nvim-lua/plenary.nvim')
@@ -44,7 +45,7 @@ return require('packer').startup(function(use)
 
     use 'Raimondi/delimitMate'
     use({ "iamcco/markdown-preview.nvim", run = "cd app && npm install", setup = function() vim.g.mkdp_filetypes = {
-            "markdown" } end, ft = { "markdown" }, })
+          "markdown" } end, ft = { "markdown" }, })
     use('nvim-treesitter/nvim-treesitter')
     use('nvim-treesitter/nvim-treesitter-textobjects')
 
