@@ -27,6 +27,7 @@ lsp.configure('lua-language-server', {
     }
 })
 
+lsp.configure('zls', {})
 
 local cmp = require('cmp')
 local cmp_select = {behavior = cmp.SelectBehavior.Select}

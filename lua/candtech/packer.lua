@@ -11,7 +11,8 @@ return require('packer').startup(function(use)
     })
 
     use('sainnhe/sonokai')
-
+    use('neovim/nvim-lspconfig')
+    use('ziglang/zig.vim')
    -- nvim v0.7.2
     use 'wbthomason/packer.nvim'
     use 'lewis6991/gitsigns.nvim'
@@ -21,6 +22,8 @@ return require('packer').startup(function(use)
     use {
         "chrisgrieser/nvim-lsp-endhints",
     }
+
+    use('tpope/vim-commentary')
     use 'yorickpeterse/happy_hacking.vim'
     use 'wbthomason/packer.nvim'
     use 'lewis6991/gitsigns.nvim'
@@ -65,7 +68,6 @@ return require('packer').startup(function(use)
     use("theprimeagen/refactoring.nvim")
     use("mbbill/undotree")
     use("tpope/vim-fugitive")
-    use("nvim-treesitter/nvim-treesitter-context");
     use('ap29600/tree-sitter-odin')
     use('Tetralux/odin.vim')
     use('nvim-telescope/telescope-fzf-native.nvim')
