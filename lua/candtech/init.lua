@@ -1,7 +1,7 @@
 require("candtech.set")
 require("candtech.remap")
 require("candtech.packer")
-require("candtech.color").setup()
+-- require("candtech.color").setup()
 require("nvim-treesitter.install").prefer_git = true
 
 local augroup = vim.api.nvim_create_augroup
