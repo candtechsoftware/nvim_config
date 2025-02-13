@@ -23,6 +23,5 @@ vim.opt.scrolloff = 8
 vim.opt.isfname:append("@-@")
 
 vim.opt.updatetime = 50
-vim.opt.guicursor = "n:block"
-
+vim.opt.guicursor = "n-v-c-i-ci:hor20"
 
