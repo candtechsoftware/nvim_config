@@ -65,7 +65,7 @@ return {
                 },
                 live_grep = {
                     additional_args = function()
-                        return { "--hidden", "--smart-case" }
+                        return { "--hidden", "--ignore-case" }
                     end,
                 },
                 git_files = {
