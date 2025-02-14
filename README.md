@@ -1,6 +1,6 @@
 # Nvim config
 
-#Installation 
+# Installation 
 
 ```
 brew install neovim
