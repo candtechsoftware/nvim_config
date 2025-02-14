@@ -21,10 +21,10 @@ to install them while in vim
 3. **Copilot** 
     the plugin is already going to be installed with this config but you need to func `:Copilot setup` 
     to authenticate with github. 
-2. **TypeScript Language Server** (for JavaScript/TypeScript)[docs](https://github.com/typescript-language-server/typescript-language-server)
-3. **Rust Analyzer** (for Rust)[docs](https://rust-analyzer.github.io/manual.html#installation)
-4. **gopls** (for Go)[docs](https://pkg.go.dev/golang.org/x/tools/gopls)
-5. **zls** (for Zig)[docs](https://github.com/zigtools/zls) 
+2. **TypeScript Language Server** (for JavaScript/TypeScript) [docs](https://github.com/typescript-language-server/typescript-language-server)
+3. **Rust Analyzer** (for Rust) [docs](https://rust-analyzer.github.io/manual.html#installation)
+4. **gopls** (for Go) [docs](https://pkg.go.dev/golang.org/x/tools/gopls)
+5. **zls** (for Zig) [docs](https://github.com/zigtools/zls) 
 
 
 For the language servers we you can remove support for them in `lua/candtech/lazy/lsp.lua` just by
