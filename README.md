@@ -51,7 +51,7 @@ sudo apt-get install ripgrep
 ## Plugins 
 For plugins I am using lazy.nvim [docs](https://lazy.folke.io/). This makes it super
 simple to install plugins the instructions above but it is as easy as going to a plugin github
-page and coping the url with out the github.com (ex. "https://github.com/github/copilot.vim" -> "github/copilot.vim")
+page and coping the url with out the github.com (ex. `"https://github.com/github/copilot.vim" -> "github/copilot.vim"`)
 and then create a file for it in the `lazy` dir and then return it. Some plugins come with options for the config and
 that would go here as well and usually they have the instructions on github but you can look at some of the 
 plugins in the `lua/candtech/lazy` dir for examples.
