@@ -14,7 +14,7 @@ Once that is done you can now use nvim with the config
 but you will run into an error since the plugins aren't install 
 to install them while in vim 
 
-# Installation Guide: Language Servers and Tools (macOS & Ubuntu)
+##  Installing Dependencies: Language Servers and Tools (macOS & Ubuntu)
 
 1. **Ripgrep** (required for searching)
 2. **Node.js** (required for some language servers)
