@@ -1,4 +1,5 @@
-vim.opt.guicursor = "n-v-c:block-Cursor"
+vim.opt.guicursor = "n-v-c:block,i-ci:hor25"
+
 
 vim.opt.nu = true -- Show line numbers
 vim.opt.relativenumber = true -- Show relative line numbers
