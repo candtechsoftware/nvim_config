@@ -4,7 +4,14 @@ return {
         "folke/trouble.nvim",
         config = function()
             require("trouble").setup({
-                icons = false,
+                icons = true,
+                signs = {
+                    error = "E",
+                    warning = "W",
+                    hint = "H",
+                    information = "I",
+                    other = "O"
+                },
             })
 
             vim.keymap.set("n", "<leader>tt", function()
