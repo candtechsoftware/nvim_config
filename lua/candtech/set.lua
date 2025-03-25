@@ -1,4 +1,4 @@
-vim.opt.guicursor = "n-v-c:block,i-ci:hor25"
+vim.opt.guicursor = "n-v-c:block,i-ci:block"
 
 
 vim.opt.nu = true -- Show line numbers
@@ -17,7 +17,6 @@ vim.opt.swapfile = false -- Don't create swap files (super annoyin trust me on t
 vim.opt.backup = false -- Don't create backup files (same as above)
 vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir" -- Save undo history
 vim.opt.undofile = true -- Save undo history
-  
 vim.opt.hlsearch = false -- Don't highlight search results (I don't like this but you might)
 vim.opt.incsearch = true -- Incremental search
 
@@ -27,5 +26,7 @@ vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
 
 vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
- 
+
 vim.opt.colorcolumn = "100" -- Highlight the 100th column try to keep lines under 100 characters 
+
+vim.g.tex_conceal = "mgs"

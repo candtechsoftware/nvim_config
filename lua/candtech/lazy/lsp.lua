@@ -2,32 +2,84 @@ return {
   {
     "neovim/nvim-lspconfig",
     dependencies = {
-      "stevearc/conform.nvim",
+      "williamboman/mason.nvim",
+      "williamboman/mason-lspconfig.nvim",
       "hrsh7th/cmp-nvim-lsp",
       "hrsh7th/cmp-buffer",
       "hrsh7th/cmp-path",
       "hrsh7th/cmp-cmdline",
       "hrsh7th/nvim-cmp",
       "j-hui/fidget.nvim",
-      "williamboman/mason.nvim",
-      "williamboman/mason-lspconfig.nvim",
     },
     config = function()
-      -- Setup Mason for LSP server installation
-      require("mason").setup()
+      -- Setup Mason first
+      require("mason").setup({
+        ui = {
+          icons = {
+            package_installed = "✓",
+            package_pending = "➜",
+            package_uninstalled = "✗"
+          }
+        }
+      })
+
+      -- Configure Mason-lspconfig
       require("mason-lspconfig").setup({
-        -- Automatically install these servers
         ensure_installed = {
-          "gopls",
-          "rust_analyzer",
-          "ts_ls",
-          -- Add other servers you want automatically installed
+          "lua_ls",    -- Lua
+          "gopls",     -- Go
+          "ts_ls",     -- TypeScript/JavaScript
+          "rust_analyzer", -- Rust
+          "clangd",    -- C/C++
         },
         automatic_installation = true,
       })
-      
+
       local lspconfig = require("lspconfig")
       require("fidget").setup({})
+
+      -- Configure diagnostic display
+      vim.diagnostic.config({
+        virtual_text = true,
+        signs = true,
+        underline = true,
+        update_in_insert = false,
+        severity_sort = true,
+        float = {
+          border = 'rounded',
+          source = 'always',
+          header = '',
+          prefix = '',
+        },
+      })
+
+      -- Automatically send diagnostics to quickfix list
+      local function add_buffer_diagnostics_to_quickfix()
+        local diagnostics = vim.diagnostic.get()
+        local qf_items = {}
+        for bufnr, diagnostic_items in pairs(diagnostics) do
+          -- Check if the buffer exists and is valid
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            local filename = vim.api.nvim_buf_get_name(bufnr)
+            for _, d in ipairs(diagnostic_items) do
+              table.insert(qf_items, {
+                filename = filename,
+                lnum = d.lnum + 1,
+                col = d.col + 1,
+                text = d.message,
+                type = d.severity == 1 and 'E' or (d.severity == 2 and 'W' or 'I')
+              })
+            end
+          end
+        end
+        vim.fn.setqflist(qf_items)
+      end
+
+      -- Update quickfix list whenever diagnostics change
+      vim.api.nvim_create_autocmd("DiagnosticChanged", {
+        callback = add_buffer_diagnostics_to_quickfix,
+        group = vim.api.nvim_create_augroup("DiagnosticQuickfix", { clear = true })
+      })
 
       local on_attach = function(client, bufnr)
         local opts = { buffer = bufnr, silent = true }
@@ -42,6 +94,10 @@ return {
         vim.keymap.set("n", "<leader>vrn", function() vim.lsp.buf.rename() end, opts)
         vim.keymap.set("n", "<leader>vi", function() vim.lsp.buf.incoming_calls() end, opts)
         vim.keymap.set("i", "<C-h>", function() vim.lsp.buf.signature_help() end, opts)
+        
+        -- Add quickfix specific keymaps
+        vim.keymap.set("n", "<leader>qf", function() vim.diagnostic.setqflist() end, opts)
+        vim.keymap.set("n", "<leader>qq", function() vim.diagnostic.setloclist() end, opts)
       end
 
       local cmp = require('cmp')
@@ -53,12 +109,11 @@ return {
         cmp_lsp.default_capabilities()
       )
 
-      local cmp_select = { behavior = cmp.SelectBehavior.Select }
-
+      -- Setup completion
       cmp.setup({
         mapping = cmp.mapping.preset.insert({
-          ['<C-p>'] = cmp.mapping.select_prev_item(cmp_select),
-          ['<C-n>'] = cmp.mapping.select_next_item(cmp_select),
+          ['<C-p>'] = cmp.mapping.select_prev_item(),
+          ['<C-n>'] = cmp.mapping.select_next_item(),
           ['<C-y>'] = cmp.mapping.confirm({ select = true }),
           ["<C-Space>"] = cmp.mapping.complete(),
         }),
@@ -69,27 +124,52 @@ return {
         }),
       })
 
-      -- LSP server configurations
-      -- Note: zls is for the Zig language, only include if you work with Zig
-      if pcall(require, "lspconfig.zls") then
-        lspconfig.zls.setup({ on_attach = on_attach, capabilities = capabilities })
-      end
-      
-      lspconfig.gopls.setup({ on_attach = on_attach, capabilities = capabilities })
-      lspconfig.ts_ls.setup({ on_attach = on_attach, capabilities = capabilities })
-      lspconfig.rust_analyzer.setup({ on_attach = on_attach, capabilities = capabilities })
-      
-      -- Setup additional common LSPs
+      -- Configure lua language server for neovim
       lspconfig.lua_ls.setup({
         on_attach = on_attach,
         capabilities = capabilities,
         settings = {
           Lua = {
+            runtime = {
+              -- Tell the language server which version of Lua you're using (most likely LuaJIT in the case of Neovim)
+              version = 'LuaJIT',
+            },
             diagnostics = {
-              globals = { 'vim' },
+              -- Get the language server to recognize the `vim` global
+              globals = {'vim'},
+            },
+            workspace = {
+              -- Make the server aware of Neovim runtime files
+              library = vim.api.nvim_get_runtime_file("", true),
+              checkThirdParty = false,
+            },
+            -- Do not send telemetry data containing a randomized but unique identifier
+            telemetry = {
+              enable = false,
             },
           },
         },
+      })
+
+      -- Setup other language servers
+      lspconfig.gopls.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+      })
+
+      lspconfig.ts_ls.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+      })
+
+      lspconfig.rust_analyzer.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+      })
+
+      lspconfig.clangd.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
       })
     end
   }
