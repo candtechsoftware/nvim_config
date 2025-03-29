@@ -1,5 +1,22 @@
 vim.opt.guicursor = "n-v-c:block,i-ci:block"
 
+vim.diagnostic.config({
+  -- Use the default configuration
+    virtual_lines = true,
+
+    -- Alternatively, customize specific options
+    -- virtual_lines = {
+    --  -- Only show virtual line diagnostics for the current cursor line
+    --  current_line = true,
+    -- },
+    virtual_text = {
+        prefix = '●', -- Custom prefix
+        source = "if_many", -- Show source when multiple
+        severity = { min = vim.diagnostic.severity.WARN },
+    }
+    --
+})
+
 
 vim.opt.nu = true -- Show line numbers
 vim.opt.relativenumber = true -- Show relative line numbers
