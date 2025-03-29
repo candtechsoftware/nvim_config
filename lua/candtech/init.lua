@@ -4,12 +4,19 @@ require("candtech.remap")
 
 -- Configure netrw to be the default file explorer
 vim.g.netrw_banner = 0
-vim.g.netrw_liststyle = 3
+vim.g.netrw_liststyle = 0  -- Use regular listing style
 vim.g.netrw_browse_split = 0  -- Open files in the current window
-vim.g.netrw_altv = 1
+vim.g.netrw_altv = 0  -- Disable vertical splitting
 vim.g.netrw_winsize = 25
 vim.g.netrw_keepdir = 0
 vim.g.netrw_special_syntax = 1
+vim.g.netrw_list_hide = [[^\.$]]  -- Hide dot files by default
+vim.g.netrw_hide = 1  -- Hide dot files by default
+vim.g.netrw_use_errorwindow = 0  -- Don't use error window
+vim.g.netrw_retmap = 1  -- Allow using <CR> to navigate into directories
+vim.g.netrw_sort_by = "name"  -- Sort by name
+vim.g.netrw_sort_direction = "normal"  -- Normal sort direction
+vim.g.netrw_sort_options = "i"  -- Case-insensitive sorting
 
 -- Load lazy bootstrap
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
