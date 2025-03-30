@@ -2,8 +2,6 @@ return {
   {
     "neovim/nvim-lspconfig",
     dependencies = {
-      "williamboman/mason.nvim",
-      "williamboman/mason-lspconfig.nvim",
       "hrsh7th/cmp-nvim-lsp",
       "hrsh7th/cmp-buffer",
       "hrsh7th/cmp-path",
@@ -12,28 +10,6 @@ return {
       "j-hui/fidget.nvim",
     },
     config = function()
-      -- Setup Mason first
-      require("mason").setup({
-        ui = {
-          icons = {
-            package_installed = "✓",
-            package_pending = "➜",
-            package_uninstalled = "✗"
-          }
-        }
-      })
-
-      -- Configure Mason-lspconfig
-      require("mason-lspconfig").setup({
-        ensure_installed = {
-          "lua_ls",    -- Lua
-          "gopls",     -- Go
-          "ts_ls",     -- TypeScript/JavaScript
-          "rust_analyzer", -- Rust
-          "clangd",    -- C/C++
-        },
-        automatic_installation = true,
-      })
 
       local lspconfig = require("lspconfig")
       require("fidget").setup({})

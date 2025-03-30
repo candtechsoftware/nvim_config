@@ -32,15 +32,15 @@ return {
 
                 -- Enable sorting and preview optimizations
                 sorting_strategy = "ascending", -- Show results in ascending order
-                path_display = { "truncate" }, -- Truncate long paths for better readability
+                path_display = { "truncate" },  -- Truncate long paths for better readability
 
                 -- Mappings for better navigation
                 mappings = {
                     i = {
-                        ["<C-j>"] = actions.move_selection_next, -- Move to next item
-                        ["<C-k>"] = actions.move_selection_previous, -- Move to previous item
+                        ["<C-j>"] = actions.move_selection_next,                           -- Move to next item
+                        ["<C-k>"] = actions.move_selection_previous,                       -- Move to previous item
                         ["<C-q>"] = actions.send_selected_to_qflist + actions.open_qflist, -- Send to quickfix
-                        ["<esc>"] = actions.close, -- Close Telescope
+                        ["<esc>"] = actions.close,                                         -- Close Telescope
                     },
                 },
 
@@ -54,13 +54,13 @@ return {
                     "--line-number",
                     "--column",
                     "--smart-case",
-                    "--hidden", -- Include hidden files
+                    "--hidden",       -- Include hidden files
                     "--glob=!.git/*", -- Exclude .git directory
                 },
             },
             pickers = {
                 find_files = {
-                    hidden = true, -- Show hidden files
+                    hidden = true,                                                           -- Show hidden files
                     find_command = { "fd", "--type", "f", "--hidden", "--exclude", ".git" }, -- Use fd for better performance
                 },
                 live_grep = {
@@ -74,17 +74,16 @@ return {
             },
             extensions = {
                 fzf = {
-                    fuzzy = true, -- Enable fuzzy searching
+                    fuzzy = true,                   -- Enable fuzzy searching
                     override_generic_sorter = true, -- Override the generic sorter
-                    override_file_sorter = true, -- Override the file sorter
-                    case_mode = "smart_case", -- Use smart case
+                    override_file_sorter = true,    -- Override the file sorter
+                    case_mode = "smart_case",       -- Use smart case
+                },
+                themves = {
+                    ignore = { "default", "desert", "elflord", "habamax" },
                 },
             },
         })
-
-        -- Load the fzf extension
-        telescope.load_extension("fzf")
-        vim.keymap.set("n", "<leader>fs", builtin.lsp_dynamic_workspace_symbols, opts) -- Find symbols in the workspace
 
         vim.keymap.set('n', '<leader>pws', function()
             local word = vim.fn.expand("<cword>")
@@ -98,10 +97,9 @@ return {
         -- Keymaps
         local opts = { noremap = true, silent = true }
         vim.keymap.set("n", "<leader>pf", builtin.find_files, opts) -- Find files
-        vim.keymap.set("n", "<leader>/", builtin.live_grep, opts) -- Search in files
-        vim.keymap.set("n", "<leader>fb", builtin.buffers, opts) -- List open buffers
-        vim.keymap.set("n", "<leader>vh", builtin.help_tags, opts) -- Search help tags
-        vim.keymap.set("n", "<leader>ff", builtin.git_files, opts) -- Find Git files
+        vim.keymap.set("n", "<leader>/", builtin.live_grep, opts)   -- Search in files
+        vim.keymap.set("n", "<leader>fb", builtin.buffers, opts)    -- List open buffers
+        vim.keymap.set("n", "<leader>vh", builtin.help_tags, opts)  -- Search help tags
+        vim.keymap.set("n", "<leader>ff", builtin.git_files, opts)  -- Find Git files
     end,
 }
-

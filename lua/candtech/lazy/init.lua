@@ -11,5 +11,4 @@ return {
     { import = "candtech.lazy.peek" },
     { import = "candtech.lazy.spell" },
     { import = "candtech.lazy.undotree" },
-    { import = "candtech.lazy.copilot" },
 }
