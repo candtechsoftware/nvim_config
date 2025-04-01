@@ -37,8 +37,6 @@ vim.opt.undofile = true -- Save undo history
 vim.opt.hlsearch = false -- Don't highlight search results (I don't like this but you might)
 vim.opt.incsearch = true -- Incremental search
 
-vim.opt.termguicolors = false -- Enable 24-bit RGB colors, I don't care for them 
-
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
 

@@ -34,30 +34,30 @@ vim.opt.rtp:prepend(lazypath)
 
 -- Initialize lazy with all plugins
 require("lazy").setup({
-  -- Import all plugin specs from the lazy directory
-  { import = "candtech.lazy" },
+    -- Import all plugin specs from the lazy directory
+    { import = "candtech.lazy" },
 }, {
-  change_detection = {
-    enabled = true,
-    notify = false,  -- Don't show notifications about config changes
-  },
-  checker = {
-    enabled = true,  -- Enable checking for plugin updates
-    notify = false,  -- Don't show notifications about updates
-  },
-  performance = {
-    rtp = {
-      disabled_plugins = {
-        "gzip",
-        "matchit",
-        "matchparen",
-        "tarPlugin",
-        "tohtml",
-        "tutor",
-        "zipPlugin",
-      },
-    },
-  },
-})
+        change_detection = {
+            enabled = true,
+            notify = false,  -- Don't show notifications about config changes
+        },
+        checker = {
+            enabled = true,  -- Enable checking for plugin updates
+            notify = false,  -- Don't show notifications about updates
+        },
+        performance = {
+            rtp = {
+                disabled_plugins = {
+                    "gzip",
+                    "matchit",
+                    "matchparen",
+                    "tarPlugin",
+                    "tohtml",
+                    "tutor",
+                    "zipPlugin",
+                },
+            },
+        },
+    })
 
 
