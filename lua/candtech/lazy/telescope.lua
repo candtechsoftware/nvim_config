@@ -36,10 +36,10 @@ return {
                 git_icons = true,
                 file_icons = true,
                 color_icons = true,
-                fd_opts = "--type f --hidden", -- allow searching inside node_modules
+                fd_opts = "--type f --hidden",
                 actions = {
-                    ["default"] = fzf.defaults.actions.file_edit,
-                    ["ctrl-q"] = fzf.defaults.actions.file_sel_to_qf,
+                    ["default"] = fzf.actions.file_edit,
+                    ["ctrl-q"] = fzf.actions.file_sel_to_qf,
                 },
             },
 
@@ -49,8 +49,8 @@ return {
                 rg_opts =
                 "--color=never --no-heading --with-filename --line-number --column --smart-case --hidden --glob=!.git/*",
                 actions = {
-                    ["default"] = fzf.defaults.actions.file_edit,
-                    ["ctrl-q"] = fzf.defaults.actions.file_sel_to_qf,
+                    ["default"] = fzf.actions.file_edit,
+                    ["ctrl-q"] = fzf.actions.file_sel_to_qf,
                 },
             },
 
@@ -59,6 +59,11 @@ return {
                     prompt = "Git Files❯ ",
                     cmd = "git ls-files --others --cached --exclude-standard",
                 },
+            },
+
+            quickfix = {
+                file_icons = true,
+                git_icons = true,
             },
 
             fzf_opts = {

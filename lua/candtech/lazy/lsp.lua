@@ -28,34 +28,6 @@ return {
         },
       })
 
-      -- Automatically send diagnostics to quickfix list
-      local function add_buffer_diagnostics_to_quickfix()
-        local diagnostics = vim.diagnostic.get()
-        local qf_items = {}
-        for bufnr, diagnostic_items in pairs(diagnostics) do
-          -- Check if the buffer exists and is valid
-          if vim.api.nvim_buf_is_valid(bufnr) then
-            local filename = vim.api.nvim_buf_get_name(bufnr)
-            for _, d in ipairs(diagnostic_items) do
-              table.insert(qf_items, {
-                filename = filename,
-                lnum = d.lnum + 1,
-                col = d.col + 1,
-                text = d.message,
-                type = d.severity == 1 and 'E' or (d.severity == 2 and 'W' or 'I')
-              })
-            end
-          end
-        end
-        vim.fn.setqflist(qf_items)
-      end
-
-      -- Update quickfix list whenever diagnostics change
-      vim.api.nvim_create_autocmd("DiagnosticChanged", {
-        callback = add_buffer_diagnostics_to_quickfix,
-        group = vim.api.nvim_create_augroup("DiagnosticQuickfix", { clear = true })
-      })
-
       local on_attach = function(client, bufnr)
         local opts = { buffer = bufnr, silent = true }
         vim.keymap.set("n", "gd", function() vim.lsp.buf.definition() end, opts)
@@ -70,9 +42,13 @@ return {
         vim.keymap.set("n", "<leader>vi", function() vim.lsp.buf.incoming_calls() end, opts)
         vim.keymap.set("i", "<C-h>", function() vim.lsp.buf.signature_help() end, opts)
         
-        -- Add quickfix specific keymaps
-        vim.keymap.set("n", "<leader>qf", function() vim.diagnostic.setqflist() end, opts)
-        vim.keymap.set("n", "<leader>qq", function() vim.diagnostic.setloclist() end, opts)
+        -- Update quickfix specific keymaps to not auto-update
+        vim.keymap.set("n", "<leader>qf", function() 
+          vim.diagnostic.setqflist({open = true}) 
+        end, opts)
+        vim.keymap.set("n", "<leader>qq", function() 
+          vim.diagnostic.setloclist({open = true}) 
+        end, opts)
       end
 
       local cmp = require('cmp')
