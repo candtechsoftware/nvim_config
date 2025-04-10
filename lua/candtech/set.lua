@@ -42,6 +42,5 @@ vim.opt.signcolumn = "yes" -- Always show the sign column
 
 vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
 
-vim.opt.colorcolumn = "100" -- Highlight the 100th column try to keep lines under 100 characters 
 
 vim.g.tex_conceal = "mgs"
