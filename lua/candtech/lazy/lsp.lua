@@ -127,6 +127,10 @@ return {
         on_attach = on_attach,
         capabilities = capabilities,
       })
+      lspconfig.ols.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+      })
     end
   }
 }
