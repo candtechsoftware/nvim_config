@@ -118,9 +118,9 @@ return {
         capabilities = capabilities,
       })
 
-      lspconfig.clangd.setup({
-        on_attach = on_attach,
-        capabilities = capabilities,
+     lspconfig.clangd.setup({
+          on_attach = on_attach,
+          capabilities = capabilities,
       })
 
       lspconfig.zls.setup({

@@ -59,5 +59,3 @@ require("lazy").setup({
             },
         },
     })
-
-

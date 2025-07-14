@@ -32,6 +32,8 @@ vim.opt.incsearch = true -- Incremental search
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
 
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
 vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
 
 
