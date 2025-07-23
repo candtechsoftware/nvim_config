@@ -10,8 +10,15 @@ vim.diagnostic.config({
 })
 
 
-vim.opt.nu = true -- Show line numbers
-vim.opt.relativenumber = true -- Show relative line numbers
+vim.o.number = false
+vim.o.relativenumber = false
+
+-- Remove tildes (~) on empty lines
+vim.opt.fillchars:append({ eob = " " })
+
+-- Set statusline to: filename line:col
+vim.o.laststatus = 2  -- Always show status line
+vim.o.statusline = "%f %l:%c"
 
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for
 vim.opt.softtabstop = 4 -- Number of spaces that a <Tab> key press in insert mode inserts

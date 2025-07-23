@@ -1,9 +1,22 @@
 return
 {
-    "p00f/alabaster.nvim",
+    'sainnhe/sonokai',
     lazy = false,
-    priority = 1000,
     config = function()
-        vim.cmd("colorscheme alabaster")
+        vim.opt.termguicolors = false
+
+        vim.cmd("colorscheme sonokai")
+        vim.cmd [[
+             highlight Normal ctermbg=None
+             highlight NormalNC ctermbg=None
+             highlight EndOfBuffer ctermbg=None
+             highlight VertSplit ctermbg=None
+             highlight StatusLine ctermbg=None
+             highlight SignColumn ctermbg=None
+             highlight LineNr ctermbg=None
+             highlight CursorLine ctermbg=None
+             highlight CursorLineNr ctermbg=None
+             highlight FoldColumn ctermbg=None
+        ]]
     end,
 }
