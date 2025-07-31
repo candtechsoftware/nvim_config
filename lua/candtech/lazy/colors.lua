@@ -1,11 +1,11 @@
 return
 {
-    'sainnhe/sonokai',
-    lazy = false,
-    config = function()
-        vim.opt.termguicolors = false
+        'luisiacc/handmade-hero-theme',
+        lazy = false,
+        config = function()
+            vim.opt.termguicolors = false
 
-        vim.cmd("colorscheme sonokai")
+            vim.cmd("colorscheme handmade-hero-theme")
         vim.cmd [[
              highlight Normal ctermbg=None
              highlight NormalNC ctermbg=None

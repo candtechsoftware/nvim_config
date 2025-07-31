@@ -1,92 +1,137 @@
 return {
-    "ibhagwan/fzf-lua",
+    "nvim-telescope/telescope.nvim",
+    tag = "0.1.8",
     dependencies = {
-        "nvim-tree/nvim-web-devicons", -- optional, for file icons
+        "nvim-lua/plenary.nvim",
+        {
+            "nvim-telescope/telescope-fzf-native.nvim",
+            build = "make",
+            cond = function()
+                return vim.fn.executable("make") == 1
+            end,
+        },
     },
     config = function()
-        local fzf = require("fzf-lua")
+        local telescope = require("telescope")
+        local builtin = require("telescope.builtin")
+        local actions = require("telescope.actions")
 
-        fzf.setup({
-            winopts = {
-                height = 0.85,
-                width = 0.9,
-                preview = {
-                    layout = "flex", -- automatically adjust between horizontal and vertical
-                    horizontal = "right:60%", -- preview on the right taking 60% width
-                    vertical = "down:75%",
-                    flip_columns = 120,
+        telescope.setup({
+            defaults = {
+                path_display = { "truncate" },
+                mappings = {
+                    i = {
+                        ["<C-j>"] = actions.move_selection_next,
+                        ["<C-k>"] = actions.move_selection_previous,
+                        ["<C-q>"] = actions.send_selected_to_qflist + actions.open_qflist,
+                        ["<esc>"] = actions.close,
+                    },
+                    n = {
+                        ["<C-j>"] = actions.move_selection_next,
+                        ["<C-k>"] = actions.move_selection_previous,
+                        ["<C-q>"] = actions.send_selected_to_qflist + actions.open_qflist,
+                        ["q"] = actions.close,
+                    },
                 },
-                prompt = " > ",
-                prompt_pos = "top",
+                vimgrep_arguments = {
+                    "rg",
+                    "--color=never",
+                    "--no-heading",
+                    "--with-filename",
+                    "--line-number",
+                    "--column",
+                    "--smart-case",
+                    "--hidden",
+                    "--follow",
+                    "--glob",
+                    "!.git/*",
+                    "--glob",
+                    "!node_modules/*",
+                    "--glob",
+                    "!.next/*",
+                    "--glob",
+                    "!dist/*",
+                    "--glob",
+                    "!build/*",
+                    "--glob",
+                    "!coverage/*",
+                    "--glob",
+                    "!*.lock",
+                    "--glob",
+                    "!*.log",
+                },
+                file_ignore_patterns = {
+                    "node_modules",
+                    ".git/",
+                    "dist/",
+                    "build/",
+                    ".next/",
+                    "coverage/",
+                    "%.lock",
+                    "%.log",
+                },
+                layout_strategy = "horizontal",
+                layout_config = {
+                    horizontal = {
+                        prompt_position = "top",
+                        preview_width = 0.6,
+                    },
+                    width = 0.9,
+                    height = 0.85,
+                },
+                sorting_strategy = "ascending",
             },
-
-            keymap = {
-                builtin = {
-                    -- these match telescope's <C-j>, <C-k>, <C-q>, and <esc>
-                    ["<C-j>"] = "down",
-                    ["<C-k>"] = "up",
-                    ["<C-q>"] = "toggle-all+accept",
-                    ["<esc>"] = "abort",
+            pickers = {
+                find_files = {
+                    hidden = true,
+                    find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*" },
+                },
+                live_grep = {
+                    additional_args = function()
+                        return { "--hidden" }
+                    end,
+                },
+                grep_string = {
+                    additional_args = function()
+                        return { "--hidden" }
+                    end,
                 },
             },
-
-            files = {
-                prompt = "Find Files❯ ",
-                cmd = "fd --type f --hidden",
-                git_icons = true,
-                file_icons = true,
-                color_icons = true,
-                fd_opts = "--type f --hidden",
-                actions = {
-                    ["default"] = fzf.actions.file_edit,
-                    ["ctrl-q"] = fzf.actions.file_sel_to_qf,
+            extensions = {
+                fzf = {
+                    fuzzy = true,
+                    override_generic_sorter = true,
+                    override_file_sorter = true,
+                    case_mode = "smart_case",
                 },
-            },
-
-            grep = {
-                prompt = "Live Grep❯ ",
-                input_prompt = "Grep For❯ ",
-                rg_opts =
-                "--color=never --no-heading --with-filename --line-number --column --smart-case --hidden --glob=!.git/*",
-                actions = {
-                    ["default"] = fzf.actions.file_edit,
-                    ["ctrl-q"] = fzf.actions.file_sel_to_qf,
-                },
-            },
-
-            git = {
-                files = {
-                    prompt = "Git Files❯ ",
-                    cmd = "git ls-files --others --cached --exclude-standard",
-                },
-            },
-
-            quickfix = {
-                file_icons = true,
-                git_icons = true,
-            },
-
-            fzf_opts = {
-                ["--ansi"] = true,
-                ["--layout"] = "reverse",
-                ["--info"] = "inline",
-                ["--prompt"] = " > ",
-                ["--pointer"] = "▶",
-                ["--marker"] = "✓",
             },
         })
 
-        -- Keymaps (equivalent to Telescope ones)
+        -- Load fzf extension if available
+        pcall(telescope.load_extension, "fzf")
+
+        -- Keymaps
         vim.keymap.set("n", "<leader>pws", function()
-            fzf.grep_cword()
+            builtin.grep_string({ search = vim.fn.expand("<cword>") })
         end, { desc = "Grep word under cursor" })
 
         vim.keymap.set("n", "<leader>pWs", function()
-            fzf.grep_cWORD()
+            builtin.grep_string({ search = vim.fn.expand("<cWORD>") })
         end, { desc = "Grep WORD under cursor" })
 
-        vim.keymap.set("n", "<leader>ff", fzf.files, { desc = "Find files" })
-        vim.keymap.set("n", "<leader>/", fzf.grep_project, { desc = "Live grep" })
-        vim.keymap.set("n", "<leader>gf", fzf.git_files, { desc = "Git files" })
+        vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Find files" })
+        vim.keymap.set("n", "<leader>/", builtin.live_grep, { desc = "Live grep (all files)" })
+        -- Remove <leader>g/ as it's not easily implemented in telescope
+        -- Use <leader>/ for general grep and <leader>gf to browse git files instead
+        vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
+        
+        -- Symbol search
+        vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols, { desc = "Document symbols" })
+        vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols, { desc = "Workspace symbols" })
+        
+        -- Additional useful git commands
+        vim.keymap.set("n", "<leader>gc", builtin.git_commits, { desc = "Git commits" })
+        vim.keymap.set("n", "<leader>gb", builtin.git_branches, { desc = "Git branches" })
+        vim.keymap.set("n", "<leader>gs", builtin.git_status, { desc = "Git status" })
     end,
 }

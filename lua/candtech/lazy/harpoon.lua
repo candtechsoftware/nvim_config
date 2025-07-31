@@ -1,12 +1,10 @@
 return {
   "ThePrimeagen/harpoon",
   branch = "harpoon2",
-  dependencies = { "nvim-lua/plenary.nvim", "ibhagwan/fzf-lua" },
+  dependencies = { "nvim-lua/plenary.nvim", "nvim-telescope/telescope.nvim" },
   config = function()
     local harpoon = require("harpoon")
     harpoon:setup({})
-
-    local fzf = require("fzf-lua")
 
     vim.keymap.set("n", "<leader>ha", function()
       harpoon:list():add()
@@ -32,31 +30,39 @@ return {
       harpoon:list():next()
     end, { desc = "Harpoon next file" })
 
-    -- Replace Telescope with fzf-lua
-    local function toggle_fzf(harpoon_files)
+    -- Use telescope for harpoon menu
+    local function toggle_telescope(harpoon_files)
       local file_paths = {}
       for _, item in ipairs(harpoon_files.items) do
         table.insert(file_paths, item.value)
       end
 
-      fzf.fzf_exec(file_paths, {
-        prompt = "Harpoon❯ ",
-        actions = {
-          ["default"] = function(selected)
+      require("telescope.pickers").new({}, {
+        prompt_title = "Harpoon",
+        finder = require("telescope.finders").new_table({
+          results = file_paths,
+        }),
+        previewer = require("telescope.config").values.file_previewer({}),
+        sorter = require("telescope.config").values.generic_sorter({}),
+        attach_mappings = function(prompt_bufnr, map)
+          require("telescope.actions.set").select:replace(function()
+            require("telescope.actions").close(prompt_bufnr)
+            local selection = require("telescope.actions.state").get_selected_entry()
             for i, item in ipairs(harpoon_files.items) do
-              if item.value == selected[1] then
+              if item.value == selection[1] then
                 harpoon:list():select(i)
                 return
               end
             end
-          end,
-        },
-      })
+          end)
+          return true
+        end,
+      }):find()
     end
 
     vim.keymap.set("n", "<C-e>", function()
-      toggle_fzf(harpoon:list())
-    end, { desc = "Open harpoon (fzf-lua)" })
+      toggle_telescope(harpoon:list())
+    end, { desc = "Open harpoon (telescope)" })
   end,
 }
 
