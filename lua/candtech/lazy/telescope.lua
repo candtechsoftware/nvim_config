@@ -129,7 +129,10 @@ return {
         
         -- Symbol search
         vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols, { desc = "Document symbols" })
-        vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols, { desc = "Workspace symbols" })
+        vim.keymap.set("n", "<leader>ws", builtin.lsp_dynamic_workspace_symbols, { desc = "Dynamic workspace symbols" })
+        vim.keymap.set("n", "<leader>Ws", function()
+            builtin.lsp_workspace_symbols({ query = "" })
+        end, { desc = "Workspace symbols (all)" })
         
         -- Additional useful git commands
         vim.keymap.set("n", "<leader>gc", builtin.git_commits, { desc = "Git commits" })
