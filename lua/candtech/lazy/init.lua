@@ -9,7 +9,6 @@ return {
     { import = "candtech.lazy.cmp" },
     { import = "candtech.lazy.fugitive" },
     { import = "candtech.lazy.harpoon" },
-    { import = "candtech.lazy.peek" },
     { import = "candtech.lazy.spell" },
     { import = "candtech.lazy.undotree" },
 }

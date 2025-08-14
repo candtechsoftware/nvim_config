@@ -1,6 +1,7 @@
 return {
   {
     "neovim/nvim-lspconfig",
+    tag = "v1.0.0",
     dependencies = {
       "hrsh7th/cmp-nvim-lsp",
       "hrsh7th/cmp-buffer",
@@ -27,6 +28,24 @@ return {
           prefix = '',
         },
       })
+
+      -- Universal function to find workspace root for any LSP
+      local function get_workspace_root(fname, patterns)
+        -- First try to find by patterns
+        local root = lspconfig.util.root_pattern(unpack(patterns))(fname)
+        if root then
+          return root
+        end
+        
+        -- Then try git root
+        local git_root = vim.fn.systemlist("git -C " .. vim.fn.shellescape(vim.fn.fnamemodify(fname, ":h")) .. " rev-parse --show-toplevel")[1]
+        if vim.v.shell_error == 0 and git_root and git_root ~= "" then
+          return git_root
+        end
+        
+        -- Use the initial working directory as fallback (not current directory)
+        return vim.fn.getcwd()
+      end
 
       local on_attach = function(client, bufnr)
         local opts = { buffer = bufnr, silent = true }
@@ -112,52 +131,170 @@ return {
         },
       })
 
-      -- Setup other language servers
+      -- Setup other language servers with consistent workspace detection
       lspconfig.gopls.setup({
         on_attach = on_attach,
         capabilities = capabilities,
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'go.mod', 'go.sum', '.git'})
+        end,
       })
 
       lspconfig.ts_ls.setup({
         on_attach = on_attach,
         capabilities = capabilities,
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'package.json', 'tsconfig.json', '.git'})
+        end,
       })
 
       lspconfig.rust_analyzer.setup({
         on_attach = on_attach,
         capabilities = capabilities,
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'Cargo.toml', '.git'})
+        end,
       })
 
-            lspconfig.clangd.setup({
-                on_attach = on_attach,
-                capabilities = capabilities,
-                cmd = {
-                    "clangd",
-                    "--background-index",
-                    "--clang-tidy",
-                    "--header-insertion=iwyu",
-                    "--completion-style=detailed",
-                    "--function-arg-placeholders",
-                    "--fallback-style=llvm"
-                },
-                root_dir = function(fname)
-                    return require("lspconfig.util").root_pattern(
-                        "compile_commands.json",
-                        ".clangd",
-                        ".git"
-                    )(fname) or vim.fn.getcwd()
-                end,
+      lspconfig.clangd.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+        cmd = {
+          "clangd",
+          "--background-index",
+          "--clang-tidy",
+          "--header-insertion=iwyu",
+          "--completion-style=detailed",
+          "--function-arg-placeholders",
+          "--fallback-style=llvm"
+        },
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'compile_commands.json', '.clangd', 'CMakeLists.txt', 'Makefile', '.git'})
+        end,
       })
 
       lspconfig.zls.setup({
         on_attach = on_attach,
         capabilities = capabilities,
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'build.zig', '.git'})
+        end,
       })
 
       lspconfig.ols.setup({
         on_attach = on_attach,
         capabilities = capabilities,
+        root_dir = function(fname)
+          return get_workspace_root(fname, {'ols.json', '.git'})
+        end,
       })
+
+      -- Jai Language Server
+      local configs = require('lspconfig.configs')
+      
+      -- Determine the correct binary path
+      local function get_jails_path()
+        -- Check common locations
+        local paths = {
+          vim.fn.expand("~/bins/jails"),
+          vim.fn.expand("~/.local/bin/jails"),
+          "/usr/local/bin/jails",
+          vim.fn.exepath("jails") -- Check if it's in PATH
+        }
+        
+        for _, p in ipairs(paths) do
+          if p and p ~= "" and vim.fn.executable(p) == 1 then
+            return p
+          end
+        end
+        
+        -- Platform-specific binary name
+        local platform = vim.loop.os_uname().sysname:lower()
+        local arch = vim.loop.os_uname().machine:lower()
+        if arch == "x86_64" then arch = "amd64" end
+        
+        local binary_name = string.format("jails-%s-%s", platform, arch)
+        if platform == "windows" then
+          binary_name = binary_name .. ".exe"
+        end
+        
+        -- Check with platform-specific name
+        local platform_specific = vim.fn.exepath(binary_name)
+        if platform_specific and platform_specific ~= "" then
+          return platform_specific
+        end
+        
+        return nil
+      end
+      
+      local jails_path = get_jails_path()
+      
+      if jails_path then
+        if not configs.jails then
+          configs.jails = {
+            default_config = {
+              cmd = { jails_path },
+              filetypes = { 'jai' },
+              root_dir = function(fname)
+                -- More robust root directory detection for Jai
+                return get_workspace_root(fname, {'build.jai', 'first.jai', '.git'})
+              end,
+              settings = {},
+              -- Keep the workspace root once found
+              single_file_support = false,
+            },
+          }
+        end
+        
+        lspconfig.jails.setup({
+          on_attach = on_attach,
+          capabilities = capabilities,
+          autostart = true,
+          -- Ensure the root directory is maintained
+          root_dir = function(fname)
+            return get_workspace_root(fname, {'build.jai', 'first.jai', '.git'})
+          end,
+        })
+      else
+        vim.api.nvim_create_autocmd("FileType", {
+          pattern = "jai",
+          once = true,
+          callback = function()
+            vim.notify(
+              "Jai Language Server not found. Please install jails from https://github.com/SogoCZE/Jails",
+              vim.log.levels.WARN
+            )
+          end,
+        })
+      end
+
+      -- Helper commands for Jai LSP
+      vim.api.nvim_create_user_command('JailsStart', function()
+        if jails_path then
+          vim.cmd('LspStart jails')
+        else
+          vim.notify("Jails not found in PATH", vim.log.levels.ERROR)
+        end
+      end, { desc = 'Start Jai Language Server' })
+      
+      vim.api.nvim_create_user_command('JailsStop', function()
+        vim.cmd('LspStop jails')
+      end, { desc = 'Stop Jai Language Server' })
+      
+      vim.api.nvim_create_user_command('JailsRestart', function()
+        vim.cmd('LspStop jails')
+        vim.defer_fn(function()
+          vim.cmd('LspStart jails')
+        end, 500)
+      end, { desc = 'Restart Jai Language Server' })
+      
+      vim.api.nvim_create_user_command('JailsInfo', function()
+        if jails_path then
+          vim.notify(string.format("Jails path: %s", jails_path), vim.log.levels.INFO)
+        else
+          vim.notify("Jails not found. Install from https://github.com/SogoCZE/Jails", vim.log.levels.WARN)
+        end
+      end, { desc = 'Show Jai Language Server info' })
     end
   }
 }

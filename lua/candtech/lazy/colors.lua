@@ -1,10 +1,13 @@
 return
 {
-        'srcery-colors/srcery-vim',
+        'metalelf0/jellybeans-nvim',
+        dependencies = {
+            'rktjmp/lush.nvim'
+        },
         lazy = false,
         config = function()
             vim.opt.termguicolors = true
 
-            vim.cmd("colorscheme fleury")
+            vim.cmd("colorscheme jellybeans-nvim")
         end,
 }

@@ -6,7 +6,7 @@ return {
     require("nvim-treesitter.configs").setup({
       ensure_installed = {
         "vimdoc", "javascript", "typescript", "c", "lua", "rust",
-        "jsdoc", "bash",
+        "jsdoc", "bash", "jai",
       },
       sync_install = false,
       auto_install = false,
@@ -49,6 +49,15 @@ return {
 
     -- Remove zig
     parser_config.zig = nil
+
+    -- Add Jai parser
+    parser_config.jai = {
+      install_info = {
+        url = 'https://github.com/constantitus/tree-sitter-jai',
+        files = { 'src/parser.c', 'src/scanner.c' },
+      },
+      filetype = 'jai',
+    }
 
     vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
       pattern = "*.zig",
