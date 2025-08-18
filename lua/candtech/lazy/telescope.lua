@@ -20,6 +20,9 @@ return {
         telescope.setup({
             defaults = {
                 path_display = { "truncate" },
+                preview = {
+                    hide_on_startup = false,
+                },
                 mappings = {
                     i = {
                         ["<C-j>"] = actions.move_selection_next,
@@ -75,7 +78,8 @@ return {
                 layout_config = {
                     horizontal = {
                         prompt_position = "top",
-                        preview_width = 0.6,
+                        preview_width = 0.55,
+                        preview_cutoff = 40,
                     },
                     width = 0.9,
                     height = 0.85,
