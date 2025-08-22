@@ -1,13 +1,12 @@
 return
 {
-        'metalelf0/jellybeans-nvim',
+        'sainnhe/gruvbox-material',
         dependencies = {
             'rktjmp/lush.nvim'
         },
         lazy = false,
         config = function()
-            vim.opt.termguicolors = true
 
-            vim.cmd("colorscheme jellybeans-nvim")
+            vim.cmd("colorscheme gruvbox-material")
         end,
 }
