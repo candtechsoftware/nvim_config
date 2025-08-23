@@ -7,7 +7,6 @@ return {
       "hrsh7th/cmp-buffer",
       "hrsh7th/cmp-path",
       "hrsh7th/cmp-cmdline",
-      "hrsh7th/nvim-cmp",
       "j-hui/fidget.nvim",
     },
     config = function()
@@ -72,6 +71,7 @@ return {
 
       local cmp = require('cmp')
       local cmp_lsp = require("cmp_nvim_lsp")
+      
       local capabilities = vim.tbl_deep_extend(
         "force",
         {},
@@ -90,11 +90,64 @@ return {
         }),
         formatting = {
           format = function(entry, vim_item)
-            -- Remove function parameters from display
-            if vim_item.kind == "Function" or vim_item.kind == "Method" then
-              vim_item.word = vim_item.word:gsub("%(.*%)", "()")
+            -- Safeguard against any errors in formatting
+            local ok, result = pcall(function()
+              -- Special handling for Jai files
+              if vim.bo.filetype == 'jai' then
+                -- Get the completion item
+                local completion_item = entry:get_completion_item()
+                
+                -- Create a minimal safe vim_item for Jai
+                local safe_item = {
+                  word = "",
+                  abbr = "",
+                  menu = "[LSP]",
+                  kind = vim_item.kind or "Text"
+                }
+                
+                -- Try to extract text safely
+                if completion_item then
+                  if completion_item.label and type(completion_item.label) == "string" then
+                    safe_item.abbr = completion_item.label
+                    safe_item.word = completion_item.label
+                  elseif completion_item.insertText and type(completion_item.insertText) == "string" then
+                    safe_item.abbr = completion_item.insertText
+                    safe_item.word = completion_item.insertText
+                  end
+                end
+                
+                -- Fallback to entry's insert text
+                if safe_item.word == "" then
+                  local insert_text = entry:get_insert_text()
+                  if insert_text and type(insert_text) == "string" then
+                    safe_item.word = insert_text
+                    safe_item.abbr = insert_text
+                  end
+                end
+                
+                return safe_item
+              end
+              
+              -- For non-Jai files, just ensure word is a string
+              if vim_item.word and type(vim_item.word) == "string" and
+                 (vim_item.kind == "Function" or vim_item.kind == "Method") then
+                vim_item.word = vim_item.word:gsub("%(.*%)", "()")
+              end
+              
+              return vim_item
+            end)
+            
+            if not ok then
+              -- Return a minimal safe item on any error
+              return {
+                word = entry:get_insert_text() or "",
+                abbr = entry:get_insert_text() or "",
+                menu = "",
+                kind = ""
+              }
             end
-            return vim_item
+            
+            return result
           end,
         },
         sources = cmp.config.sources({
@@ -196,9 +249,7 @@ return {
       local function get_jails_path()
         -- Check common locations
         local paths = {
-          vim.fn.expand("~/bins/jails"),
-          vim.fn.expand("~/.local/bin/jails"),
-          "/usr/local/bin/jails",
+          "/home/candtech/gits/Jails/bin",
           vim.fn.exepath("jails") -- Check if it's in PATH
         }
         
@@ -233,7 +284,7 @@ return {
         if not configs.jails then
           configs.jails = {
             default_config = {
-              cmd = { jails_path },
+              cmd = { jails_path, "-jai_path", "/home/candtech/gits/jai" },
               filetypes = { 'jai' },
               root_dir = function(fname)
                 -- More robust root directory detection for Jai
@@ -247,7 +298,62 @@ return {
         end
         
         lspconfig.jails.setup({
-          on_attach = on_attach,
+          on_attach = function(client, bufnr)
+            -- Intercept completion responses for Jai to clean blob data
+            local original_handler = vim.lsp.handlers["textDocument/completion"]
+            vim.lsp.handlers["textDocument/completion"] = function(err, result, ctx, config)
+              if result and vim.bo.filetype == 'jai' then
+                -- Deep clean function to remove all non-serializable data
+                local function clean_value(v)
+                  local vtype = type(v)
+                  if vtype == "string" or vtype == "number" or vtype == "boolean" or vtype == "nil" then
+                    return v
+                  elseif vtype == "userdata" then
+                    -- This is likely a blob - convert to empty string
+                    return ""
+                  elseif vtype == "function" then
+                    return nil
+                  elseif vtype == "table" then
+                    local clean = {}
+                    for k, val in pairs(v) do
+                      local cleaned = clean_value(val)
+                      if cleaned ~= nil or val == nil then
+                        clean[k] = cleaned
+                      end
+                    end
+                    return clean
+                  else
+                    -- Unknown type - convert to string
+                    local ok, str = pcall(tostring, v)
+                    return ok and str or ""
+                  end
+                end
+                
+                -- Clean the entire result
+                result = clean_value(result)
+                
+                -- Extra safety for import completions
+                if result and result.items then
+                  local line = vim.api.nvim_get_current_line()
+                  if line:match('#import%s*"') then
+                    for i, item in ipairs(result.items) do
+                      -- Ensure critical fields are present and are strings
+                      if not item.label or type(item.label) ~= "string" then
+                        item.label = item.insertText or item.filterText or "module"
+                      end
+                      if item.label then
+                        item.label = tostring(item.label):gsub("%z", "")
+                      end
+                    end
+                  end
+                end
+              end
+              return original_handler(err, result, ctx, config)
+            end
+            
+            -- Call the original on_attach
+            on_attach(client, bufnr)
+          end,
           capabilities = capabilities,
           autostart = true,
           -- Ensure the root directory is maintained

@@ -211,7 +211,7 @@ return {
         end, { desc = 'Reset workspace root cache' })
 
         -- Jai module search keymaps
-        local jai_modules_path = "/Users/alexmatthewcandelario/gits/jai/modules"
+        local jai_modules_path = "~/gits/jai/modules"
         
         -- Search for symbols (functions/structs) in Jai modules
         vim.keymap.set("n", "<leader>js", function()
