@@ -1,12 +1,11 @@
 return
 {
-        'sainnhe/gruvbox-material',
-        dependencies = {
-            'rktjmp/lush.nvim'
-        },
-        lazy = false,
-        config = function()
-
-            vim.cmd("colorscheme gruvbox-material")
-        end,
+    'RostislavArts/naysayer.nvim',
+    dependencies = {
+        'rktjmp/lush.nvim'
+    },
+    lazy = false,
+    config = function()
+        vim.cmd("colorscheme cand")
+    end,
 }

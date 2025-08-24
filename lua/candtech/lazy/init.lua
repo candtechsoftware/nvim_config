@@ -6,6 +6,7 @@ return {
     { import = "candtech.lazy.telescope" },
     { import = "candtech.lazy.treesitter" },
     { import = "candtech.lazy.trouble" },
+    { import = "candtech.lazy.git" },
     { import = "candtech.lazy.cmp" },
     { import = "candtech.lazy.fugitive" },
     { import = "candtech.lazy.harpoon" },
