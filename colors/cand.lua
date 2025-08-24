@@ -8,7 +8,6 @@ local colors = {
   cyan       = "#A1EFE4",
   violet     = "#AE81FF",
 
-  background = "#1e1e1e",
   gutter     = "#062625",
   selection  = "#0000ff",
   text       = "#d0b892",
@@ -48,7 +47,7 @@ set(0, "Cursor",           { bg = colors.white })
 set(0, "Visual",           { bg = colors.selection })
 set(0, "LineNr",           { fg = colors.line_fg, bg = colors.background })
 set(0, "CursorLineNr",     { fg = colors.white, bg = colors.background })
-set(0, "CursorLine",       { bg = colors.highlight })
+set(0, "CursorLine",       { bg = colors.selection })
 set(0, "ColorColumn",      { bg = colors.highlight })
 set(0, "VertSplit",        { fg = colors.line_fg })
 set(0, "MatchParen",       { bg = colors.selection })
@@ -63,7 +62,7 @@ set(0, "Identifier",       { fg = colors.variable })
 set(0, "Function",         { fg = colors.function_ })
 set(0, "Statement",        { fg = colors.keyword })
 set(0, "Keyword",          { fg = colors.keyword })
-set(0, "Type",             { fg = colors.punctuation })
+set(0, "Type",             { fg = colors.variable})
 set(0, "PreProc",          { fg = colors.macro })
 set(0, "Special",          { fg = colors.orange })
 set(0, "WarningMsg",       { fg = colors.warning })
@@ -93,6 +92,10 @@ set(0, "PmenuSbar",        { bg = "#2a2a2a" })
 set(0, "PmenuThumb",       { bg = colors.line_fg })
 set(0, "WinSeparator",     { fg = colors.line_fg })
 set(0, "Winseparator",     { fg = colors.line_fg })
+
+-- NetRW
+set(0, "netrwCursorLine",  { bg = colors.selection })
+set(0, "netrwDir",         { fg = colors.punctuation })
 
 -- Lazy.nvim interface
 set(0, "LazyNormal",        { fg = colors.text, bg = "#2a2a2a" })
