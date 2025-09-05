@@ -148,7 +148,8 @@ set(0, "Winseparator",     { fg = colors.margin })
 
 -- NetRW
 set(0, "netrwCursorLine",  { bg = colors.highlight })
-set(0, "netrwDir",         { fg = colors.index_sum_type })
+set(0, "netrwDir",         { fg = colors.blue })
+set(0, "netrwExe",         { fg = colors.orange })
 
 -- Lazy.nvim interface
 set(0, "LazyNormal",        { fg = colors.text_default, bg = colors.margin })
