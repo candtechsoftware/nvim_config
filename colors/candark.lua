@@ -1,312 +1,222 @@
--- Candark colorscheme
--- Converted from 4coder theme
-
-vim.cmd("hi clear")
-if vim.fn.exists("syntax_on") then
-    vim.cmd("syntax reset")
-end
-
-vim.o.background = "dark"
-vim.g.colors_name = "candark"
-
-local function hex_to_rgb(hex)
-    hex = hex:gsub("#", "")
-    return {
-        r = tonumber(hex:sub(1, 2), 16),
-        g = tonumber(hex:sub(3, 4), 16),
-        b = tonumber(hex:sub(5, 6), 16)
-    }
-end
-
-local function to_hex(color)
-    if type(color) == "number" then
-        return string.format("#%06x", math.floor(color) % 0x1000000)
-    end
-    return color
-end
-
--- Color definitions from new 4coder palette
 local colors = {
-    -- Main UI colors
-    bar = to_hex(0x1f1f27),                    -- Status bar background
-    base = to_hex(0xcb9401),                   -- Status bar text
-    pop1 = to_hex(0x70971e),                  -- Prompts, search, goto
-    pop2 = to_hex(0xcb9401),                  -- Annotations on list picker items
-    back = to_hex(0x161616),                  -- Text area background
-    margin = to_hex(0x0C0C0C),                -- Frame around inactive panel
-    margin_hover = to_hex(0x00ff00),          -- Hover state
-    margin_active = to_hex(0x0C0C0C),         -- Frame around list picker
-    
-    -- List picker colors
-    list_item = "#000000",                     -- Background of list item
-    list_item_hover = to_hex(0x171e20),       -- Mouse-hover background
-    list_item_active = to_hex(0x2d3640),      -- Keyboard-hover background
-    
-    -- Cursor and highlighting
-    cursor_green = to_hex(0x00EE00),          -- Primary cursor
-    cursor_orange = to_hex(0xEE7700),         -- Secondary cursor
-    at_cursor = to_hex(0x161616),             -- Text at cursor
-    highlight_cursor_line = to_hex(0x1f1f27), -- Active line background
-    highlight = to_hex(0x315268),             -- Active search background
-    at_highlight = to_hex(0xc4b82b),          -- Active search text
-    mark = to_hex(0x494949),                  -- Mark color
+    -- Core UI colors
+    bar                   = "#000000",
+    base                  = "#fcaa05",
+    pop1                  = "#de8150",
+    pop2                  = "#FF0000",
+    back                  = "#020202",
+    margin                = "#222425",
+    margin_hover          = "#63523d",
+    margin_active         = "#63523d",
+    cursor                = "#00EE00",
+    cursor_alt1           = "#e0741b",
+    cursor_alt2           = "#1be094",
+    cursor_alt3           = "#ba60c4",
+    at_cursor             = "#0C0C0C",
+    highlight_cursor_line = "#1E1E1E",
+    highlight             = "#303040",
+    at_highlight          = "#FF44DD",
+    mark                  = "#494949",
     
     -- Text colors
-    text_default = to_hex(0xa08563),          -- Regular text
-    comment = to_hex(0x686868),              -- Comment text
-    comment_good = to_hex(0x00A000),         -- Good comment
-    comment_bad = to_hex(0xA00000),          -- Bad comment
-    keyword = to_hex(0xac7b0b),              -- Keyword text
-    string = to_hex(0x6b8e23),              -- String constant
-    number = to_hex(0x6b8e23),              -- Number constant
-    boolean = to_hex(0x6b8e23),             -- Bool constant
-    preproc = to_hex(0xdab98f),             -- Preprocessor
-    include = to_hex(0xdab98f),             -- Include directive
+    text_default          = "#b99468",
+    comment               = "#666666",
+    comment_pop           = "#2ab34f",
+    comment_pop_alt       = "#db2828",
+    keyword               = "#f0c674",
+    str_constant          = "#ffa900",
+    char_constant         = "#ffa900",
+    int_constant          = "#ffa900",
+    float_constant        = "#ffa900",
+    bool_constant         = "#ffa900",
+    preproc               = "#dc7575",
+    include               = "#ffa900",
+    special_character     = "#FF0000",
+    ghost_character       = "#4E5E46",
+    highlight_junk        = "#3A0000",
+    highlight_white       = "#003A3A",
+    paste                 = "#DDEE00",
+    undo                  = "#00DDEE",
+    line_numbers_back     = "#101010",
+    line_numbers_text     = "#404040",
     
-    -- Special characters
-    special_char = to_hex(0xff0000),         -- Special character
-    ghost_char = to_hex(0x5b4d3c),          -- Ghost character
-    highlight_junk = to_hex(0x3A0000),      -- Junk highlight
-    highlight_white = to_hex(0x003A3A),     -- White highlight
-    paste = to_hex(0xffbb00),               -- Paste color
-    undo = to_hex(0x80005d),                -- Undo color
+    -- Fleury theme specific colors
+    syntax_crap           = "#5c4d3c",
+    operators             = "#bd2d2d",
+    inactive_pane_overlay = "#44000000",
+    inactive_pane_background = "#000000",
+    file_progress_bar     = "#634323",
+    brace_highlight       = "#8ffff2",
+    brace_line            = "#9ba290",
+    brace_annotation      = "#9ba290",
+    index_product_type    = "#edb211",
+    index_sum_type        = "#a7eb13",
+    index_function        = "#de451f",
+    index_macro           = "#66D9EF",
+    index_constant        = "#6eb535",
+    index_comment_tag     = "#ffae00",
+    index_decl            = "#c9598a",
+    cursor_macro          = "#de2368",
+    cursor_power_mode     = "#efaf2f",
+    cursor_inactive       = "#880000",
+    plot_cycle1           = "#03d3fc",
+    plot_cycle2           = "#22b80b",
+    plot_cycle3           = "#f0bb0c",
+    plot_cycle4           = "#f0500c",
+    token_highlight       = "#f2d357",
+    token_minor_highlight = "#d19045",
+    error_annotation      = "#ff0000",
+    lego_grab             = "#efaf6f",
+    lego_splat            = "#efaaef",
+    comment_user_name     = "#ffdd23",
     
-    -- Line numbers
-    line_numbers_back = to_hex(0x101010),    -- Line number background
-    line_numbers_text = to_hex(0x404040),    -- Line number text
-    
-    -- Text cycle colors
-    text_cycle_1 = to_hex(0xc0a583),         -- Text cycle color 1
-    text_cycle_2 = to_hex(0xb09573),         -- Text cycle color 2
-    
-    -- Fleury index colors
-    type_color = to_hex(0xd8a51d),           -- Type identifiers
-    function_color = to_hex(0xcc5735),       -- Function identifiers
-    macro_color = to_hex(0x478980),          -- Macro identifiers
-    coder_command = to_hex(0x23de33),        -- 4coder command
-    
-    -- Fleury syntax colors
-    syntax_crap = to_hex(0x907553),          -- Braces, semicolons
-    operators = to_hex(0x907553),            -- Operators
-    brace_highlight = to_hex(0xb09573),      -- Brace highlighting
-    brace_line = to_hex(0x9ba290) .. "30",   -- Brace lines
-    brace_annotation = to_hex(0x9ba290) .. "60", -- Brace annotations
-    
-    -- Fleury additional colors
-    cursor_macro = to_hex(0xde2368),         -- Macro recording cursor
-    cursor_power = to_hex(0xefaf2f),         -- Power mode cursor
-    token_highlight = to_hex(0x2f2f37),      -- Token highlight
-    
-    -- Plot cycle colors
-    plot_cycle_1 = to_hex(0x03d3fc),         -- Plot color 1
-    plot_cycle_2 = to_hex(0x22b80b),         -- Plot color 2
-    plot_cycle_3 = to_hex(0xf0bb0c),         -- Plot color 3
-    plot_cycle_4 = to_hex(0xf0500c),         -- Plot color 4
-    
-    -- Additional compatibility colors
-    error_color = to_hex(0xff0000),          -- Error color
-    none = "none",                           -- Transparent
+    -- Legacy mappings for compatibility
+    yellow     = "#f0c674",
+    orange     = "#de8150",
+    red        = "#FF0000",
+    magenta    = "#FF44DD",
+    blue       = "#66D9EF",
+    green      = "#a7eb13",
+    cyan       = "#8ffff2",
+    violet     = "#ba60c4",
+    white      = "#b99468",
+    error      = "#ff0000",
+    warning    = "#ffa900",
 }
 
--- Define highlight groups
-local highlights = {
-    -- UI Elements
-    Normal = { fg = colors.text_default, bg = colors.back },
-    NormalFloat = { fg = colors.text_default, bg = colors.margin },
-    FloatBorder = { fg = colors.margin_hover, bg = colors.margin },
-    Pmenu = { fg = colors.text_default, bg = colors.margin },
-    PmenuSel = { fg = colors.text_default, bg = colors.margin_hover },
-    PmenuSbar = { bg = colors.margin },
-    PmenuThumb = { bg = colors.margin_hover },
-    
-    -- Cursor and selection
-    Cursor = { fg = colors.at_cursor, bg = colors.cursor_green },
-    CursorLine = { bg = colors.highlight_cursor_line },
-    CursorColumn = { bg = colors.highlight_cursor_line },
-    Visual = { bg = colors.highlight },
-    VisualNOS = { bg = colors.highlight },
-    
-    -- Line numbers
-    LineNr = { fg = colors.line_numbers_text, bg = colors.line_numbers_back },
-    CursorLineNr = { fg = colors.base, bg = colors.line_numbers_back },
-    
-    -- Search and highlighting
-    Search = { fg = colors.at_highlight, bg = colors.highlight },
-    IncSearch = { fg = colors.at_highlight, bg = colors.highlight },
-    MatchParen = { fg = colors.brace_highlight, bold = true },
-    
-    -- Syntax highlighting
-    Comment = { fg = colors.comment, italic = true },
-    Constant = { fg = colors.string },
-    String = { fg = colors.string },
-    Character = { fg = colors.string },
-    Number = { fg = colors.number },
-    Boolean = { fg = colors.boolean },
-    Float = { fg = colors.number },
-    
-    Identifier = { fg = colors.text_default },
-    Function = { fg = colors.function_color },
-    
-    Statement = { fg = colors.keyword },
-    Conditional = { fg = colors.keyword },
-    Repeat = { fg = colors.keyword },
-    Label = { fg = colors.keyword },
-    Operator = { fg = colors.operators },
-    Keyword = { fg = colors.keyword },
-    Exception = { fg = colors.keyword },
-    
-    PreProc = { fg = colors.preproc },
-    Include = { fg = colors.include },
-    Define = { fg = colors.macro_color },
-    Macro = { fg = colors.macro_color },
-    PreCondit = { fg = colors.preproc },
-    
-    -- Use type color for types
-    Type = { fg = colors.type_color },
-    StorageClass = { fg = colors.macro_color },
-    Structure = { fg = colors.type_color },
-    Typedef = { fg = colors.type_color },
-    
-    Special = { fg = colors.special_char },
-    SpecialChar = { fg = colors.special_char },
-    Tag = { fg = colors.keyword },
-    Delimiter = { fg = colors.operators },
-    SpecialComment = { fg = colors.keyword },
-    Debug = { fg = colors.error_color },
-    
-    -- Error and warning
-    Error = { fg = colors.error_color },
-    ErrorMsg = { fg = colors.error_color },
-    WarningMsg = { fg = colors.comment_bad },
-    
-    -- Status line
-    StatusLine = { fg = colors.text_default, bg = colors.margin },
-    StatusLineNC = { fg = colors.comment, bg = colors.margin },
-    
-    -- Tabs
-    TabLine = { fg = colors.comment, bg = colors.margin },
-    TabLineFill = { bg = colors.back },
-    TabLineSel = { fg = colors.text_default, bg = colors.back },
-    
-    -- Vertical split
-    VertSplit = { fg = colors.margin },
-    WinSeparator = { fg = colors.margin },
-    
-    -- Folding
-    Folded = { fg = colors.comment, bg = colors.margin },
-    FoldColumn = { fg = colors.comment, bg = colors.line_numbers_back },
-    
-    -- Diff
-    DiffAdd = { fg = colors.comment_good },
-    DiffChange = { fg = colors.base },
-    DiffDelete = { fg = colors.comment_bad },
-    DiffText = { fg = colors.at_highlight },
-    
-    -- Treesitter highlights
-    ["@comment"] = { link = "Comment" },
-    ["@constant"] = { link = "Constant" },
-    ["@constant.builtin"] = { fg = colors.boolean },
-    ["@constant.macro"] = { fg = colors.macro_color },
-    ["@string"] = { link = "String" },
-    ["@string.escape"] = { fg = colors.special_char },
-    ["@character"] = { link = "Character" },
-    ["@number"] = { link = "Number" },
-    ["@boolean"] = { link = "Boolean" },
-    ["@float"] = { link = "Float" },
-    
-    ["@function"] = { link = "Function" },
-    ["@function.builtin"] = { fg = colors.function_color },
-    ["@function.call"] = { fg = colors.function_color },
-    ["@function.macro"] = { fg = colors.macro_color },
-    ["@parameter"] = { fg = colors.text_default },
-    ["@method"] = { link = "Function" },
-    ["@method.call"] = { fg = colors.function_color },
-    ["@field"] = { fg = colors.text_default },
-    ["@property"] = { fg = colors.text_default },
-    ["@constructor"] = { fg = colors.type_color },
-    
-    ["@conditional"] = { link = "Conditional" },
-    ["@repeat"] = { link = "Repeat" },
-    ["@label"] = { link = "Label" },
-    ["@operator"] = { link = "Operator" },
-    ["@keyword"] = { link = "Keyword" },
-    ["@exception"] = { link = "Exception" },
-    
-    ["@variable"] = { fg = colors.text_default },
-    ["@type"] = { fg = colors.type_color },
-    ["@type.builtin"] = { fg = colors.type_color },
-    ["@namespace"] = { fg = colors.type_color },
-    ["@include"] = { link = "Include" },
-    
-    ["@punctuation.delimiter"] = { link = "Delimiter" },
-    ["@punctuation.bracket"] = { fg = colors.brace_highlight },
-    ["@punctuation.special"] = { link = "Special" },
-    
-    ["@tag"] = { link = "Tag" },
-    ["@tag.attribute"] = { fg = colors.text_default },
-    ["@tag.delimiter"] = { link = "Delimiter" },
-    
-    -- Language specific
-    -- C
-    ["@type.c"] = { fg = colors.type_color },
-    ["@constant.c"] = { fg = colors.string },
-    
-    -- TypeScript/JavaScript
-    ["@type.typescript"] = { fg = colors.type_color },
-    ["@constructor.typescript"] = { fg = colors.type_color },
-    ["@variable.typescript"] = { fg = colors.text_default },
-    
-    -- Zig
-    ["@type.zig"] = { fg = colors.type_color },
-    ["@keyword.zig"] = { fg = colors.keyword },
-    ["@function.zig"] = { fg = colors.function_color },
-    
-    -- Jai (special keywords like #expand use macro color)
-    ["@type.jai"] = { fg = colors.type_color },
-    ["@keyword.jai"] = { fg = colors.keyword },
-    ["@function.jai"] = { fg = colors.function_color },
-    ["@function.call.jai"] = { fg = colors.function_color },
-    ["@function.builtin.jai"] = { fg = colors.function_color },
-    ["@method.jai"] = { fg = colors.function_color },
-    ["@method.call.jai"] = { fg = colors.function_color },
-    ["@variable.builtin.jai"] = { fg = colors.function_color },
-    ["@identifier.jai"] = { fg = colors.text_default },
-    ["@variable.jai"] = { fg = colors.text_default },
-    ["@keyword.directive.jai"] = { fg = colors.macro_color },
-    ["@preproc.jai"] = { fg = colors.macro_color },
-    
-    -- LSP semantic tokens
-    ["@lsp.type.class"] = { fg = colors.type_color },
-    ["@lsp.type.decorator"] = { fg = colors.macro_color },
-    ["@lsp.type.enum"] = { fg = colors.type_color },
-    ["@lsp.type.enumMember"] = { fg = colors.string },
-    ["@lsp.type.function"] = { fg = colors.function_color },
-    ["@lsp.type.interface"] = { fg = colors.type_color },
-    ["@lsp.type.macro"] = { fg = colors.macro_color },
-    ["@lsp.type.method"] = { fg = colors.function_color },
-    ["@lsp.type.namespace"] = { fg = colors.type_color },
-    ["@lsp.type.parameter"] = { fg = colors.text_default },
-    ["@lsp.type.property"] = { fg = colors.text_default },
-    ["@lsp.type.struct"] = { fg = colors.type_color },
-    ["@lsp.type.type"] = { fg = colors.type_color },
-    ["@lsp.type.typeParameter"] = { fg = colors.type_color },
-    ["@lsp.type.variable"] = { fg = colors.text_default },
-}
+vim.cmd("highlight clear")
+vim.o.background = "dark"
+vim.g.colors_name = "cand"
 
--- Apply highlights
-for group, settings in pairs(highlights) do
-    vim.api.nvim_set_hl(0, group, settings)
-end
+local set = vim.api.nvim_set_hl
 
--- Telescope specific highlights
-vim.api.nvim_set_hl(0, "TelescopeNormal", { fg = colors.text_default, bg = colors.back })
-vim.api.nvim_set_hl(0, "TelescopeBorder", { fg = colors.margin_hover, bg = colors.back })
-vim.api.nvim_set_hl(0, "TelescopePromptNormal", { fg = colors.text_default, bg = colors.margin })
-vim.api.nvim_set_hl(0, "TelescopePromptBorder", { fg = colors.margin_hover, bg = colors.margin })
-vim.api.nvim_set_hl(0, "TelescopePromptTitle", { fg = colors.pop1, bg = colors.margin })
-vim.api.nvim_set_hl(0, "TelescopePreviewTitle", { fg = colors.pop1, bg = colors.back })
-vim.api.nvim_set_hl(0, "TelescopeResultsTitle", { fg = colors.pop1, bg = colors.back })
-vim.api.nvim_set_hl(0, "TelescopeSelection", { fg = colors.text_default, bg = colors.highlight_cursor_line })
-vim.api.nvim_set_hl(0, "TelescopeSelectionCaret", { fg = colors.pop1, bg = colors.highlight_cursor_line })
-vim.api.nvim_set_hl(0, "TelescopeMultiSelection", { fg = colors.cursor_green, bg = colors.highlight_cursor_line })
-vim.api.nvim_set_hl(0, "TelescopeMatching", { fg = colors.at_highlight, bold = true })
+-- Core UI
+set(0, "Normal",           { fg = colors.text_default, bg = colors.back })
+set(0, "Cursor",           { fg = colors.at_cursor, bg = colors.cursor })
+set(0, "Visual",           { bg = colors.highlight })
+set(0, "LineNr",           { fg = colors.line_numbers_text, bg = colors.line_numbers_back })
+set(0, "CursorLineNr",     { fg = colors.text_default, bg = colors.line_numbers_back })
+set(0, "CursorLine",       { bg = colors.highlight_cursor_line })
+set(0, "ColorColumn",      { bg = colors.margin })
+set(0, "VertSplit",        { fg = colors.margin })
+set(0, "MatchParen",       { bg = colors.brace_highlight })
+
+-- Syntax
+set(0, "Comment",          { fg = colors.comment })
+set(0, "String",           { fg = colors.str_constant })
+set(0, "Character",        { fg = colors.char_constant })
+set(0, "Number",           { fg = colors.int_constant })
+set(0, "Float",            { fg = colors.float_constant })
+set(0, "Boolean",          { fg = colors.bool_constant })
+set(0, "Constant",         { fg = colors.index_constant })
+set(0, "Identifier",       { fg = colors.text_default })
+set(0, "Function",         { fg = colors.index_function })
+set(0, "Statement",        { fg = colors.keyword })
+set(0, "Keyword",          { fg = colors.keyword })
+set(0, "Type",             { fg = colors.index_product_type })
+set(0, "PreProc",          { fg = colors.preproc })
+set(0, "Include",          { fg = colors.include })
+set(0, "Special",          { fg = colors.special_character })
+set(0, "Operator",         { fg = colors.operators })
+set(0, "WarningMsg",       { fg = colors.warning })
+set(0, "Error",            { fg = colors.error_annotation })
+
+-- Diagnostics
+set(0, "DiagnosticError",  { fg = colors.red })
+set(0, "DiagnosticWarn",   { fg = colors.warning })
+set(0, "DiagnosticInfo",   { fg = colors.blue })
+set(0, "DiagnosticHint",   { fg = colors.cyan })
+
+-- Rainbow delimiters (optional)
+set(0, "rainbowcol1", { fg = colors.violet })
+set(0, "rainbowcol2", { fg = colors.blue })
+set(0, "rainbowcol3", { fg = colors.green })
+set(0, "rainbowcol4", { fg = colors.yellow })
+set(0, "rainbowcol5", { fg = colors.orange })
+set(0, "rainbowcol6", { fg = colors.red })
+
+-- Floating windows (hover screens)
+set(0, "NormalFloat",       { fg = colors.text_default, bg = colors.margin })
+set(0, "FloatBorder",       { fg = colors.margin_hover, bg = colors.margin })
+set(0, "FloatTitle",        { fg = colors.base, bg = colors.margin })
+set(0, "Pmenu",            { fg = colors.text_default, bg = colors.margin })
+set(0, "PmenuSel",         { fg = colors.base, bg = colors.margin_active })
+set(0, "PmenuSbar",        { bg = colors.margin })
+set(0, "PmenuThumb",       { bg = colors.margin_hover })
+set(0, "WinSeparator",     { fg = colors.margin })
+set(0, "Winseparator",     { fg = colors.margin })
+
+-- NetRW
+set(0, "netrwCursorLine",  { bg = colors.highlight })
+set(0, "netrwDir",         { fg = colors.index_sum_type })
+
+-- Lazy.nvim interface
+set(0, "LazyNormal",        { fg = colors.text_default, bg = colors.margin })
+set(0, "LazyBorder",        { fg = colors.margin_hover, bg = colors.margin })
+set(0, "LazyTitle",         { fg = colors.base, bg = colors.margin })
+set(0, "LazyButton",        { fg = colors.text_default, bg = colors.highlight })
+set(0, "LazyButtonActive", { fg = colors.base, bg = colors.margin_active })
+set(0, "LazyH1",            { fg = colors.base })
+set(0, "LazyH2",            { fg = colors.cyan })
+set(0, "LazyComment",       { fg = colors.comment })
+set(0, "LazyCommit",        { fg = colors.green })
+set(0, "LazyCommitIssue",   { fg = colors.red })
+set(0, "LazyCommitScope",   { fg = colors.blue })
+set(0, "LazyCommitType",    { fg = colors.yellow })
+set(0, "LazyDimmed",        { fg = colors.comment })
+set(0, "LazyDir",           { fg = colors.cyan })
+set(0, "LazyProgressDone",  { fg = colors.green })
+set(0, "LazyProgressTodo",  { fg = colors.comment })
+set(0, "LazyProp",          { fg = colors.index_decl })
+set(0, "LazyReasonCmd",     { fg = colors.orange })
+set(0, "LazyReasonEvent",   { fg = colors.yellow })
+set(0, "LazyReasonFt",      { fg = colors.magenta })
+set(0, "LazyReasonImport",  { fg = colors.violet })
+set(0, "LazyReasonKeys",    { fg = colors.blue })
+set(0, "LazyReasonPlugin",  { fg = colors.green })
+set(0, "LazyReasonRuntime", { fg = colors.cyan })
+set(0, "LazyReasonSource",  { fg = colors.red })
+set(0, "LazyReasonStart",   { fg = colors.base })
+set(0, "LazySpecial",       { fg = colors.index_function })
+set(0, "LazyTaskError",     { fg = colors.error_annotation })
+set(0, "LazyTaskOutput",    { fg = colors.text_default })
+set(0, "LazyUrl",           { fg = colors.cyan })
+set(0, "LazyValue",         { fg = colors.index_constant })
+
+-- Lualine integration
+set(0, "StatusLine",        { fg = colors.back, bg = colors.text_default })
+set(0, "StatusLineNC",      { fg = colors.comment, bg = colors.margin })
+
+-- Treesitter highlights
+set(0, "@comment",        { link = "Comment" })
+set(0, "@string",         { link = "String" })
+set(0, "@number",         { link = "Number" })
+set(0, "@boolean",        { link = "Boolean" })
+set(0, "@constant",       { link = "Constant" })
+set(0, "@function",       { link = "Function" })
+set(0, "@function.builtin", { link = "Function" })
+set(0, "@variable",       { link = "Identifier" })
+set(0, "@variable.builtin", { link = "Type" })
+set(0, "@constant.builtin", { link = "Type" })
+set(0, "@type",           { link = "Type" })
+set(0, "@type.builtin",   { link = "Type" })
+set(0, "@keyword",        { link = "Keyword" })
+set(0, "@keyword.function", { link = "Keyword" })
+set(0, "@punctuation.special", { fg = colors.function_ })
+set(0, "@field",          { link = "Identifier" })
+set(0, "@property",       { link = "Identifier" })
+set(0, "@parameter",      { link = "Identifier" })
+set(0, "@constructor",    { link = "Type" })
+
+-- Language-specific overrides
+set(0, "@keyword.lua",        { fg = colors.keyword })
+set(0, "@keyword.jai",        { fg = colors.keyword })
+set(0, "@keyword.type",       { fg = colors.keyword })
+set(0, "@storageclass",       { fg = colors.keyword })
+set(0, "@storageclass.jai",   { fg = colors.keyword })
+
+-- Jai syntax highlighting overrides
+set(0, "jaiStruct",           { fg = colors.keyword })
+set(0, "jaiEnum",             { fg = colors.keyword })
+
+return colors

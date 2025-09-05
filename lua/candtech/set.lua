@@ -53,7 +53,7 @@ vim.api.nvim_set_hl(0, "Type", { italic = false })
 vim.api.nvim_set_hl(0, "Function", { italic = false })
 vim.api.nvim_set_hl(0, "Identifier", { italic = false })
 
-
+vim.opt.splitright = true
 
 if vim.g.neovide then
     vim.g.neovide_position_animation_length = 0.01

@@ -25,10 +25,10 @@ return {
       harpoon:list():select(4)
     end)
 
-    vim.keymap.set("n", "<leader>hp", function()
+    vim.keymap.set("n", "<leader>bp", function()
       harpoon:list():prev()
     end, { desc = "Harpoon prev file" })
-    vim.keymap.set("n", "<leader>hn", function()
+    vim.keymap.set("n", "<leader>bn", function()
       harpoon:list():next()
     end, { desc = "Harpoon next file" })
 
