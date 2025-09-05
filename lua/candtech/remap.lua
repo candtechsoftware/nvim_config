@@ -10,6 +10,7 @@ vim.keymap.set("n", "<C-u>", "<C-u>zz") -- Move up half a page and center the cu
 vim.keymap.set("n", "n", "nzzzv") -- Keep the cursor centered when searching
 vim.keymap.set("n", "N", "Nzzzv") -- Keep the cursor centered when searching
 
+
 vim.keymap.set("x", "<leader>p", [["_dP]]) -- Paste without yanking
 
 vim.keymap.set({"n", "v"}, "<leader>y", [["+y]]) -- Copy to system clipboard

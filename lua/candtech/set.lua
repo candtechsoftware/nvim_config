@@ -40,6 +40,7 @@ vim.opt.incsearch = true -- Incremental search
 
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
+vim.opt.colorcolumn = "" -- Disable the color column
 
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
@@ -54,6 +55,7 @@ vim.api.nvim_set_hl(0, "Function", { italic = false })
 vim.api.nvim_set_hl(0, "Identifier", { italic = false })
 
 
+vim.opt.splitright = true
 
 if vim.g.neovide then
     vim.g.neovide_position_animation_length = 0.01
