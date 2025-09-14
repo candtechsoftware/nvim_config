@@ -19,10 +19,12 @@ return {
 
         telescope.setup({
             defaults = {
-                path_display = { "truncate" },
+                path_display = { "smart" },
                 preview = {
                     hide_on_startup = false,
                 },
+                prompt_prefix = "> ",
+                selection_caret = "> ",
                 mappings = {
                     i = {
                         ["<C-j>"] = actions.move_selection_next,
@@ -47,6 +49,7 @@ return {
                     "--smart-case",
                     "--hidden",
                     "--follow",
+                    "--trim",
                     "--glob",
                     "!.git/*",
                     "--glob",
@@ -63,16 +66,22 @@ return {
                     "!*.lock",
                     "--glob",
                     "!*.log",
+                    "--glob",
+                    "!*.min.js",
+                    "--glob",
+                    "!*.min.css",
                 },
                 file_ignore_patterns = {
-                    "node_modules",
-                    ".git/",
-                    "dist/",
-                    "build/",
-                    ".next/",
-                    "coverage/",
-                    "%.lock",
-                    "%.log",
+                    "^node_modules/",
+                    "^.git/",
+                    "^dist/",
+                    "^build/",
+                    "^.next/",
+                    "^coverage/",
+                    "%.lock$",
+                    "%.log$",
+                    "%.min%.js$",
+                    "%.min%.css$",
                 },
                 layout_strategy = "horizontal",
                 layout_config = {
@@ -89,17 +98,31 @@ return {
             pickers = {
                 find_files = {
                     hidden = true,
-                    find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*" },
+                    follow = true,
+                    find_command = { 
+                        "rg", 
+                        "--files", 
+                        "--hidden", 
+                        "--follow",
+                        "--glob", "!.git/*",
+                        "--glob", "!node_modules/*",
+                        "--glob", "!*.lock",
+                        "--glob", "!*.log"
+                    },
                 },
                 live_grep = {
                     additional_args = function()
-                        return { "--hidden" }
+                        return { "--hidden", "--follow", "--trim" }
                     end,
+                    disable_coordinates = false,
+                    only_sort_text = false,
                 },
                 grep_string = {
                     additional_args = function()
-                        return { "--hidden" }
+                        return { "--hidden", "--follow", "--trim" }
                     end,
+                    disable_coordinates = false,
+                    only_sort_text = false,
                 },
             },
             extensions = {
@@ -116,19 +139,51 @@ return {
         if vim.fn.has("win32") ~= 1 then
             pcall(telescope.load_extension, "fzf")
         end
+        
+        -- Helper function to get visual selection
+        vim.getVisualSelection = function()
+            local _, ls, cs = unpack(vim.fn.getpos("v"))
+            local _, le, ce = unpack(vim.fn.getpos("."))
+            
+            -- Swap if selection is backwards
+            if ls > le or (ls == le and cs > ce) then
+                ls, le = le, ls
+                cs, ce = ce, cs
+            end
+            
+            local lines = vim.fn.getline(ls, le)
+            if #lines == 0 then return "" end
+            
+            if #lines == 1 then
+                lines[1] = string.sub(lines[1], cs, ce)
+            else
+                lines[1] = string.sub(lines[1], cs)
+                lines[#lines] = string.sub(lines[#lines], 1, ce)
+            end
+            
+            return table.concat(lines, "\n")
+        end
 
         -- Function to find project root (similar to LSP workspace detection)
         local function get_project_root()
+            -- Start from current buffer's directory or cwd
+            local start_dir
             local current_file = vim.fn.expand('%:p')
-            local current_dir = vim.fn.fnamemodify(current_file, ':h')
+            
+            if current_file ~= '' then
+                start_dir = vim.fn.fnamemodify(current_file, ':h')
+            else
+                start_dir = vim.fn.getcwd()
+            end
             
             -- Try to find project markers in order of preference
             local markers = {
+                -- Git is most common
+                '.git',
                 -- Jai specific
                 'build.jai',
                 'first.jai',
                 -- Common project files
-                '.git',
                 'package.json',
                 'Cargo.toml',
                 'go.mod',
@@ -138,54 +193,96 @@ return {
                 '.root'
             }
             
-            -- Search upward from current file's directory
-            for _, marker in ipairs(markers) do
-                local found = vim.fn.findfile(marker, current_dir .. ';')
-                if found ~= '' then
-                    return vim.fn.fnamemodify(found, ':h')
+            -- Search upward from start directory, but stop at home directory
+            local home = vim.fn.expand('~')
+            local current = start_dir
+            
+            while current ~= home and current ~= '/' do
+                for _, marker in ipairs(markers) do
+                    local marker_path = current .. '/' .. marker
+                    if vim.fn.isdirectory(marker_path) == 1 or vim.fn.filereadable(marker_path) == 1 then
+                        return current
+                    end
                 end
-                local found_dir = vim.fn.finddir(marker, current_dir .. ';')
-                if found_dir ~= '' then
-                    return vim.fn.fnamemodify(found_dir, ':h')
+                
+                local parent = vim.fn.fnamemodify(current, ':h')
+                if parent == current then
+                    break
                 end
+                current = parent
             end
             
-            -- Try git root as fallback
-            local git_root = vim.fn.systemlist("git rev-parse --show-toplevel 2>/dev/null")[1]
-            if vim.v.shell_error == 0 and git_root and git_root ~= "" then
-                return git_root
+            -- If no marker found, try git root from current working directory
+            local git_root = vim.fn.system("cd " .. vim.fn.shellescape(start_dir) .. " && git rev-parse --show-toplevel 2>/dev/null")
+            if vim.v.shell_error == 0 and git_root ~= "" then
+                return vim.fn.trim(git_root)
             end
             
-            -- Use the initial working directory as final fallback
-            -- Store it once to avoid it changing when using netrw
-            if not vim.g.initial_cwd then
-                vim.g.initial_cwd = vim.fn.getcwd()
-            end
-            return vim.g.initial_cwd
+            -- Use start directory as fallback (not home or root)
+            return start_dir
         end
 
-        -- Keymaps
+        -- Keymaps with improved search
         vim.keymap.set("n", "<leader>pws", function()
+            local root = get_project_root()
             builtin.grep_string({ 
                 search = vim.fn.expand("<cword>"),
-                cwd = get_project_root()
+                cwd = root,
+                search_dirs = { root },
+                word_match = "-w",
+                prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
             })
-        end, { desc = "Grep word under cursor" })
+        end, { desc = "Grep word under cursor (exact)" })
 
         vim.keymap.set("n", "<leader>pWs", function()
+            local root = get_project_root()
             builtin.grep_string({ 
                 search = vim.fn.expand("<cWORD>"),
-                cwd = get_project_root()
+                cwd = root,
+                search_dirs = { root },
+                prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
             })
         end, { desc = "Grep WORD under cursor" })
+        
+        -- Add visual mode grep
+        vim.keymap.set("v", "<leader>ps", function()
+            local root = get_project_root()
+            local text = vim.getVisualSelection()
+            builtin.grep_string({ 
+                search = text,
+                cwd = root,
+                search_dirs = { root },
+                prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
+            })
+        end, { desc = "Grep selected text" })
 
         vim.keymap.set("n", "<leader>ff", function()
-            builtin.find_files({ cwd = get_project_root() })
+            local root = get_project_root()
+            builtin.find_files({ 
+                cwd = root,
+                search_dirs = { root },
+                prompt_title = "Files in " .. vim.fn.fnamemodify(root, ":t")
+            })
         end, { desc = "Find files" })
         
         vim.keymap.set("n", "<leader>/", function()
-            builtin.live_grep({ cwd = get_project_root() })
-        end, { desc = "Live grep (all files)" })
+            local root = get_project_root()
+            builtin.live_grep({ 
+                cwd = root,
+                search_dirs = { root },
+                prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
+            })
+        end, { desc = "Live grep (project root)" })
+        
+        -- Add a keybinding for current directory search
+        vim.keymap.set("n", "<leader>.", function()
+            local cwd = vim.fn.getcwd()
+            builtin.live_grep({ 
+                cwd = cwd,
+                search_dirs = { cwd },
+                prompt_title = "Grep in " .. vim.fn.fnamemodify(cwd, ":t")
+            })
+        end, { desc = "Live grep (current dir)" })
         -- Remove <leader>g/ as it's not easily implemented in telescope
         -- Use <leader>/ for general grep and <leader>gf to browse git files instead
         vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
@@ -202,13 +299,22 @@ return {
         -- Helper commands for workspace debugging
         vim.api.nvim_create_user_command('WorkspaceInfo', function()
             local root = get_project_root()
-            vim.notify(string.format("Current workspace root: %s", root), vim.log.levels.INFO)
+            local cwd = vim.fn.getcwd()
+            local buf_path = vim.fn.expand('%:p:h')
+            vim.notify(string.format("Project root: %s\nCurrent dir: %s\nBuffer dir: %s", root, cwd, buf_path), vim.log.levels.INFO)
         end, { desc = 'Show current workspace root' })
         
         vim.api.nvim_create_user_command('WorkspaceReset', function()
             vim.g.initial_cwd = nil
             vim.notify("Workspace root cache cleared", vim.log.levels.INFO)
         end, { desc = 'Reset workspace root cache' })
+        
+        -- Command to reload Telescope configuration
+        vim.api.nvim_create_user_command('TelescopeReload', function()
+            require('plenary.reload').reload_module('telescope')
+            require('telescope').setup(telescope.setup())
+            vim.notify("Telescope configuration reloaded", vim.log.levels.INFO)
+        end, { desc = 'Reload Telescope configuration' })
 
         -- Jai module search keymaps
         local jai_modules_path = "/Users/alexmatthewcandelario/gits/jai/modules"

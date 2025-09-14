@@ -4,7 +4,7 @@ local colors = {
     base                  = "#fcaa05",        -- amber-gold
     pop1                  = "#de8150",
     pop2                  = "#FF0000",
-    back                  = "#020202",        -- rich-black
+    back                  = "#101010",        -- rich-black
     margin                = "#222425",        -- dark-slate
     margin_hover          = "#63523d",        -- coffee-brown
     margin_active         = "#63523d",        -- coffee-brown
@@ -241,5 +241,15 @@ set(0, "@lsp.type.enumMember.c", { fg = colors.blue })
 set(0, "@lsp.mod.readonly.c", {})
 set(0, "@lsp.typemod.enumMember.fileScope.c", { fg = colors.blue })
 set(0, "@lsp.typemod.enumMember.readonly.c", { fg = colors.blue })
+
+-- C++ Treesitter highlights
+set(0, "@variable.cpp", { fg = colors.blue })
+set(0, "@function.call.cpp", { fg = colors.blue })
+set(0, "@constructor.cpp", { fg = colors.blue })
+
+-- C++ Semantic Tokens
+set(0, "@lsp.type.macro.cpp", { fg = colors.blue })
+set(0, "@lsp.mod.globalScope.cpp", { fg = colors.blue })
+set(0, "@lsp.typemod.macro.globalScope.cpp", { fg = colors.blue })
 
 return colors
