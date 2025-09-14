@@ -86,12 +86,63 @@ function M.setup()
     vim.keymap.set("n", key, function()
       -- Re-find the root in case we've switched projects
       local current_root = find_project_root()
-      vim.notify("Running command: " .. cmd .. " in directory: " .. current_root)
-      vim.cmd("split")
-      vim.cmd("terminal")
-      -- Use proper cd command for Unix-like systems (no /d flag)
-      local term_cmd = "cd " .. vim.fn.shellescape(current_root) .. " && " .. cmd
-      vim.fn.chansend(vim.b.terminal_job_id, term_cmd .. "\r")
+      vim.notify("Running command: " .. cmd)
+
+      -- Collect output
+      local output = {}
+
+      -- Use jobstart for true background execution
+      local job_id = vim.fn.jobstart(cmd, {
+        cwd = current_root,
+        on_stdout = function(_, data)
+          if data then
+            for _, line in ipairs(data) do
+              if line ~= "" then
+                table.insert(output, line)
+              end
+            end
+          end
+        end,
+        on_stderr = function(_, data)
+          if data then
+            for _, line in ipairs(data) do
+              if line ~= "" then
+                table.insert(output, line)
+              end
+            end
+          end
+        end,
+        on_exit = function(_, exit_code, _)
+          vim.schedule(function()
+            if exit_code == 0 then
+              -- Success - just show a notification
+              vim.notify("Build succeeded!", vim.log.levels.INFO)
+            else
+              -- Failure - create buffer with output and show in split
+              vim.notify("Build failed with exit code: " .. exit_code, vim.log.levels.ERROR)
+
+              -- Create a new buffer for the output
+              local bufnr = vim.api.nvim_create_buf(false, true)
+              vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, output)
+              vim.api.nvim_buf_set_option(bufnr, 'buftype', 'nofile')
+              vim.api.nvim_buf_set_option(bufnr, 'bufhidden', 'wipe')
+              vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
+
+              -- Open split and show buffer
+              vim.cmd("split")
+              vim.api.nvim_win_set_buf(0, bufnr)
+
+              -- Scroll to bottom to show error
+              vim.cmd("normal! G")
+            end
+          end)
+        end
+      })
+
+      if job_id <= 0 then
+        vim.notify("Failed to start job: " .. cmd, vim.log.levels.ERROR)
+      end
+
     end, { noremap = true, silent = true, desc = "launch.json command" })
   end
   

@@ -45,7 +45,6 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
 
-vim.o.guifont = "Liberation Mono:h14"
 vim.g.tex_conceal = "mgs"
 vim.api.nvim_set_hl(0, "Comment", { italic = false })
 vim.api.nvim_set_hl(0, "Keyword", { italic = false })
