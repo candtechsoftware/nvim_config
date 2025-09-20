@@ -1,44 +1,44 @@
 local colors = {
-    -- Core UI colors
+    -- Core UI colors (from Fleury theme)
     bar                   = "#000000",
-    base                  = "#fcaa05",
+    base                  = "#fcaa05",        -- amber-gold
     pop1                  = "#de8150",
     pop2                  = "#FF0000",
-    back                  = "#101010",
-    margin                = "#222425",
-    margin_hover          = "#63523d",
-    margin_active         = "#63523d",
-    cursor                = "#00EE00",
+    back                  = "#101010",        -- rich-black
+    margin                = "#222425",        -- dark-slate
+    margin_hover          = "#63523d",        -- coffee-brown
+    margin_active         = "#63523d",        -- coffee-brown
+    cursor                = "#66bc11",        -- fresh-green (from Fleury)
     cursor_alt1           = "#e0741b",
     cursor_alt2           = "#1be094",
     cursor_alt3           = "#ba60c4",
     at_cursor             = "#0C0C0C",
-    highlight_cursor_line = "#1E1E1E",
-    highlight             = "#303040",
+    highlight_cursor_line = "#1e1e1e",        -- charcoal-gray-lite
+    highlight             = "#303040",        -- gunmetal-blue
     at_highlight          = "#FF44DD",
     mark                  = "#494949",
     
-    -- Text colors
-    text_default          = "#b99468",
-    comment               = "#666666",
-    comment_pop           = "#2ab34f",
+    -- Text colors (from Fleury theme)
+    text_default          = "#b99468",        -- light-bronze
+    comment               = "#666666",        -- dim-gray
+    comment_pop           = "#66bc11",        -- fresh-green
     comment_pop_alt       = "#db2828",
-    keyword               = "#f0c674",
-    str_constant          = "#ffa900",
-    char_constant         = "#ffa900",
-    int_constant          = "#ffa900",
-    float_constant        = "#ffa900",
-    bool_constant         = "#ffa900",
-    preproc               = "#dc7575",
-    include               = "#ffa900",
+    keyword               = "#f0c674",        -- goldenrod
+    str_constant          = "#ffaa00",        -- bright-orange
+    char_constant         = "#ffaa00",        -- bright-orange
+    int_constant          = "#ffaa00",        -- bright-orange
+    float_constant        = "#ffaa00",        -- bright-orange
+    bool_constant         = "#ffaa00",        -- bright-orange
+    preproc               = "#dc7575",        -- dusty-rose
+    include               = "#ffaa00",        -- bright-orange
     special_character     = "#FF0000",
     ghost_character       = "#4E5E46",
     highlight_junk        = "#3A0000",
-    highlight_white       = "#003A3A",
+    highlight_white       = "#003939",        -- lime-green (for region)
     paste                 = "#DDEE00",
     undo                  = "#00DDEE",
-    line_numbers_back     = "#101010",
-    line_numbers_text     = "#404040",
+    line_numbers_back     = "#020202",        -- rich-black
+    line_numbers_text     = "#404040",        -- medium-gray
     
     -- Fleury theme specific colors
     syntax_crap           = "#5c4d3c",
@@ -46,42 +46,42 @@ local colors = {
     inactive_pane_overlay = "#44000000",
     inactive_pane_background = "#000000",
     file_progress_bar     = "#634323",
-    brace_highlight       = "#8ffff2",
-    brace_line            = "#9ba290",
-    brace_annotation      = "#9ba290",
-    index_product_type    = "#edb211",
+    brace_highlight       = "#8ffff2",        -- aqua-ice
+    brace_line            = "#9ba290",        -- dusty-sage
+    brace_annotation      = "#9ba290",        -- dusty-sage
+    index_product_type    = "#edb211",        -- sunflower-yellow
     index_sum_type        = "#a7eb13",
-    index_function        = "#de451f",
-    index_macro           = "#66D9EF",
-    index_constant        = "#6eb535",
-    index_comment_tag     = "#ffae00",
+    index_function        = "#de451f",        -- burnt-orange
+    index_macro           = "#2895c7",        -- sky-blue (from Fleury)
+    index_constant        = "#66bc11",        -- fresh-green
+    index_comment_tag     = "#ffaa00",        -- bright-orange
     index_decl            = "#c9598a",
     cursor_macro          = "#de2368",
     cursor_power_mode     = "#efaf2f",
     cursor_inactive       = "#880000",
     plot_cycle1           = "#03d3fc",
     plot_cycle2           = "#22b80b",
-    plot_cycle3           = "#f0bb0c",
-    plot_cycle4           = "#f0500c",
+    plot_cycle3           = "#f0bb0c",        -- golden-yellow
+    plot_cycle4           = "#f0500c",        -- vivid-vermilion
     token_highlight       = "#f2d357",
     token_minor_highlight = "#d19045",
-    error_annotation      = "#ff0000",
+    error_annotation      = "#ff0000",        -- bright-red
     lego_grab             = "#efaf6f",
     lego_splat            = "#efaaef",
     comment_user_name     = "#ffdd23",
     
-    -- Legacy mappings for compatibility
-    yellow     = "#f0c674",
-    orange     = "#de8150",
-    red        = "#FF0000",
+    -- Legacy mappings for compatibility (Fleury palette)
+    yellow     = "#f0c674",        -- goldenrod
+    orange     = "#de451f",        -- burnt-orange
+    red        = "#ff0000",        -- bright-red
     magenta    = "#FF44DD",
-    blue       = "#66D9EF",
-    green      = "#a7eb13",
-    cyan       = "#8ffff2",
+    blue       = "#2895c7",        -- sky-blue
+    green      = "#66bc11",        -- fresh-green
+    cyan       = "#8ffff2",        -- aqua-ice
     violet     = "#ba60c4",
-    white      = "#b99468",
-    error      = "#ff0000",
-    warning    = "#ffa900",
+    white      = "#b99468",        -- light-bronze
+    error      = "#ff0000",        -- bright-red
+    warning    = "#ffaa00",        -- bright-orange
 }
 
 vim.cmd("highlight clear")
@@ -93,7 +93,7 @@ local set = vim.api.nvim_set_hl
 -- Core UI
 set(0, "Normal",           { fg = colors.text_default, bg = colors.back })
 set(0, "Cursor",           { fg = colors.at_cursor, bg = colors.cursor })
-set(0, "Visual",           { bg = colors.highlight })
+set(0, "Visual",           { bg = colors.highlight_white })
 set(0, "LineNr",           { fg = colors.line_numbers_text, bg = colors.line_numbers_back })
 set(0, "CursorLineNr",     { fg = colors.text_default, bg = colors.line_numbers_back })
 set(0, "CursorLine",       { bg = colors.highlight_cursor_line })
@@ -148,7 +148,8 @@ set(0, "Winseparator",     { fg = colors.margin })
 
 -- NetRW
 set(0, "netrwCursorLine",  { bg = colors.highlight })
-set(0, "netrwDir",         { fg = colors.index_sum_type })
+set(0, "netrwDir",         { fg = colors.blue })
+set(0, "netrwExe",         { fg = colors.orange })
 
 -- Lazy.nvim interface
 set(0, "LazyNormal",        { fg = colors.text_default, bg = colors.margin })
@@ -217,6 +218,38 @@ set(0, "@storageclass.jai",   { fg = colors.keyword })
 
 -- Jai syntax highlighting overrides
 set(0, "jaiStruct",           { fg = colors.keyword })
+set(0, "jaiUnion",            { fg = colors.keyword })
 set(0, "jaiEnum",             { fg = colors.keyword })
+set(0, "jaiConstant",         { fg = colors.blue })
+
+-- C syntax highlighting overrides
+set(0, "@keyword.type.c",     { fg = colors.keyword })
+set(0, "@type.builtin.c",     { fg = colors.keyword })
+
+-- C macro highlights
+set(0, "@lsp.type.macro.c",   { fg = colors.blue })
+
+-- C function highlights (LSP semantic tokens)
+set(0, "@lsp.type.function.c", { link = "Function" })
+set(0, "@lsp.mod.globalScope.c", {})
+set(0, "@lsp.typemod.function.globalScope.c", { link = "Function" })
+set(0, "@lsp.mod.fileScope.c", {})
+set(0, "@lsp.typemod.function.fileScope.c", { link = "Function" })
+
+-- C enum member highlights (LSP semantic tokens)
+set(0, "@lsp.type.enumMember.c", { fg = colors.blue })
+set(0, "@lsp.mod.readonly.c", {})
+set(0, "@lsp.typemod.enumMember.fileScope.c", { fg = colors.blue })
+set(0, "@lsp.typemod.enumMember.readonly.c", { fg = colors.blue })
+
+-- C++ Treesitter highlights
+set(0, "@variable.cpp", { fg = colors.blue })
+set(0, "@function.call.cpp", { fg = colors.blue })
+set(0, "@constructor.cpp", { fg = colors.blue })
+
+-- C++ Semantic Tokens
+set(0, "@lsp.type.macro.cpp", { fg = colors.blue })
+set(0, "@lsp.mod.globalScope.cpp", { fg = colors.blue })
+set(0, "@lsp.typemod.macro.globalScope.cpp", { fg = colors.blue })
 
 return colors
