@@ -12,4 +12,5 @@ return {
     { import = "candtech.lazy.harpoon" },
     { import = "candtech.lazy.spell" },
     { import = "candtech.lazy.undotree" },
+    { import = "candtech.lazy.tilt" },
 }

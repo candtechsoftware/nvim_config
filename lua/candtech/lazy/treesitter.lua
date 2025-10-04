@@ -55,6 +55,8 @@ return {
       install_info = {
         url = 'https://github.com/constantitus/tree-sitter-jai',
         files = { 'src/parser.c', 'src/scanner.c' },
+        revision = '9d6fa4a91fbb2a7d7ff69e688c4d2ff5bed45695',
+        branch = 'main',
       },
       filetype = 'jai',
     }

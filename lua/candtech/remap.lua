@@ -36,3 +36,28 @@ vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><
 vim.keymap.set("n", "<leader><leader>", function()
     vim.cmd("so")
 end) -- Source the file
+
+vim.keymap.set("n", "<leader>hi", "<cmd>Inspect<CR>") -- Show treesitter highlight groups under cursor
+
+-- Debug treesitter
+vim.keymap.set("n", "<leader>ts", function()
+    print("Filetype: " .. vim.bo.filetype)
+    print("Treesitter enabled: " .. tostring(vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil))
+    local parser_ok, parser = pcall(vim.treesitter.get_parser, 0)
+    print("Parser loaded: " .. tostring(parser_ok))
+    if parser_ok then
+        print("Parser lang: " .. parser:lang())
+    end
+end, { desc = "Debug treesitter" })
+
+-- Show all highlight groups under cursor
+vim.keymap.set("n", "<leader>hh", function()
+    local result = vim.treesitter.get_captures_at_cursor(0)
+    if #result == 0 then
+        print("No captures found")
+    else
+        for _, capture in ipairs(result) do
+            print("Capture: @" .. capture)
+        end
+    end
+end, { desc = "Show treesitter captures" })

@@ -6,7 +6,7 @@ return
     },
     lazy = false,
     config = function()
-        vim.cmd("colorscheme cand")
+        vim.cmd("colorscheme jb")
 
         -- Make the sign column background match the main background
         vim.api.nvim_set_hl(0, "SignColumn", { bg = "NONE" })
