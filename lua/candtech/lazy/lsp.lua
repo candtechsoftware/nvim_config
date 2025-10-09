@@ -236,12 +236,8 @@ return {
                         default_config = {
                             cmd = { jails_path },
                             filetypes = { 'jai' },
-                            root_dir = function(fname)
-                                -- More robust root directory detection for Jai
-                                return get_workspace_root(fname, { 'build.jai', 'first.jai', '.git' })
-                            end,
+                            root_dir = lspconfig.util.root_pattern('build.jai', 'first.jai', '.git'),
                             settings = {},
-                            -- Keep the workspace root once found
                             single_file_support = false,
                         },
                     }
@@ -251,7 +247,6 @@ return {
                     on_attach = on_attach,
                     capabilities = capabilities,
                     autostart = true,
-                    -- Ensure the root directory is maintained
                     root_dir = function(fname)
                         return get_workspace_root(fname, { 'build.jai', 'first.jai', '.git' })
                     end,

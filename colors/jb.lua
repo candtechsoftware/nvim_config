@@ -114,7 +114,7 @@ local set = vim.api.nvim_set_hl
 
 -- Core UI
 set(0, "Normal", { fg = colors.code_default, bg = colors.background0 })
-set(0, "NormalNC", { fg = colors.code_default, bg = colors.background1 })
+set(0, "NormalNC", { fg = colors.code_default, bg = colors.background0 })
 set(0, "NormalFloat", { fg = colors.code_default, bg = colors.background1 })
 set(0, "FloatBorder", { fg = colors.splitter, bg = colors.background1 })
 set(0, "FloatTitle", { fg = colors.text_input_label, bg = colors.color_preview_title_bar })
@@ -308,7 +308,7 @@ set(0, "SpellRare", { undercurl = true, sp = colors.code_note })
 -- Telescope
 set(0, "TelescopeNormal", { fg = colors.code_default, bg = colors.background0 })
 set(0, "TelescopeBorder", { fg = colors.splitter, bg = colors.background0 })
-set(0, "TelescopeSelection", { fg = colors.background0, bg = colors.selection_active })
+set(0, "TelescopeSelection", { fg = colors.code_keyword, bg = colors.selection_active })
 set(0, "TelescopeSelectionCaret", { fg = colors.ui_success })
 set(0, "TelescopeMatching", { fg = colors.code_highlight })
 set(0, "TelescopeTitle", { fg = colors.text_input_label })
