@@ -14,7 +14,6 @@ return {
             local lspconfig = require("lspconfig")
             require("fidget").setup({})
 
-            -- Configure diagnostic display
             vim.diagnostic.config({
                 virtual_text = true,
                 signs = true,
@@ -28,22 +27,18 @@ return {
                 },
             })
 
-            -- Universal function to find workspace root for any LSP
             local function get_workspace_root(fname, patterns)
-                -- First try to find by patterns
                 local root = lspconfig.util.root_pattern(unpack(patterns))(fname)
                 if root then
                     return root
                 end
 
-                -- Then try git root
                 local git_root = vim.fn.systemlist("git -C " ..
                 vim.fn.shellescape(vim.fn.fnamemodify(fname, ":h")) .. " rev-parse --show-toplevel")[1]
                 if vim.v.shell_error == 0 and git_root and git_root ~= "" then
                     return git_root
                 end
 
-                -- Use the initial working directory as fallback (not current directory)
                 return vim.fn.getcwd()
             end
 
@@ -61,7 +56,6 @@ return {
                 vim.keymap.set("n", "<leader>vi", function() vim.lsp.buf.incoming_calls() end, opts)
                 vim.keymap.set("i", "<C-h>", function() vim.lsp.buf.signature_help() end, opts)
 
-                -- Update quickfix specific keymaps to not auto-update
                 vim.keymap.set("n", "<leader>qf", function()
                     vim.diagnostic.setqflist({ open = true })
                 end, opts)
@@ -80,7 +74,6 @@ return {
             )
             capabilities.textDocument.completion.completionItem.snippetSupport = false
 
-            -- Setup completion
             cmp.setup({
                 mapping = cmp.mapping.preset.insert({
                     ['<C-p>'] = cmp.mapping.select_prev_item(),
@@ -90,7 +83,6 @@ return {
                 }),
                 formatting = {
                     format = function(entry, vim_item)
-                        -- Remove function parameters from display
                         if vim_item.kind == "Function" or vim_item.kind == "Method" then
                             vim_item.word = vim_item.word:gsub("%(.*%)", "()")
                         end
@@ -111,19 +103,15 @@ return {
                 settings = {
                     Lua = {
                         runtime = {
-                            -- Tell the language server which version of Lua you're using (most likely LuaJIT in the case of Neovim)
                             version = 'LuaJIT',
                         },
                         diagnostics = {
-                            -- Get the language server to recognize the `vim` global
                             globals = { 'vim' },
                         },
                         workspace = {
-                            -- Make the server aware of Neovim runtime files
                             library = vim.api.nvim_get_runtime_file("", true),
                             checkThirdParty = false,
                         },
-                        -- Do not send telemetry data containing a randomized but unique identifier
                         telemetry = {
                             enable = false,
                         },
@@ -131,7 +119,6 @@ return {
                 },
             })
 
-            -- Setup other language servers with consistent workspace detection
             lspconfig.gopls.setup({
                 on_attach = on_attach,
                 capabilities = capabilities,
@@ -190,12 +177,9 @@ return {
                 end,
             })
 
-            -- Jai Language Server
             local configs = require('lspconfig.configs')
 
-            -- Determine the correct binary path
             local function get_jails_path()
-                -- Check common locations
                 local paths = {
                     vim.fn.expand("~/bins/jails"),
                     vim.fn.expand("~/.local/bin/jails"),
@@ -209,7 +193,6 @@ return {
                     end
                 end
 
-                -- Platform-specific binary name
                 local platform = vim.loop.os_uname().sysname:lower()
                 local arch = vim.loop.os_uname().machine:lower()
                 if arch == "x86_64" then arch = "amd64" end
@@ -219,7 +202,6 @@ return {
                     binary_name = binary_name .. ".exe"
                 end
 
-                -- Check with platform-specific name
                 local platform_specific = vim.fn.exepath(binary_name)
                 if platform_specific and platform_specific ~= "" then
                     return platform_specific
@@ -263,34 +245,6 @@ return {
                     end,
                 })
             end
-
-            -- Helper commands for Jai LSP
-            vim.api.nvim_create_user_command('JailsStart', function()
-                if jails_path then
-                    vim.cmd('LspStart jails')
-                else
-                    vim.notify("Jails not found in PATH", vim.log.levels.ERROR)
-                end
-            end, { desc = 'Start Jai Language Server' })
-
-            vim.api.nvim_create_user_command('JailsStop', function()
-                vim.cmd('LspStop jails')
-            end, { desc = 'Stop Jai Language Server' })
-
-            vim.api.nvim_create_user_command('JailsRestart', function()
-                vim.cmd('LspStop jails')
-                vim.defer_fn(function()
-                    vim.cmd('LspStart jails')
-                end, 500)
-            end, { desc = 'Restart Jai Language Server' })
-
-            vim.api.nvim_create_user_command('JailsInfo', function()
-                if jails_path then
-                    vim.notify(string.format("Jails path: %s", jails_path), vim.log.levels.INFO)
-                else
-                    vim.notify("Jails not found. Install from https://github.com/SogoCZE/Jails", vim.log.levels.WARN)
-                end
-            end, { desc = 'Show Jai Language Server info' })
         end
     }
 }

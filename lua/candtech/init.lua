@@ -2,6 +2,9 @@
 require("candtech.set")
 require("candtech.remap")
 
+-- Setup automatic build detection
+require("candtech.make_detect").setup()
+
 vim.g.netrw_banner = 0
 vim.g.netrw_liststyle = 0  -- Use regular listing style
 vim.g.netrw_browse_split = 0  -- Open files in the current window
