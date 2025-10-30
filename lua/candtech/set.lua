@@ -46,7 +46,12 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
 
-vim.o.guifont = "Liberation Mono:h14"
+-- Performance optimizations
+vim.opt.lazyredraw = false -- Keep false for smooth experience (true can cause UI lag)
+vim.opt.synmaxcol = 240 -- Only syntax highlight first 240 columns (prevents slowdown on long lines)
+vim.opt.redrawtime = 1500 -- Time in ms for redrawing screen
+
+vim.o.guifont = "Liberation Mono:h18"
 vim.g.tex_conceal = "mgs"
 vim.api.nvim_set_hl(0, "Comment", { italic = false })
 vim.api.nvim_set_hl(0, "Keyword", { italic = false })

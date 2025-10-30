@@ -8,9 +8,7 @@ return {
     { import = "candtech.lazy.trouble" },
     { import = "candtech.lazy.git" },
     { import = "candtech.lazy.cmp" },
-    { import = "candtech.lazy.fugitive" },
     { import = "candtech.lazy.harpoon" },
-    { import = "candtech.lazy.spell" },
     { import = "candtech.lazy.undotree" },
     { import = "candtech.lazy.tilt" },
 }

@@ -18,7 +18,7 @@ return {
                 virtual_text = true,
                 signs = true,
                 underline = true,
-                update_in_insert = false,
+                update_in_insert = false, -- Already optimized: don't update diagnostics while typing
                 severity_sort = true,
                 float = {
                     border = 'rounded',
@@ -74,28 +74,6 @@ return {
             )
             capabilities.textDocument.completion.completionItem.snippetSupport = false
 
-            cmp.setup({
-                mapping = cmp.mapping.preset.insert({
-                    ['<C-p>'] = cmp.mapping.select_prev_item(),
-                    ['<C-n>'] = cmp.mapping.select_next_item(),
-                    ['<C-y>'] = cmp.mapping.confirm({ select = true }),
-                    ["<C-Space>"] = cmp.mapping.complete(),
-                }),
-                formatting = {
-                    format = function(entry, vim_item)
-                        if vim_item.kind == "Function" or vim_item.kind == "Method" then
-                            vim_item.word = vim_item.word:gsub("%(.*%)", "()")
-                        end
-                        return vim_item
-                    end,
-                },
-                sources = cmp.config.sources({
-                    { name = 'nvim_lsp' },
-                    { name = 'buffer' },
-                    { name = 'path' },
-                }),
-            })
-
             -- Configure lua language server for neovim
             lspconfig.lua_ls.setup({
                 on_attach = on_attach,
@@ -133,6 +111,34 @@ return {
                 root_dir = function(fname)
                     return get_workspace_root(fname, { 'package.json', 'tsconfig.json', '.git' })
                 end,
+                settings = {
+                    typescript = {
+                        preferences = {
+                            includePackageJsonAutoImports = "on",
+                            includeAutomaticOptionalChainCompletions = true,
+                        },
+                        suggest = {
+                            includeAutomaticOptionalChainCompletions = true,
+                        },
+                    },
+                    javascript = {
+                        preferences = {
+                            includePackageJsonAutoImports = "on",
+                        },
+                    },
+                },
+                init_options = {
+                    preferences = {
+                        includePackageJsonAutoImports = "on",
+                        includeInlayParameterNameHints = "all",
+                        includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+                        includeInlayFunctionParameterTypeHints = true,
+                        includeInlayVariableTypeHints = true,
+                        includeInlayPropertyDeclarationTypeHints = true,
+                        includeInlayFunctionLikeReturnTypeHints = true,
+                        includeInlayEnumMemberValueHints = true,
+                    },
+                },
             })
 
             lspconfig.rust_analyzer.setup({
@@ -149,11 +155,12 @@ return {
                 cmd = {
                     "clangd",
                     "--background-index",
-                    "--clang-tidy",
                     "--header-insertion=never",
-                    "--completion-style=detailed",
+                    "--completion-style=bundled", -- Changed from 'detailed' for better performance
                     "--function-arg-placeholders",
-                    "--fallback-style=llvm"
+                    "--fallback-style=llvm",
+                    "--pch-storage=memory", -- Store precompiled headers in memory
+                    "-j=4", -- Limit background threads
                 },
                 root_dir = function(fname)
                     return get_workspace_root(fname,

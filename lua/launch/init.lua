@@ -80,13 +80,13 @@ function M.setup()
     return
   end
 
-  vim.notify("Launch plugin loaded with root: " .. root)
+  -- vim.notify("Launch plugin loaded with root: " .. root)
 
   for key, cmd in pairs(config.key_map) do
     vim.keymap.set("n", key, function()
       -- Re-find the root in case we've switched projects
       local current_root = find_project_root()
-      vim.notify("Running command: " .. cmd .. " in directory: " .. current_root)
+      -- vim.notify("Running command: " .. cmd .. " in directory: " .. current_root)
       vim.cmd("split")
       vim.cmd("terminal")
       -- Use proper cd command for Unix-like systems (no /d flag)

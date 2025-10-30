@@ -16,17 +16,6 @@ return {
       },
       highlight = {
         enable = true,
-        disable = function(lang, buf)
-          if lang == "zig" or lang == "html" then
-            return true
-          end
-          local max_filesize = 100 * 1024
-          local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
-          if ok and stats and stats.size > max_filesize then
-            vim.notify("File larger than 100KB, Treesitter disabled", vim.log.levels.WARN, { title = "Treesitter" })
-            return true
-          end
-        end,
         additional_vim_regex_highlighting = { "markdown" },
       },
     })
@@ -50,13 +39,12 @@ return {
     -- Remove zig
     parser_config.zig = nil
 
-    -- Add Jai parser
+    -- Add Jai parser (constantitus version)
     parser_config.jai = {
       install_info = {
         url = 'https://github.com/constantitus/tree-sitter-jai',
         files = { 'src/parser.c', 'src/scanner.c' },
-        revision = '9d6fa4a91fbb2a7d7ff69e688c4d2ff5bed45695',
-        branch = 'main',
+        branch = 'master',
       },
       filetype = 'jai',
     }
