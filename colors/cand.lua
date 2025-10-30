@@ -99,7 +99,7 @@ set(0, "CursorLineNr",     { fg = colors.text_default, bg = colors.line_numbers_
 set(0, "CursorLine",       { bg = colors.highlight_cursor_line })
 set(0, "ColorColumn",      { bg = colors.margin })
 set(0, "VertSplit",        { fg = colors.margin })
-set(0, "MatchParen",       { bg = colors.brace_highlight })
+set(0, "MatchParen",       { fg = colors.base, bg = colors.margin_active, bold = true, underline = true })
 
 -- Syntax
 set(0, "Comment",          { fg = colors.comment })
