@@ -3,7 +3,6 @@ local M = {}
 function M.setup()
     local ok, ts_configs = pcall(require, 'nvim-treesitter.configs')
     if not ok then
-        vim.notify("nvim-treesitter not installed", vim.log.levels.WARN)
         return
     end
 

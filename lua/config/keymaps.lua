@@ -64,3 +64,24 @@ vim.keymap.set("i", "<CR>", function()
         return "<CR>"
     end
 end, { expr = true, desc = "Accept completion or new line" })
+
+-- Notes keybindings
+vim.keymap.set("n", "<leader>ns", function()
+    require("notes").search_notes()
+end, { desc = "Search notes content" })
+
+vim.keymap.set("n", "<leader>nf", function()
+    require("notes").find_notes()
+end, { desc = "Find notes by filename" })
+
+vim.keymap.set("n", "<leader>nn", function()
+    require("notes").new_note()
+end, { desc = "Create new note" })
+
+vim.keymap.set("n", "<leader>n", function()
+    require("notes").open_notes_dir()
+end, { desc = "Open notes directory" })
+
+vim.keymap.set("n", "<leader>ng", function()
+    require("notes").git_status()
+end, { desc = "Notes git status" })

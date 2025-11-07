@@ -40,12 +40,15 @@ require("config.harpoon").setup()
 
 -- Load custom utilities
 require("utils.make_detect").setup()
-require("utils.launch").setup()
+require("launch").setup()
+
+-- Load and setup notes plugin
+require("notes").setup()
 
 -- Load color scheme
 vim.cmd.colorscheme("cand")
 
--- Build telescope-fzf-native if needed
+-- Build telescope-fzf-native if needed (silently)
 vim.api.nvim_create_autocmd("VimEnter", {
     once = true,
     callback = function()
@@ -53,13 +56,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
         local so_file = fzf_path .. "/build/fzf.so"
 
         if vim.fn.isdirectory(fzf_path) == 1 and vim.fn.filereadable(so_file) == 0 then
-            vim.notify("Building telescope-fzf-native...", vim.log.levels.INFO)
-            vim.fn.system("cd " .. vim.fn.shellescape(fzf_path) .. " && make")
-            if vim.v.shell_error == 0 then
-                vim.notify("telescope-fzf-native built successfully", vim.log.levels.INFO)
-            else
-                vim.notify("Failed to build telescope-fzf-native", vim.log.levels.WARN)
-            end
+            vim.fn.system("cd " .. vim.fn.shellescape(fzf_path) .. " && make >/dev/null 2>&1")
         end
     end,
 })

@@ -76,7 +76,7 @@ function M.setup()
   local config = load_launch_json(root)
 
   if not config or not config.key_map then
-    vim.notify("No valid launch.json found", vim.log.levels.WARN)
+    -- Silently return if no launch.json found
     return
   end
 

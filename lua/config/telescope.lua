@@ -97,19 +97,29 @@ function M.setup_keymaps()
         return table.concat(lines, "\n")
     end
 
+    -- Cached project root detection
+    local project_cache = {}
     local function get_project_root()
-        local current_file = vim.api.nvim_buf_get_name(0)
         local current_dir = vim.fn.getcwd()
-        
-        local git_root = vim.fn.systemlist({ 'git', '-C', current_dir, 'rev-parse', '--show-toplevel' })
-        if vim.v.shell_error == 0 and git_root[1] and git_root[1] ~= '' then
-            return git_root[1]
+
+        if project_cache[current_dir] then
+            return project_cache[current_dir]
         end
-        
-        return project_root.find({
-            startpath = current_file,
-            fallback_to_initial_cwd = true,
-        })
+
+        local git_root = vim.fn.systemlist({ 'git', '-C', current_dir, 'rev-parse', '--show-toplevel' })
+        local root
+        if vim.v.shell_error == 0 and git_root[1] and git_root[1] ~= '' then
+            root = git_root[1]
+        else
+            local current_file = vim.api.nvim_buf_get_name(0)
+            root = project_root.find({
+                startpath = current_file,
+                fallback_to_initial_cwd = true,
+            })
+        end
+
+        project_cache[current_dir] = root
+        return root
     end
 
     -- Keymaps with improved search
@@ -265,19 +275,16 @@ function M.setup_commands()
         local root = get_project_root()
         local cwd = vim.fn.getcwd()
         local buf_path = vim.fn.expand('%:p:h')
-        vim.notify(string.format("Project root: %s\nCurrent dir: %s\nBuffer dir: %s", root, cwd, buf_path), vim.log.levels.INFO)
     end, { desc = 'Show current workspace root' })
 
     vim.api.nvim_create_user_command('WorkspaceReset', function()
         vim.g.initial_cwd = nil
-        vim.notify("Workspace root cache cleared", vim.log.levels.INFO)
     end, { desc = 'Reset workspace root cache' })
 
     -- Command to reload Telescope configuration
     vim.api.nvim_create_user_command('TelescopeReload', function()
         require('plenary.reload').reload_module('telescope')
         require('telescope').setup()
-        vim.notify("Telescope configuration reloaded", vim.log.levels.INFO)
     end, { desc = 'Reload Telescope configuration' })
 end
 

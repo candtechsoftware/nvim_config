@@ -149,22 +149,23 @@ function M.setup()
             })
         end
 
-        -- Auto-trigger completion as you type (but don't auto-select)
+        -- Debounced auto-trigger completion
+        local timer = vim.loop.new_timer()
         vim.api.nvim_create_autocmd({ 'TextChangedI' }, {
             buffer = bufnr,
             callback = function()
-                local line = vim.api.nvim_get_current_line()
-                local col = vim.api.nvim_win_get_cursor(0)[2]
-                local before_cursor = line:sub(1, col)
+                timer:stop()
+                timer:start(150, 0, vim.schedule_wrap(function()
+                    if vim.api.nvim_get_mode().mode == 'i' then
+                        local line = vim.api.nvim_get_current_line()
+                        local col = vim.api.nvim_win_get_cursor(0)[2]
+                        local before_cursor = line:sub(1, col)
 
-                -- Trigger completion after typing letters (not spaces or symbols)
-                if before_cursor:match('%w$') and vim.fn.pumvisible() == 0 then
-                    vim.schedule(function()
-                        if vim.api.nvim_get_mode().mode == 'i' then
+                        if before_cursor:match('%w%w$') and vim.fn.pumvisible() == 0 then
                             vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-o>", true, false, true), 'n')
                         end
-                    end)
-                end
+                    end
+                end))
             end,
         })
     end
@@ -291,10 +292,6 @@ function M.setup()
             pattern = "jai",
             once = true,
             callback = function()
-                vim.notify(
-                    "Jai Language Server not found. Please install jails from https://github.com/SogoCZE/Jails",
-                    vim.log.levels.WARN
-                )
             end,
         })
     end
@@ -306,13 +303,11 @@ function M.stop_lsp(bufnr)
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
 
     if #clients == 0 then
-        vim.notify("No LSP clients attached to this buffer", vim.log.levels.WARN)
         return
     end
 
     for _, client in ipairs(clients) do
         vim.lsp.buf_detach_client(bufnr, client.id)
-        vim.notify(string.format("Detached LSP client: %s from buffer", client.name), vim.log.levels.INFO)
     end
 end
 
@@ -321,7 +316,6 @@ function M.start_lsp(bufnr)
     local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
 
     if not filetype or filetype == "" then
-        vim.notify("No filetype detected for this buffer", vim.log.levels.WARN)
         return
     end
 
@@ -412,14 +406,12 @@ function M.start_lsp(bufnr)
                             end
                         end,
                     }, { bufnr = bufnr })
-                    vim.notify(string.format("Started %s LSP for %s", server_name, filetype), vim.log.levels.INFO)
                     return
                 end
             end
         end
     end
 
-    vim.notify(string.format("No LSP server found for filetype: %s", filetype), vim.log.levels.WARN)
 end
 
 -- Create user commands
