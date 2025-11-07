@@ -49,7 +49,6 @@ vim.opt.incsearch = true -- Incremental search
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
--- UI
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
 vim.opt.colorcolumn = "" -- Disable the color column
@@ -71,16 +70,13 @@ vim.api.nvim_set_hl(0, "Type", { italic = false })
 vim.api.nvim_set_hl(0, "Function", { italic = false })
 vim.api.nvim_set_hl(0, "Identifier", { italic = false })
 
--- Window splitting
 vim.opt.splitright = true
 
--- Neovide specific settings
 if vim.g.neovide then
     vim.g.neovide_position_animation_length = 0.01
     vim.g.neovide_scroll_animation_length = 0.01
 end
 
--- Completion settings
 vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" } -- Don't auto-select or auto-insert
 vim.opt.pumheight = 10 -- Limit popup menu height
 vim.opt.shortmess:append("c") -- Don't show completion messages

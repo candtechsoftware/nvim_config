@@ -34,6 +34,11 @@ local function on_attach(client, bufnr)
     vim.keymap.set("n", "<leader>vi", vim.lsp.buf.incoming_calls, opts)
     vim.keymap.set("i", "<C-h>", vim.lsp.buf.signature_help, opts)
 
+    -- Formatting
+    vim.keymap.set("n", "<leader>f", function()
+        vim.lsp.buf.format({ async = false })
+    end, opts)
+
     -- Diagnostics
     vim.keymap.set("n", "<leader>qf", function()
         vim.diagnostic.setqflist({ open = true })
@@ -294,5 +299,136 @@ function M.setup()
         })
     end
 end
+
+-- LSP control commands
+function M.stop_lsp(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    local clients = vim.lsp.get_clients({ bufnr = bufnr })
+
+    if #clients == 0 then
+        vim.notify("No LSP clients attached to this buffer", vim.log.levels.WARN)
+        return
+    end
+
+    for _, client in ipairs(clients) do
+        vim.lsp.buf_detach_client(bufnr, client.id)
+        vim.notify(string.format("Detached LSP client: %s from buffer", client.name), vim.log.levels.INFO)
+    end
+end
+
+function M.start_lsp(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
+
+    if not filetype or filetype == "" then
+        vim.notify("No filetype detected for this buffer", vim.log.levels.WARN)
+        return
+    end
+
+    -- Get the buffer name for root detection
+    local bufname = vim.api.nvim_buf_get_name(bufnr)
+    local capabilities = get_capabilities()
+
+    -- Find matching server config
+    local servers = {
+        lua_ls = {
+            cmd = { 'lua-language-server' },
+            filetypes = { 'lua' },
+            root_markers = { '.luarc.json', '.luarc.jsonc', '.luacheckrc', '.stylua.toml', 'stylua.toml', 'selene.toml', 'selene.yml', '.git' },
+            settings = {
+                Lua = {
+                    runtime = { version = 'LuaJIT' },
+                    diagnostics = { globals = { 'vim' } },
+                    workspace = {
+                        library = vim.api.nvim_get_runtime_file("", true),
+                        checkThirdParty = false,
+                    },
+                    telemetry = { enable = false },
+                },
+            },
+        },
+        gopls = {
+            cmd = { 'gopls' },
+            filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
+            root_markers = { 'go.mod', 'go.sum', '.git' },
+        },
+        ts_ls = {
+            cmd = { 'typescript-language-server', '--stdio' },
+            filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+            root_markers = { 'package.json', 'tsconfig.json', '.git' },
+        },
+        rust_analyzer = {
+            cmd = { 'rust-analyzer' },
+            filetypes = { 'rust' },
+            root_markers = { 'Cargo.toml', '.git' },
+        },
+        clangd = {
+            cmd = { 'clangd' },
+            filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda', 'proto' },
+            root_markers = { 'compile_commands.json', '.clangd', 'CMakeLists.txt', 'Makefile', '.git' },
+        },
+        zls = {
+            cmd = { 'zls' },
+            filetypes = { 'zig' },
+            root_markers = { 'build.zig', '.git' },
+        },
+        ols = {
+            cmd = { 'ols' },
+            filetypes = { 'odin' },
+            root_markers = { 'ols.json', '.git' },
+        },
+    }
+
+    -- Add Jai if available
+    local jails_path = get_jails_path()
+    if jails_path then
+        servers.jails = {
+            cmd = { jails_path },
+            filetypes = { 'jai' },
+            root_markers = { 'build.jai', 'first.jai', '.git' },
+        }
+    end
+
+    -- Find matching server for current filetype
+    for server_name, config in pairs(servers) do
+        for _, ft in ipairs(config.filetypes) do
+            if ft == filetype and vim.fn.executable(config.cmd[1]) == 1 then
+                local root_dir = get_workspace_root(bufname, config.root_markers)
+
+                if root_dir or config.single_file_support ~= false then
+                    vim.lsp.start({
+                        name = server_name,
+                        cmd = config.cmd,
+                        root_dir = root_dir,
+                        capabilities = capabilities,
+                        settings = config.settings,
+                        init_options = config.init_options,
+                        on_attach = function(client, buf)
+                            on_attach(client, buf)
+                            if vim.lsp.completion then
+                                vim.lsp.completion.enable(true, client.id, buf, {
+                                    autotrigger = true,
+                                })
+                            end
+                        end,
+                    }, { bufnr = bufnr })
+                    vim.notify(string.format("Started %s LSP for %s", server_name, filetype), vim.log.levels.INFO)
+                    return
+                end
+            end
+        end
+    end
+
+    vim.notify(string.format("No LSP server found for filetype: %s", filetype), vim.log.levels.WARN)
+end
+
+-- Create user commands
+vim.api.nvim_create_user_command("LspStop", function()
+    M.stop_lsp()
+end, { desc = "Stop LSP for current buffer" })
+
+vim.api.nvim_create_user_command("LspStart", function()
+    M.start_lsp()
+end, { desc = "Start LSP for current buffer" })
 
 return M
