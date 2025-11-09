@@ -46,7 +46,8 @@ require("launch").setup()
 require("notes").setup()
 
 -- Load color scheme
-vim.cmd.colorscheme("cand")
+vim.cmd.colorscheme("focus")
+
 
 -- Build telescope-fzf-native if needed (silently)
 vim.api.nvim_create_autocmd("VimEnter", {

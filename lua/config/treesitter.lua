@@ -8,7 +8,7 @@ function M.setup()
 
     ts_configs.setup({
         ensure_installed = {
-            "c", "cpp", "lua", "rust", "go", 
+            "c", "cpp", "lua", "rust", "go",
             "javascript", "typescript", "tsx",
             "json", "yaml", "toml", "bash", "vim", "vimdoc", "query"
         },
@@ -21,17 +21,54 @@ function M.setup()
                 if lang == "zig" then
                     return true
                 end
-                local max_filesize = 100 * 1024
+
+                -- More aggressive file size limits for performance
+                local max_filesize = 50 * 1024  -- Reduced from 100KB to 50KB
                 local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
                 if ok and stats and stats.size > max_filesize then
                     return true
                 end
+
+                -- Also disable for very long lines (performance killer)
+                local max_line_length = 1000
+                local lines = vim.api.nvim_buf_get_lines(buf, 0, 100, false)  -- Check first 100 lines
+                for _, line in ipairs(lines) do
+                    if #line > max_line_length then
+                        return true
+                    end
+                end
             end,
+            use_languagetree = true,  -- Better for complex files
         },
         indent = {
             enable = true,
             disable = { "python", "c", "cpp", "lua", "rust", "go", "jai" },
         },
+        -- Performance: reduce incremental selection overhead
+        incremental_selection = {
+            enable = false,  -- Disable if not used
+        },
+        -- Performance: reduce textobjects overhead
+        textobjects = {
+            enable = false,  -- Disable if not used
+        },
+    })
+
+    -- Async treesitter setup for better performance
+    vim.api.nvim_create_autocmd("BufReadPost", {
+        callback = function(args)
+            local buf = args.buf
+            local file_size = vim.fn.getfsize(vim.api.nvim_buf_get_name(buf))
+
+            -- For large files, delay treesitter parsing
+            if file_size > 25 * 1024 then  -- 25KB threshold
+                vim.defer_fn(function()
+                    if vim.api.nvim_buf_is_valid(buf) then
+                        vim.treesitter.start(buf)
+                    end
+                end, 100)
+            end
+        end,
     })
 
     vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {

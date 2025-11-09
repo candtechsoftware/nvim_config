@@ -14,6 +14,8 @@ function M.setup()
             path_display = { "smart" },
             prompt_prefix = "> ",
             selection_caret = "> ",
+            -- Improve visibility of selected/hovered items
+            borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
             mappings = {
                 i = {
                     ["<C-j>"] = actions.move_selection_next,
@@ -57,17 +59,17 @@ function M.setup()
         extensions = {
             fzf = {
                 fuzzy = true,
-                override_generic_sorter = false, -- Don't override, use ripgrep
-                override_file_sorter = false,    -- Don't override, use ripgrep
+                override_generic_sorter = true,  -- Enable for better performance
+                override_file_sorter = true,     -- Enable for better performance
                 case_mode = "smart_case",
             },
         },
     })
 
-    -- Don't load fzf extension - we want to use ripgrep
-    -- if vim.fn.has("win32") ~= 1 then
-    --     pcall(telescope.load_extension, "fzf")
-    -- end
+    -- Load fzf extension for significant performance improvement
+    if vim.fn.has("win32") ~= 1 then
+        pcall(telescope.load_extension, "fzf")
+    end
 end
 
 function M.setup_keymaps()

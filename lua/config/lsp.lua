@@ -52,9 +52,14 @@ end
 local function setup_diagnostics()
     vim.diagnostic.config({
         virtual_text = {
-            prefix = '●',
-            source = "if_many",
-            severity = { min = vim.diagnostic.severity.WARN },
+            prefix = '■ ',
+            source = true,
+            severity = { min = vim.diagnostic.severity.ERROR },
+            spacing = 4,
+            suffix = '',
+            format = function(diagnostic)
+                return string.format("[%s] %s", diagnostic.source or "LSP", diagnostic.message)
+            end,
         },
         signs = true,
         underline = true,
@@ -64,8 +69,22 @@ local function setup_diagnostics()
             border = 'rounded',
             header = '',
             prefix = '',
+            focusable = false,  -- Performance: don't make diagnostic floats focusable
+            max_width = 80,
+            max_height = 20,
         },
     })
+
+    -- Debounce diagnostic updates for performance
+    local diagnostic_timer = vim.uv.new_timer()
+    local original_set_loclist = vim.diagnostic.setloclist
+    vim.diagnostic.setloclist = function(...)
+        local args = {...}
+        diagnostic_timer:stop()
+        diagnostic_timer:start(200, 0, vim.schedule_wrap(function()
+            original_set_loclist(unpack(args))
+        end))
+    end
 
     -- Configure LSP floating window appearance
     vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
@@ -87,12 +106,30 @@ end
 local function get_capabilities()
     local capabilities = vim.lsp.protocol.make_client_capabilities()
 
-    -- Enable completion if available
-    if vim.lsp.completion then
-        capabilities.textDocument.completion.completionItem.snippetSupport = false
-        capabilities.textDocument.completion.completionItem.resolveSupport = {
-            properties = { "documentation", "detail", "additionalTextEdits" }
+    -- Performance optimizations: disable unused capabilities
+    capabilities.workspace.workspaceEdit = nil  -- Don't need workspace edits for performance
+    capabilities.textDocument.publishDiagnostics = vim.tbl_deep_extend("force",
+        capabilities.textDocument.publishDiagnostics or {},
+        {
+            relatedInformation = false,  -- Disable for performance
+            codeActionsInline = false,  -- Disable for performance
         }
+    )
+
+    -- Enable optimized completion
+    if vim.lsp.completion then
+        capabilities.textDocument.completion.completionItem = {
+            documentationFormat = { "plaintext" },  -- Faster than markdown
+            snippetSupport = false,  -- Keep disabled for performance
+            preselectSupport = false,  -- Don't preselect for our use case
+            insertReplaceSupport = false,  -- Simple insertion only
+            resolveSupport = {
+                properties = { "detail" }  -- Only resolve detail, not documentation for speed
+            },
+            deprecatedSupport = true,
+            commitCharactersSupport = false,  -- Don't commit on character for our use case
+        }
+        capabilities.textDocument.completion.contextSupport = true
     end
 
     return capabilities
@@ -135,39 +172,86 @@ function M.setup()
 
     local capabilities = get_capabilities()
 
-    -- Enhanced on_attach with auto-completion that shows but doesn't auto-complete
+    -- Enhanced on_attach with optimized auto-completion
     local function enhanced_on_attach(client, bufnr)
         on_attach(client, bufnr)
+
+        -- Performance: set LSP timeouts
+        client.server_capabilities = client.server_capabilities or {}
+        if client.server_capabilities.hoverProvider then
+            client.server_capabilities.hoverProvider = { timeout_ms = 1500 }
+        end
 
         -- Set omnifunc for completion
         vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
 
-        -- Enable auto-completion that shows as you type
+        -- Enable optimized auto-completion
         if vim.lsp.completion then
             vim.lsp.completion.enable(true, client.id, bufnr, {
-                autotrigger = true, -- Show completions as you type
+                autotrigger = true,
+                debounce = 100,  -- Faster trigger, down from 150ms
             })
         end
 
-        -- Debounced auto-trigger completion
-        local timer = vim.loop.new_timer()
+        -- Smart context-aware completion trigger
+        local timer = vim.uv.new_timer()
         vim.api.nvim_create_autocmd({ 'TextChangedI' }, {
             buffer = bufnr,
             callback = function()
                 timer:stop()
-                timer:start(150, 0, vim.schedule_wrap(function()
+                timer:start(100, 0, vim.schedule_wrap(function()  -- Faster trigger
                     if vim.api.nvim_get_mode().mode == 'i' then
                         local line = vim.api.nvim_get_current_line()
                         local col = vim.api.nvim_win_get_cursor(0)[2]
                         local before_cursor = line:sub(1, col)
 
-                        if before_cursor:match('%w%w$') and vim.fn.pumvisible() == 0 then
+                        -- Don't trigger in comments or strings (basic detection)
+                        local syntax_group = vim.fn.synIDattr(vim.fn.synID(vim.fn.line('.'), col, true), 'name')
+                        if syntax_group:match('[Cc]omment') or syntax_group:match('[Ss]tring') then
+                            return
+                        end
+
+                        -- More sophisticated triggering patterns
+                        local should_trigger = (
+                            before_cursor:match('%w%w+$') or       -- 2+ word chars
+                            before_cursor:match('%w+%.$') or       -- word followed by dot
+                            before_cursor:match('%w+::$') or       -- word followed by :: (jai/c++)
+                            before_cursor:match('%w+->$')          -- word followed by -> (c/c++)
+                        )
+
+                        if should_trigger and vim.fn.pumvisible() == 0 then
                             vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-o>", true, false, true), 'n')
                         end
                     end
                 end))
             end,
         })
+
+        -- Add Tab and S-Tab for completion navigation
+        vim.keymap.set('i', '<Tab>', function()
+            if vim.fn.pumvisible() == 1 then
+                return '<C-n>'
+            else
+                return '<Tab>'
+            end
+        end, { expr = true, buffer = bufnr })
+
+        vim.keymap.set('i', '<S-Tab>', function()
+            if vim.fn.pumvisible() == 1 then
+                return '<C-p>'
+            else
+                return '<S-Tab>'
+            end
+        end, { expr = true, buffer = bufnr })
+
+        -- Escape to close completion menu
+        vim.keymap.set('i', '<Esc>', function()
+            if vim.fn.pumvisible() == 1 then
+                vim.fn.feedkeys(vim.api.nvim_replace_termcodes('<C-e><Esc>', true, false, true), 'n')
+            else
+                vim.fn.feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n')
+            end
+        end, { buffer = bufnr })
     end
 
     -- Use the modern vim.lsp.config API properly

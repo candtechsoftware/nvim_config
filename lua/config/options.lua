@@ -77,6 +77,9 @@ if vim.g.neovide then
     vim.g.neovide_scroll_animation_length = 0.01
 end
 
-vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" } -- Don't auto-select or auto-insert
-vim.opt.pumheight = 10 -- Limit popup menu height
+-- Optimized completion settings for performance and usability
+vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" } -- Show menu, don't auto-select/insert
+vim.opt.pumheight = 15 -- Slightly larger popup for better visibility
+vim.opt.pumwidth = 25 -- Consistent popup width
 vim.opt.shortmess:append("c") -- Don't show completion messages
+vim.opt.complete = ".,w,b,u" -- Faster completion sources (current buffer, windows, buffers, unloaded buffers)

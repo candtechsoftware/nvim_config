@@ -1,5 +1,10 @@
 local M = {}
 
+-- Cache for performance
+local _cache = {}
+local _cache_expiry = {}
+local CACHE_TTL = 5000  -- 5 seconds TTL
+
 M.default_markers = {
   'package.json',
   'tsconfig.json',
@@ -86,21 +91,52 @@ function M.find(opts)
   local stop = opts.stop or vim.loop.os_homedir()
   local startpath = resolve_startpath(opts.startpath)
 
+  -- Create cache key
+  local cache_key = startpath .. '|' .. vim.fn.join(markers, ',')
+  local now = vim.uv.now()
+
+  -- Check cache first
+  if _cache[cache_key] and _cache_expiry[cache_key] and _cache_expiry[cache_key] > now then
+    return _cache[cache_key]
+  end
+
   local root = find_with_markers(startpath, markers, stop)
   if root then
+    _cache[cache_key] = root
+    _cache_expiry[cache_key] = now + CACHE_TTL
     return root
   end
 
   root = try_git_root(startpath)
   if root then
+    _cache[cache_key] = root
+    _cache_expiry[cache_key] = now + CACHE_TTL
     return root
   end
 
+  local fallback = startpath
   if opts.fallback_to_initial_cwd and _G.launch_initial_cwd then
-    return normalize(_G.launch_initial_cwd)
+    fallback = normalize(_G.launch_initial_cwd)
   end
 
-  return startpath or (normalize(vim.loop.cwd()) or normalize(vim.fn.getcwd()))
+  if not fallback then
+    fallback = normalize(vim.loop.cwd()) or normalize(vim.fn.getcwd())
+  end
+
+  _cache[cache_key] = fallback
+  _cache_expiry[cache_key] = now + CACHE_TTL
+  return fallback
 end
+
+-- Clear expired cache entries periodically
+vim.defer_fn(function()
+  local now = vim.uv.now()
+  for key, expiry in pairs(_cache_expiry) do
+    if expiry <= now then
+      _cache[key] = nil
+      _cache_expiry[key] = nil
+    end
+  end
+end, 10000)  -- Clean every 10 seconds
 
 return M
