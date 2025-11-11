@@ -6,71 +6,21 @@
 ] @include
 
 
-; Keywords
-[
-  ; from modules/Jai_Lexer
-  "if"
-  "xx"
+; Keywords - match as identifiers with predicates
+((identifier) @keyword
+  (#any-of? @keyword
+    "if" "xx" "ifx" "for" "then" "else" "null" "case" "enum" "true" "cast"
+    "while" "break" "using" "defer" "false" "union" "return" "struct" "inline"
+    "remove" "continue" "operator" "interface" "switch" "size_of" "type_of"
+    "code_of" "context" "type_info" "no_inline" "enum_flags" "is_constant"
+    "push_context" "initializer_of" "type_info_none"
+    "type_info_procedures_are_void_pointers"))
 
-  "ifx"
-  "for"
+((identifier) @keyword.return
+  (#eq? @keyword.return "return"))
 
-  "then"
-  "else"
-  "null"
-  "case"
-  "enum"
-  "true"
-  "cast"
-
-  "while"
-  "break"
-  "using"
-  "defer"
-  "false"
-  "union"
-
-  "return"
-  "struct"
-  "inline"
-  "remove"
-
-  "size_of"
-  "type_of"
-  "code_of"
-  "context"
-
-  "continue"
-  "operator"
-
-  "type_info"
-  "no_inline"
-  "interface"
-
-  "enum_flags"
-
-  "is_constant"
-
-  "push_context"
-
-  "initializer_of"
-  
-  ; Additional keywords from emacs mode
-  "switch"
-  "type_info_none"
-  "type_info_procedures_are_void_pointers"
-] @keyword
-
-[
-  "return"
-] @keyword.return
-
-[
-  "if"
-  "else"
-  "case"
-  "break"
-] @conditional
+((identifier) @conditional
+  (#any-of? @conditional "if" "else" "case" "break"))
 
 ((if_expression
   [
@@ -81,12 +31,8 @@
   (#set! "priority" 105))
 
 ; Repeats
-
-[
-  "for"
-  "while"
-  "continue"
-] @repeat
+((identifier) @repeat
+  (#any-of? @repeat "for" "while" "continue"))
 
 ; Variables
 
@@ -115,11 +61,6 @@ named_argument: (identifier) @variable
 ; (procedure_declaration (identifier) @function (procedure (block)))
 ; Procedure declarations with various patterns
 (procedure_declaration (identifier) @function (block))
-
-; Match procedure patterns like "name :: procedure" or "name: type: procedure"
-((identifier) @function
-  (#lua-match? @function "^[a-zA-Z_][a-zA-Z0-9_]*$")
-  . ":" ":"? . (#any-of? "procedure" "inline" "#type"))
 
 ; Function calls
 (call_expression function: (identifier) @function.call)
@@ -328,11 +269,10 @@ type: ("type_of") @type
     "#type_info_procedures_are_void_pointers"))
 
 ; Procedure/function name patterns from Emacs mode
-; Match: name :: inline? ( or name : type : inline? (
-(identifier @function
-  . ":" ":"? 
-  . (identifier @keyword)? 
-  . "(")
+; Match function declarations like: name :: () {...}
+(const_declaration
+  name: (identifier) @function
+  value: (procedure))
 
 ; Special constant for triple dash
 ("---" @constant)
