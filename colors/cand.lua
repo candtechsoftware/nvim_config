@@ -4,7 +4,7 @@ local colors = {
     base                  = "#fcaa05",        -- amber-gold
     pop1                  = "#de8150",
     pop2                  = "#FF0000",
-    back                  = "#101010",        -- rich-black
+    back                  = "#000000",        -- rich-black
     margin                = "#222425",        -- dark-slate
     margin_hover          = "#63523d",        -- coffee-brown
     margin_active         = "#63523d",        -- coffee-brown
@@ -191,22 +191,55 @@ set(0, "StatusLineNC",      { fg = colors.comment, bg = colors.margin })
 -- Treesitter highlights
 set(0, "@comment",        { link = "Comment" })
 set(0, "@string",         { link = "String" })
+set(0, "@string.escape",  { fg = colors.special_character })
+set(0, "@character",      { fg = colors.char_constant })
 set(0, "@number",         { link = "Number" })
+set(0, "@number.float",   { fg = colors.float_constant })
 set(0, "@boolean",        { link = "Boolean" })
 set(0, "@constant",       { link = "Constant" })
+set(0, "@constant.builtin", { fg = colors.index_constant })
+
+-- Functions
 set(0, "@function",       { link = "Function" })
 set(0, "@function.builtin", { link = "Function" })
+set(0, "@function.call",  { fg = colors.index_function })
+set(0, "@function.definition", { fg = colors.index_function, bold = true })
+set(0, "@function.macro", { fg = colors.index_macro })
+
+-- Variables
 set(0, "@variable",       { link = "Identifier" })
-set(0, "@variable.builtin", { link = "Type" })
-set(0, "@constant.builtin", { link = "Type" })
+set(0, "@variable.builtin", { fg = colors.index_constant })
+set(0, "@variable.parameter", { fg = colors.text_default, italic = true })
+set(0, "@variable.jai",  { link = "Identifier" })
+set(0, "@parameter",      { fg = colors.text_default, italic = true })
+
+-- Types
 set(0, "@type",           { link = "Type" })
 set(0, "@type.builtin",   { link = "Type" })
+set(0, "@type.definition", { fg = colors.index_product_type, bold = true })
+
+-- Keywords
 set(0, "@keyword",        { link = "Keyword" })
 set(0, "@keyword.function", { link = "Keyword" })
-set(0, "@punctuation.special", { fg = colors.function_ })
+set(0, "@keyword.return", { fg = colors.keyword, bold = true })
+set(0, "@keyword.conditional", { link = "Keyword" })
+set(0, "@keyword.repeat", { link = "Keyword" })
+set(0, "@keyword.import", { fg = colors.include })
+set(0, "@keyword.directive", { fg = colors.preproc })
+set(0, "@keyword.modifier", { link = "Keyword" })
+
+-- Attributes & Macros
+set(0, "@attribute",      { fg = colors.index_comment_tag })
+set(0, "@module",         { fg = colors.include })
+
+-- Fields & Properties
 set(0, "@field",          { link = "Identifier" })
-set(0, "@property",       { link = "Identifier" })
-set(0, "@parameter",      { link = "Identifier" })
+set(0, "@property",       { fg = colors.text_default })
+
+-- Punctuation
+set(0, "@punctuation.special", { fg = colors.operators })
+
+-- Constructors
 set(0, "@constructor",    { link = "Type" })
 
 -- Language-specific overrides

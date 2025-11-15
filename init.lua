@@ -46,7 +46,7 @@ require("launch").setup()
 require("notes").setup()
 
 -- Load color scheme
-vim.cmd.colorscheme("cand")
+vim.cmd.colorscheme("aether")
 
 
 -- Build telescope-fzf-native if needed (silently)

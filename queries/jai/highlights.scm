@@ -1,12 +1,16 @@
-; Includes
+; ============================================================================
+; INCLUDES & IMPORTS
+; ============================================================================
 
 [
   (import)
   (load)
-] @include
+] @keyword.import
 
+; ============================================================================
+; KEYWORDS
+; ============================================================================
 
-; Keywords - match as identifiers with predicates
 ((identifier) @keyword
   (#any-of? @keyword
     "if" "xx" "ifx" "for" "then" "else" "null" "case" "enum" "true" "cast"
@@ -19,22 +23,24 @@
 ((identifier) @keyword.return
   (#eq? @keyword.return "return"))
 
-((identifier) @conditional
-  (#any-of? @conditional "if" "else" "case" "break"))
+((identifier) @keyword.conditional
+  (#any-of? @keyword.conditional "if" "else" "case" "break"))
 
 ((if_expression
   [
     "then"
     "ifx"
     "else"
-  ] @conditional.ternary)
+  ] @keyword.conditional.ternary)
   (#set! "priority" 105))
 
-; Repeats
-((identifier) @repeat
-  (#any-of? @repeat "for" "while" "continue"))
+; Repeats/loops
+((identifier) @keyword.repeat
+  (#any-of? @keyword.repeat "for" "while" "continue"))
 
-; Variables
+; ============================================================================
+; VARIABLES
+; ============================================================================
 
 ; (identifier) @variable
 name: (identifier) @variable
@@ -43,37 +49,50 @@ named_argument: (identifier) @variable
 (member_expression (identifier) @variable)
 (parenthesized_expression (identifier) @variable)
 
+; Builtin variables (it, it_index, context)
 ((identifier) @variable.builtin
   (#any-of? @variable.builtin "context" "it" "it_index"))
 
-; Namespaces
+; ============================================================================
+; NAMESPACES
+; ============================================================================
 
-(import (identifier) @namespace)
+(import (identifier) @module)
 
-; Parameters
+; ============================================================================
+; PARAMETERS
+; ============================================================================
 
-(parameter (identifier) @parameter ":" "="? (identifier)? @constant)
+(parameter (identifier) @variable.parameter ":" "="? (identifier)? @constant)
 
-; (call_expression argument: (identifier) @parameter "=")
+; ============================================================================
+; FUNCTIONS & PROCEDURES
+; ============================================================================
 
-; Functions
-
-; (procedure_declaration (identifier) @function (procedure (block)))
 ; Procedure declarations with various patterns
-(procedure_declaration (identifier) @function (block))
+(procedure_declaration (identifier) @function.definition (block))
 
 ; Function calls
 (call_expression function: (identifier) @function.call)
 
-; Types
+; Procedure/function name patterns from Emacs mode
+; Match function declarations like: name :: () {...}
+(const_declaration
+  name: (identifier) @function.definition
+  value: (procedure))
+
+; ============================================================================
+; TYPES
+; ============================================================================
 
 type: (types) @type
 type: (identifier) @type
 ((types) @type)
 
-modifier: (identifier) @keyword
+modifier: (identifier) @keyword.modifier
 keyword: (identifier) @keyword
 
+; Builtin types
 ((types (identifier) @type.builtin)
   (#any-of? @type.builtin
     "bool" "int" "string" "void"
@@ -82,53 +101,86 @@ keyword: (identifier) @keyword
     "float" "float32" "float64"
     "Type" "Any"))
 
-(struct_declaration (identifier) @type ":" ":")
+; Type definitions
+(struct_declaration (identifier) @type.definition ":" ":")
+(enum_declaration (identifier) @type.definition ":" ":")
 
-(enum_declaration (identifier) @type ":" ":")
+; Dollar types like $T, $foo - polymorphic types
+((identifier) @type.definition
+  (#lua-match? @type.definition "^\\$[a-zA-Z_][a-zA-Z0-9_]*$"))
 
-; (const_declaration (identifier) @type ":" ":" [(array_type) (pointer_type)])
+; Struct/enum/union literal syntax: Foo.{} and bar.[]
+((identifier) @type
+  . "." . ["{" "["])
 
-; ; I don't like this
-; ((identifier) @type
-;   (#lua-match? @type "^[A-Z][a-zA-Z0-9]*$")
-;   (#not-has-parent? @type parameter procedure_declaration call_expression))
+; Type declaration patterns: name :: struct/enum/union
+((identifier) @type.definition
+  . ":" . ":" . ["struct" "enum" "union" "#type"])
 
-; Fields
+; ============================================================================
+; FIELDS & PROPERTIES
+; ============================================================================
 
-(member_expression "." (identifier) @field)
+(member_expression "." (identifier) @property)
 
-(assignment_statement (identifier) @field "="?)
-(update_statement (identifier) @field)
+(assignment_statement (identifier) @property "="?)
+(update_statement (identifier) @property)
 
-; Constants
+; ============================================================================
+; CONSTANTS
+; ============================================================================
 
+; SCREAMING_SNAKE_CASE constants
 ((identifier) @constant
   (#lua-match? @constant "^_*[A-Z][A-Z0-9_]*$")
   (#not-has-parent? @constant type parameter))
 
 (member_expression . "." (identifier) @constant)
 
-; (enum_field (identifier) @constant)
+; Single character literals like 'a', 'x'
+((identifier) @character
+  (#lua-match? @character "^'[a-zA-Z0-9_]'$"))
 
-; Literals
+; ============================================================================
+; LITERALS
+; ============================================================================
 
+; Numbers
 (integer) @number
-(float) @number
+(float) @number.float
 
+; Enhanced number literals (hex, with underscores)
+((integer) @number
+  (#lua-match? @number "^0x[0-9a-fA-F_]+$"))
+
+((integer) @number
+  (#lua-match? @number "^[0-9_]+[a-zA-Z_]*$"))
+
+; Strings
 (string) @string
 
-;(character) @character
+; Character literals (single quotes)
+((string) @character
+  (#lua-match? @character "^'.*'$"))
+
+; String with quotes highlighting
+((string) @string
+  (#lua-match? @string "^\".*\"$"))
 
 (string_contents (escape_sequence) @string.escape)
 
+; Booleans
 (boolean) @boolean
 
+; Builtin constants
 [
   (uninitialized)
   (null)
 ] @constant.builtin
 
-; Operators
+; ============================================================================
+; OPERATORS
+; ============================================================================
 
 [
   ":"
@@ -172,7 +224,12 @@ keyword: (identifier) @keyword
   "&&="
 ] @operator
 
-; Punctuation
+; Postfix cast syntax .()
+("." . "(" @operator . ")" @operator)
+
+; ============================================================================
+; PUNCTUATION
+; ============================================================================
 
 [ "{" "}" ] @punctuation.bracket
 
@@ -189,94 +246,52 @@ keyword: (identifier) @keyword
   ";"
 ] @punctuation.delimiter
 
-; Comments
+; ============================================================================
+; COMMENTS
+; ============================================================================
 
 [
   (block_comment)
   (comment)
 ] @comment @spell
 
-; Nested block comments support
-(block_comment) @comment
+; ============================================================================
+; COMPILER DIRECTIVES & MACROS
+; ============================================================================
 
-; Errors
+directive: ("#") @keyword.directive
+type: ("type_of") @function.builtin
 
-(ERROR) @error
+(compiler_directive) @keyword.directive
 
-(block_comment) @comment
+; Hash directives - use @function.macro for better theme support
+((identifier) @function.macro
+  (#any-of? @function.macro
+    "#add_context" "#align" "#as" "#asm" "#assert" "#bake" "#bake_arguments"
+    "#bytes" "#caller_location" "#c_call" "#char" "#code" "#compiler"
+    "#compile_time" "#complete" "#cpp_method" "#define" "#deprecated" "#dump"
+    "#else" "#endif" "#expand" "#file" "#filepath" "#foreign" "#foreign_library"
+    "#foreign_system_library" "#if" "#ifdef" "#ifndef" "#import" "#insert"
+    "#insert_internal" "#intrinsic" "#library" "#load" "#location" "#modify"
+    "#module_parameters" "#must" "#no_abc" "#no_alias" "#no_aoc" "#no_context"
+    "#no_debug" "#no_padding" "#no_reset" "#place" "#placeholder" "#poke_name"
+    "#procedure_name" "#program_export" "#run" "#run_and_insert" "#runtime_support"
+    "#scope_export" "#scope_file" "#scope_module" "#specified" "#string"
+    "#symmetric" "#system_library" "#this" "#through" "#type" "#type_info_none"
+    "#type_info_procedures_are_void_pointers"))
 
-directive: ("#") @keyword ; #if
-type: ("type_of") @type
+; @ notes (annotations/attributes) - use @attribute for better theme support
+((identifier) @attribute
+  (#lua-match? @attribute "^@[a-zA-Z_][a-zA-Z0-9_]*$"))
 
-(compiler_directive) @keyword
+; Heredoc support
 (heredoc_start) @none
 (heredoc_end) @none
 (heredoc_body) @string
 (note) @string
 
-; Additional highlighting patterns from Emacs mode
+; ============================================================================
+; ERRORS
+; ============================================================================
 
-; Character literals
-((string) @character
-  (#lua-match? @character "^'.*'$"))
-
-; Single character literals (like 'a', 'x') 
-((identifier) @constant
-  (#lua-match? @constant "^'[a-zA-Z0-9_]'$"))
-
-; @ notes  
-((identifier) @preproc
-  (#lua-match? @preproc "^@[a-zA-Z_][a-zA-Z0-9_]*$"))
-
-; Dollar types like $T
-((identifier) @type
-  (#lua-match? @type "^\\$[a-zA-Z_][a-zA-Z0-9_]*$"))
-
-; Struct/enum/union literal syntax highlighting
-; Foo.{} and bar.[] matching
-((identifier) @type
-  . "." . ["{" "["])
-
-; Type declaration patterns
-((identifier) @type
-  . ":" . ":" . ["struct" "enum" "union" "#type"])
-
-; Postfix cast syntax .() 
-("." . "(" @operator . ")" @operator)
-
-; Enhanced number literal support (hex, with underscores, etc)
-((integer) @number
-  (#lua-match? @number "^0x[0-9a-fA-F_]+$"))
-
-((integer) @number
-  (#lua-match? @number "^[0-9_]+[a-zA-Z_]*$"))
-
-; Compiler directives from Emacs mode - comprehensive list
-; Hash directives
-((identifier) @preproc
-  (#any-of? @preproc 
-    "#add_context" "#align" "#as" "#asm" "#assert" "#bake" "#bake_arguments" 
-    "#bytes" "#caller_location" "#c_call" "#char" "#code" "#compiler" 
-    "#compile_time" "#complete" "#cpp_method" "#define" "#deprecated" "#dump" 
-    "#else" "#endif" "#expand" "#file" "#filepath" "#foreign" "#foreign_library" 
-    "#foreign_system_library" "#if" "#ifdef" "#ifndef" "#import" "#insert" 
-    "#insert_internal" "#intrinsic" "#library" "#load" "#location" "#modify" 
-    "#module_parameters" "#must" "#no_abc" "#no_alias" "#no_aoc" "#no_context" 
-    "#no_debug" "#no_padding" "#no_reset" "#place" "#placeholder" "#poke_name" 
-    "#procedure_name" "#program_export" "#run" "#run_and_insert" "#runtime_support" 
-    "#scope_export" "#scope_file" "#scope_module" "#specified" "#string" 
-    "#symmetric" "#system_library" "#this" "#through" "#type" "#type_info_none" 
-    "#type_info_procedures_are_void_pointers"))
-
-; Procedure/function name patterns from Emacs mode
-; Match function declarations like: name :: () {...}
-(const_declaration
-  name: (identifier) @function
-  value: (procedure))
-
-; Special constant for triple dash
-("---" @constant)
-
-; String with quotes highlighting
-((string) @string
-  (#lua-match? @string "^\".*\"$"))
+(ERROR) @error
