@@ -64,7 +64,11 @@ function M.setup()
             if file_size > 25 * 1024 then  -- 25KB threshold
                 vim.defer_fn(function()
                     if vim.api.nvim_buf_is_valid(buf) then
-                        vim.treesitter.start(buf)
+                        -- Only start treesitter if parser exists for this filetype
+                        local ok = pcall(vim.treesitter.get_parser, buf)
+                        if ok then
+                            vim.treesitter.start(buf)
+                        end
                     end
                 end, 100)
             end

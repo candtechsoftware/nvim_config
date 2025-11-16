@@ -3,7 +3,7 @@ local colors = {
     -- Monotone shades (base00-base07)
     base00 = "#0f0f0f", -- Default background
     base01 = "#5e5959", -- Lighter background (status bars)
-    base02 = "#0f0f0f", -- Selection background
+    base02 = "#2a2525", -- Selection background
     base03 = "#5e5959", -- Comments, invisibles
     base04 = "#e6caab", -- Dark foreground
     base05 = "#eadccc", -- Default foreground
