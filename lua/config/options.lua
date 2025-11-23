@@ -52,12 +52,14 @@ vim.opt.smartcase = true
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.signcolumn = "yes" -- Always show the sign column
 vim.opt.colorcolumn = "" -- Disable the color column
-vim.opt.updatetime = 50 -- Update interval for CursorHold and CursorHoldI
+vim.opt.updatetime = 250 -- Update interval for CursorHold and CursorHoldI
 
 -- Performance optimizations
-vim.opt.lazyredraw = false -- Keep false for smooth experience
-vim.opt.synmaxcol = 240 -- Only syntax highlight first 240 columns
+vim.opt.lazyredraw = false -- Keep false for smooth scrolling/cursor
+vim.opt.synmaxcol = 300 -- Syntax highlight up to 300 columns
 vim.opt.redrawtime = 1500 -- Time in ms for redrawing screen
+vim.opt.timeoutlen = 400 -- Faster key sequence completion
+vim.opt.ttimeoutlen = 10 -- Near-instant escape key response
 
 -- Font and display
 vim.o.guifont = "Liberation Mono:h18"

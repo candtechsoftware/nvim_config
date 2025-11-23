@@ -17,28 +17,7 @@ function M.setup()
         highlight = {
             enable = true,
             additional_vim_regex_highlighting = false,
-            disable = function(lang, buf)
-                if lang == "zig" then
-                    return true
-                end
-
-                -- More aggressive file size limits for performance
-                local max_filesize = 50 * 1024  -- Reduced from 100KB to 50KB
-                local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
-                if ok and stats and stats.size > max_filesize then
-                    return true
-                end
-
-                -- Also disable for very long lines (performance killer)
-                local max_line_length = 1000
-                local lines = vim.api.nvim_buf_get_lines(buf, 0, 100, false)  -- Check first 100 lines
-                for _, line in ipairs(lines) do
-                    if #line > max_line_length then
-                        return true
-                    end
-                end
-            end,
-            use_languagetree = true,  -- Better for complex files
+            disable = { "zig" },
         },
         indent = {
             enable = true,
@@ -52,27 +31,6 @@ function M.setup()
         textobjects = {
             enable = false,  -- Disable if not used
         },
-    })
-
-    -- Async treesitter setup for better performance
-    vim.api.nvim_create_autocmd("BufReadPost", {
-        callback = function(args)
-            local buf = args.buf
-            local file_size = vim.fn.getfsize(vim.api.nvim_buf_get_name(buf))
-
-            -- For large files, delay treesitter parsing
-            if file_size > 25 * 1024 then  -- 25KB threshold
-                vim.defer_fn(function()
-                    if vim.api.nvim_buf_is_valid(buf) then
-                        -- Only start treesitter if parser exists for this filetype
-                        local ok = pcall(vim.treesitter.get_parser, buf)
-                        if ok then
-                            vim.treesitter.start(buf)
-                        end
-                    end
-                end, 100)
-            end
-        end,
     })
 
     vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {

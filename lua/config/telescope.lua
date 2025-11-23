@@ -14,8 +14,28 @@ function M.setup()
             path_display = { "smart" },
             prompt_prefix = "> ",
             selection_caret = "> ",
-            -- Improve visibility of selected/hovered items
             borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
+            -- Performance: use ripgrep with optimized flags
+            vimgrep_arguments = {
+                "rg",
+                "--color=never",
+                "--no-heading",
+                "--with-filename",
+                "--line-number",
+                "--column",
+                "--smart-case",
+                "--hidden",
+                "--glob=!.git/",
+            },
+            -- Performance: disable treesitter in previewer (faster for C files)
+            preview = {
+                treesitter = false,
+            },
+            -- Performance: cache pickers for faster reopening
+            cache_picker = {
+                num_pickers = 10,
+                limit_entries = 1000,
+            },
             mappings = {
                 i = {
                     ["<C-j>"] = actions.move_selection_next,
