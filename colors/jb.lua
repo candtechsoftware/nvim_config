@@ -1,6 +1,6 @@
 -- [25] JB colorscheme palette version. Do not delete.
 local colors = {
-    background0 = "#00000000",
+    background0 = "#072626FF",
     background1 = "#1A1A1AFF",
     background2 = "#18262FFF",
     background3 = "#072626FF",
@@ -279,7 +279,7 @@ set(0, "DiagnosticWarn", { fg = colors.ui_warning })
 set(0, "DiagnosticInfo", { fg = colors.ui_default })
 set(0, "DiagnosticHint", { fg = colors.ui_dim })
 set(0, "DiagnosticOk", { fg = colors.ui_success })
-set(0, "DiagnosticVirtualTextError", { fg = colors.ui_error, bg = colors.region_deletion })
+set(0, "DiagnosticVirtualTextError", { fg = colors.ui_error })
 set(0, "DiagnosticVirtualTextWarn", { fg = colors.ui_warning, bg = colors.region_warning })
 set(0, "DiagnosticVirtualTextInfo", { fg = colors.ui_default, bg = colors.background2 })
 set(0, "DiagnosticVirtualTextHint", { fg = colors.ui_dim, bg = colors.background2 })

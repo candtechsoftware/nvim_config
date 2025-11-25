@@ -6,6 +6,54 @@ if not _G.launch_cached_root then
   _G.launch_initial_cwd = vim.fn.getcwd()
 end
 
+-- Parse error lines into quickfix entries
+local function parse_errors(lines, root)
+  local qf_entries = {}
+
+  for _, line in ipairs(lines) do
+    -- Jai format: /path/file.jai:192,30: Error: message
+    -- Use pattern that captures path with slashes, allowing leading whitespace
+    local file, lnum, col, msg = line:match("%s*(/[^:]+):(%d+),(%d+):%s*Error:%s*(.+)")
+    if file and lnum then
+      table.insert(qf_entries, {
+        filename = vim.fn.fnamemodify(file, ":p"),
+        lnum = tonumber(lnum),
+        col = tonumber(col),
+        text = msg,
+        type = "E",
+      })
+    else
+      -- C/Clang format: file:line:col: error: message (absolute path)
+      file, lnum, col, msg = line:match("%s*(/[^:]+):(%d+):(%d+):%s*error:%s*(.+)")
+      if file and lnum then
+        table.insert(qf_entries, {
+          filename = vim.fn.fnamemodify(file, ":p"),
+          lnum = tonumber(lnum),
+          col = tonumber(col),
+          text = msg,
+          type = "E",
+        })
+      else
+        -- C/Clang format with relative path: ../src/file.c:103:35: error: message
+        file, lnum, col, msg = line:match("%s*([%.%w_/-]+%.[%w]+):(%d+):(%d+):%s*error:%s*(.+)")
+        if file and lnum then
+          -- Resolve relative path from root directory
+          local abs_path = vim.fn.resolve(root .. "/" .. file)
+          table.insert(qf_entries, {
+            filename = abs_path,
+            lnum = tonumber(lnum),
+            col = tonumber(col),
+            text = msg,
+            type = "E",
+          })
+        end
+      end
+    end
+  end
+
+  return qf_entries
+end
+
 local function find_project_root()
   -- Don't use cached root if we're in a different project
   if _G.launch_cached_root then
@@ -86,12 +134,56 @@ function M.setup()
     vim.keymap.set("n", key, function()
       -- Re-find the root in case we've switched projects
       local current_root = find_project_root()
-      -- vim.notify("Running command: " .. cmd .. " in directory: " .. current_root)
-      vim.cmd("split")
-      vim.cmd("terminal")
-      -- Use proper cd command for Unix-like systems (no /d flag)
-      local term_cmd = "cd " .. vim.fn.shellescape(current_root) .. " && " .. cmd
-      vim.fn.chansend(vim.b.terminal_job_id, term_cmd .. "\r")
+      local output_lines = {}
+
+      vim.notify("Running: " .. cmd, vim.log.levels.INFO)
+
+      vim.fn.jobstart(cmd, {
+        cwd = current_root,
+        stdout_buffered = true,
+        stderr_buffered = true,
+        on_stdout = function(_, data)
+          if data then
+            vim.list_extend(output_lines, data)
+          end
+        end,
+        on_stderr = function(_, data)
+          if data then
+            vim.list_extend(output_lines, data)
+          end
+        end,
+        on_exit = function(_, exit_code)
+          vim.schedule(function()
+            if exit_code ~= 0 then
+              local qf_entries = parse_errors(output_lines, current_root)
+              if #qf_entries > 0 then
+                vim.fn.setqflist(qf_entries, "r")
+                vim.fn.setqflist({}, "a", { title = "Build Errors: " .. cmd })
+                vim.cmd("copen")
+                -- Debug: show first error path
+                vim.notify("Build FAILED - " .. #qf_entries .. " error(s). First: " .. qf_entries[1].filename, vim.log.levels.ERROR)
+              else
+                -- No parseable errors, show raw output
+                vim.fn.setqflist({}, "r")
+                for _, line in ipairs(output_lines) do
+                  if line ~= "" then
+                    vim.fn.setqflist({ { text = line } }, "a")
+                  end
+                end
+                vim.fn.setqflist({}, "a", { title = "Build Output: " .. cmd })
+                vim.cmd("copen")
+                vim.notify("Build FAILED (exit code " .. exit_code .. ")", vim.log.levels.ERROR)
+              end
+            else
+              -- Clear quickfix on success
+              vim.fn.setqflist({}, "r")
+              vim.fn.setqflist({}, "a", { title = "Build: SUCCESS" })
+              vim.cmd("cclose")
+              vim.notify("Build SUCCESS", vim.log.levels.INFO)
+            end
+          end)
+        end,
+      })
     end, { noremap = true, silent = true, desc = "launch.json command" })
   end
   

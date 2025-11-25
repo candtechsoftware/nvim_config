@@ -10,7 +10,8 @@ function M.setup()
         ensure_installed = {
             "c", "cpp", "lua", "rust", "go",
             "javascript", "typescript", "tsx",
-            "json", "yaml", "toml", "bash", "vim", "vimdoc", "query"
+            "json", "yaml", "toml", "bash", "vim", "vimdoc", "query",
+            "glsl", "hlsl"
         },
         sync_install = false,
         auto_install = true,
