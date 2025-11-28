@@ -95,7 +95,10 @@ function M.setup()
   hl(0, "FloatTitle", { fg = colors.base, bg = colors.list_item_hover })
 
   -- Cursor and selection
-  hl(0, "Cursor", { fg = colors.at_cursor, bg = colors.cursor })
+  hl(0, "Cursor", { fg = colors.at_cursor, bg = colors.cursor })           -- Normal: green
+  hl(0, "CursorInsert", { fg = colors.at_cursor, bg = colors.cursor3 })    -- Insert: gold
+  hl(0, "CursorVisual", { fg = colors.at_cursor, bg = colors.cursor2 })    -- Visual: orange
+  hl(0, "CursorReplace", { fg = colors.at_cursor, bg = colors.error })     -- Replace: red
   hl(0, "CursorIM", { fg = colors.at_cursor, bg = colors.cursor2 })
   hl(0, "CursorLine", { bg = colors.highlight_line })
   hl(0, "CursorColumn", { bg = colors.highlight_line })
@@ -111,6 +114,12 @@ function M.setup()
   -- Status line
   hl(0, "StatusLine", { fg = colors.base, bg = colors.bar_bg })
   hl(0, "StatusLineNC", { fg = colors.line_numbers_text, bg = colors.bar_bg })
+  -- Mode-specific statusline colors
+  hl(0, "StatusLineNormal", { fg = colors.back, bg = colors.cursor, bold = true })      -- Green
+  hl(0, "StatusLineInsert", { fg = colors.back, bg = colors.cursor3, bold = true })     -- Gold
+  hl(0, "StatusLineVisual", { fg = colors.back, bg = colors.cursor2, bold = true })     -- Orange
+  hl(0, "StatusLineReplace", { fg = colors.back, bg = colors.error, bold = true })      -- Red
+  hl(0, "StatusLineCommand", { fg = colors.back, bg = colors.pop1, bold = true })       -- Olive green
   hl(0, "WinBar", { fg = colors.text_default, bg = colors.back })
   hl(0, "WinBarNC", { fg = colors.comment, bg = colors.back })
 

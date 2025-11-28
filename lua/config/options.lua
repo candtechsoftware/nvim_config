@@ -9,10 +9,12 @@ vim.diagnostic.config({
     }
 })
 
--- Cursor configuration
+-- Cursor configuration with mode colors
 vim.opt.guicursor = {
-    "n-v-c:block",       -- Normal, Visual, Command: block cursor
-    "i-ci:block",        -- Insert, Insert Command: block cursor
+    "n-c:block-Cursor",           -- Normal, Command: green cursor
+    "v:block-CursorVisual",       -- Visual: orange cursor
+    "i-ci:block-CursorInsert",    -- Insert: gold cursor
+    "r-cr:block-CursorReplace",   -- Replace: red cursor
 }
 
 -- Line numbers
@@ -22,9 +24,43 @@ vim.o.relativenumber = false
 -- Remove tildes (~) on empty lines
 vim.opt.fillchars:append({ eob = " " })
 
--- Set statusline to: filename line:col
+-- Set statusline with mode indicator
 vim.o.laststatus = 2  -- Always show status line
-vim.o.statusline = "%f %l:%c"
+
+-- Mode-aware statusline
+local function get_mode_statusline()
+    local mode_map = {
+        ['n']  = { name = 'NORMAL',  hl = 'StatusLineNormal' },
+        ['no'] = { name = 'NORMAL',  hl = 'StatusLineNormal' },
+        ['v']  = { name = 'VISUAL',  hl = 'StatusLineVisual' },
+        ['V']  = { name = 'V-LINE',  hl = 'StatusLineVisual' },
+        [''] = { name = 'V-BLOCK', hl = 'StatusLineVisual' },
+        ['s']  = { name = 'SELECT',  hl = 'StatusLineVisual' },
+        ['S']  = { name = 'S-LINE',  hl = 'StatusLineVisual' },
+        ['i']  = { name = 'INSERT',  hl = 'StatusLineInsert' },
+        ['ic'] = { name = 'INSERT',  hl = 'StatusLineInsert' },
+        ['R']  = { name = 'REPLACE', hl = 'StatusLineReplace' },
+        ['Rv'] = { name = 'V-REPLACE', hl = 'StatusLineReplace' },
+        ['c']  = { name = 'COMMAND', hl = 'StatusLineCommand' },
+        ['cv'] = { name = 'VIM EX',  hl = 'StatusLineCommand' },
+        ['ce'] = { name = 'EX',      hl = 'StatusLineCommand' },
+        ['r']  = { name = 'PROMPT',  hl = 'StatusLineNormal' },
+        ['rm'] = { name = 'MORE',    hl = 'StatusLineNormal' },
+        ['r?'] = { name = 'CONFIRM', hl = 'StatusLineNormal' },
+        ['!']  = { name = 'SHELL',   hl = 'StatusLineNormal' },
+        ['t']  = { name = 'TERMINAL', hl = 'StatusLineInsert' },
+    }
+    local mode = vim.fn.mode()
+    local info = mode_map[mode] or { name = mode, hl = 'StatusLine' }
+    return info.name, info.hl
+end
+
+function StatusLine()
+    local mode, hl = get_mode_statusline()
+    return string.format('%%#%s# %s %%#StatusLine# %%f %%l:%%c', hl, mode)
+end
+
+vim.o.statusline = '%!v:lua.StatusLine()'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for

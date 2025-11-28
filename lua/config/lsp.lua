@@ -304,20 +304,7 @@ function M.setup()
             root_markers = { 'Cargo.toml', '.git' },
         },
 
-        clangd = {
-            cmd = {
-                "clangd",
-                "--background-index",
-                "--header-insertion=never",
-                "--completion-style=bundled",
-                "--function-arg-placeholders",
-                "--fallback-style=llvm",
-                "--pch-storage=memory",
-                "-j=4",
-            },
-            filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda', 'proto' },
-            root_markers = { 'compile_commands.json', '.clangd', 'CMakeLists.txt', 'Makefile', '.git' },
-        },
+        -- clangd removed: C/C++ handled by YouCompleteMe (see config/ycm.lua)
 
         zls = {
             cmd = { 'zls' },
@@ -440,11 +427,7 @@ function M.start_lsp(bufnr)
             filetypes = { 'rust' },
             root_markers = { 'Cargo.toml', '.git' },
         },
-        clangd = {
-            cmd = { 'clangd' },
-            filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda', 'proto' },
-            root_markers = { 'compile_commands.json', '.clangd', 'CMakeLists.txt', 'Makefile', '.git' },
-        },
+        -- clangd removed: C/C++ handled by YouCompleteMe
         zls = {
             cmd = { 'zls' },
             filetypes = { 'zig' },

@@ -1,6 +1,45 @@
 -- Modern Neovim configuration without Lazy.nvim
 -- Using native LSP, treesitter, and minimal plugin dependencies
 
+-- YouCompleteMe settings (must be set BEFORE plugin loads)
+vim.g.ycm_use_clangd = 1  -- Use clangd backend
+vim.g.ycm_clangd_binary_path = vim.fn.exepath('clangd')
+vim.g.ycm_clangd_args = {
+    '--background-index',
+    '--header-insertion=never',
+    '--completion-style=detailed',  -- Shows [kind] in completions
+    '--function-arg-placeholders=0',
+    '--fallback-style=llvm',
+    '--pch-storage=memory',
+    '-j=4',
+}
+vim.g.ycm_filetype_whitelist = {
+    c = 1,
+    cpp = 1,
+    objc = 1,
+    objcpp = 1,
+    cuda = 1,
+}
+vim.g.ycm_auto_hover = ''  -- Disable auto hover, use K manually
+vim.g.ycm_auto_trigger = 1
+vim.g.ycm_disable_signature_help = 0  -- Enable signature help
+vim.g.ycm_signature_help_disable_syntax = 0  -- Keep syntax highlighting in signature popup
+vim.g.ycm_key_list_select_completion = {'<Tab>', '<Down>'}
+vim.g.ycm_key_list_previous_completion = {'<S-Tab>', '<Up>'}
+vim.g.ycm_key_list_stop_completion = {'<Esc>'}
+vim.g.ycm_show_diagnostics_ui = 0  -- Disable diagnostics (for unity builds)
+vim.g.ycm_enable_diagnostic_signs = 0
+vim.g.ycm_enable_diagnostic_highlighting = 0
+vim.g.ycm_semantic_triggers = {
+    c = { '->', '.' },
+    cpp = { '->', '.', '::' },
+}
+vim.g.ycm_confirm_extra_conf = 0  -- Auto-load .ycm_extra_conf.py
+vim.g.ycm_clangd_uses_ycmd_caching = 0  -- Let clangd handle caching
+vim.g.ycm_add_preview_to_completeopt = 0  -- No preview window
+vim.g.ycm_complete_in_comments = 1
+vim.g.ycm_collect_identifiers_from_comments_and_strings = 1
+
 -- Set up netrw before anything else
 vim.g.netrw_banner = 0
 vim.g.netrw_liststyle = 0  -- Use regular listing style
@@ -23,6 +62,9 @@ require("config.keymaps")
 
 -- Load and setup native LSP
 require("config.lsp").setup()
+
+-- Load and setup YouCompleteMe for C/C++
+require("config.ycm").setup()
 
 -- Load and setup native treesitter
 local treesitter = require("config.treesitter")
