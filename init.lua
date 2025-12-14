@@ -87,8 +87,11 @@ require("launch").setup()
 -- Load and setup notes plugin
 require("notes").setup()
 
+-- Load and setup clipboard manager
+require("config.clipboard").setup()
+
 -- Load color scheme
-vim.cmd.colorscheme("fleury")
+vim.cmd.colorscheme("hh")
 
 
 -- Build telescope-fzf-native if needed (silently)

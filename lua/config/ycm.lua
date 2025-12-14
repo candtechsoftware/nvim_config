@@ -1,12 +1,21 @@
 -- YouCompleteMe keybindings for C/C++
 -- NOTE: Global YCM settings are in init.lua (must load before plugin)
+-- YCM is in pack/plugins/opt/ and only loads for C/C++ files
 local M = {}
 
+local ycm_loaded = false
+
 function M.setup()
-    -- Set up keybindings for C/C++ files (clangd backend)
+    -- Load YCM only for C/C++ files
     vim.api.nvim_create_autocmd("FileType", {
         pattern = { 'c', 'cpp', 'objc', 'objcpp', 'cuda' },
         callback = function(args)
+            -- Load YCM plugin once
+            if not ycm_loaded then
+                vim.cmd("packadd YouCompleteMe")
+                ycm_loaded = true
+            end
+
             local opts = { buffer = args.buf, silent = true }
 
             -- Navigation

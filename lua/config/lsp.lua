@@ -185,73 +185,33 @@ function M.setup()
         -- Set omnifunc for completion
         vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
 
-        -- Enable optimized auto-completion
-        if vim.lsp.completion then
-            vim.lsp.completion.enable(true, client.id, bufnr, {
-                autotrigger = true,
-                debounce = 100,  -- Faster trigger, down from 150ms
-            })
-        end
-
-        -- Smart context-aware completion trigger
-        local timer = vim.uv.new_timer()
-        vim.api.nvim_create_autocmd({ 'TextChangedI' }, {
+        -- Use omnifunc-based completion (Tab keymaps are in keymaps.lua)
+        -- Trigger with <C-x><C-o> or auto-trigger on typing
+        local completion_timer = vim.uv.new_timer()
+        vim.api.nvim_create_autocmd('TextChangedI', {
             buffer = bufnr,
             callback = function()
-                timer:stop()
-                timer:start(100, 0, vim.schedule_wrap(function()  -- Faster trigger
-                    if vim.api.nvim_get_mode().mode == 'i' then
+                completion_timer:stop()
+                completion_timer:start(150, 0, vim.schedule_wrap(function()
+                    if vim.api.nvim_get_mode().mode == 'i' and vim.fn.pumvisible() == 0 then
                         local line = vim.api.nvim_get_current_line()
                         local col = vim.api.nvim_win_get_cursor(0)[2]
-                        local before_cursor = line:sub(1, col)
-
-                        -- Don't trigger in comments or strings (basic detection)
-                        local syntax_group = vim.fn.synIDattr(vim.fn.synID(vim.fn.line('.'), col, true), 'name')
-                        if syntax_group:match('[Cc]omment') or syntax_group:match('[Ss]tring') then
-                            return
+                        local before = line:sub(1, col)
+                        -- Trigger completion on . or 2+ word chars
+                        if before:match('%.$') or before:match('%w%w$') then
+                            vim.api.nvim_feedkeys(
+                                vim.api.nvim_replace_termcodes('<C-x><C-o>', true, false, true),
+                                'n', false
+                            )
                         end
-
-                        -- More sophisticated triggering patterns
-                        local should_trigger = (
-                            before_cursor:match('%w%w+$') or       -- 2+ word chars
-                            before_cursor:match('%w+%.$') or       -- word followed by dot
-                            before_cursor:match('%w+::$') or       -- word followed by :: (jai/c++)
-                            before_cursor:match('%w+->$')          -- word followed by -> (c/c++)
-                        )
-
-                        if should_trigger and vim.fn.pumvisible() == 0 then
-                            vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-o>", true, false, true), 'n')
+                        -- Trigger signature help on ( or ,
+                        if before:match('%($') or before:match(',%s*$') then
+                            vim.lsp.buf.signature_help()
                         end
                     end
                 end))
             end,
         })
-
-        -- Add Tab and S-Tab for completion navigation
-        vim.keymap.set('i', '<Tab>', function()
-            if vim.fn.pumvisible() == 1 then
-                return '<C-n>'
-            else
-                return '<Tab>'
-            end
-        end, { expr = true, buffer = bufnr })
-
-        vim.keymap.set('i', '<S-Tab>', function()
-            if vim.fn.pumvisible() == 1 then
-                return '<C-p>'
-            else
-                return '<S-Tab>'
-            end
-        end, { expr = true, buffer = bufnr })
-
-        -- Escape to close completion menu
-        vim.keymap.set('i', '<Esc>', function()
-            if vim.fn.pumvisible() == 1 then
-                vim.fn.feedkeys(vim.api.nvim_replace_termcodes('<C-e><Esc>', true, false, true), 'n')
-            else
-                vim.fn.feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n')
-            end
-        end, { buffer = bufnr })
     end
 
     -- Use the modern vim.lsp.config API properly
