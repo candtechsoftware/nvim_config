@@ -488,6 +488,15 @@ local scope_queries = {
     (for_statement) @scope
     (while_statement) @scope
   ]],
+  typescript = [[
+    (statement_block) @scope
+  ]],
+  tsx = [[
+    (statement_block) @scope
+  ]],
+  javascript = [[
+    (statement_block) @scope
+  ]],
 }
 
 -- Parse all scopes in a buffer (called on text change, not cursor move)
@@ -719,7 +728,7 @@ function M.setup_scope_highlight()
   local group = vim.api.nvim_create_augroup("HHScopeSetup", { clear = true })
   vim.api.nvim_create_autocmd("FileType", {
     group = group,
-    pattern = { "c", "cpp", "lua" },
+    pattern = { "c", "cpp", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
     callback = function(ev)
       vim.schedule(function()
         M.enable_scope_highlight(ev.buf)
@@ -729,7 +738,7 @@ function M.setup_scope_highlight()
 
   -- Also enable for current buffer if it matches
   local ft = vim.bo.filetype
-  if ft == "c" or ft == "cpp" or ft == "lua" then
+  if ft == "c" or ft == "cpp" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
     vim.schedule(function()
       M.enable_scope_highlight(vim.api.nvim_get_current_buf())
     end)

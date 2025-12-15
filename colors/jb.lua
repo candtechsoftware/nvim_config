@@ -1,4 +1,6 @@
 -- [25] JB colorscheme palette version. Do not delete.
+local M = {}
+
 local colors = {
     background0 = "#072626FF",
     background1 = "#1A1A1AFF",
@@ -90,6 +92,13 @@ local colors = {
     code_comment_highlight3 = "#FFFFFFFF",
     code_comment_highlight4 = "#7FFFD4FF",
     cursor_line_highlight = "#1A1A1AFF",
+    -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
+    back_cycle = {
+        "#0a2e2eFF",  -- Level 1: slightly lighter teal
+        "#072e26FF",  -- Level 2: green tint
+        "#072632FF",  -- Level 3: blue tint
+        "#0e2626FF",  -- Level 4: red tint
+    },
     color_preview_title_bar = "#1A1A1AFF",
     code_addition = "#33B333FF",
     code_deletion = "#E64D4DFF",
@@ -409,4 +418,295 @@ set(0, "LexicalScopeExport", { link = "FocusRegionScopeExport" })
 set(0, "LexicalScopeFile", { link = "FocusRegionScopeFile" })
 set(0, "LexicalScopeModule", { link = "FocusRegionScopeModule" })
 
-return colors
+-- Scope highlight groups for nested scope backgrounds
+for i, bg in ipairs(colors.back_cycle) do
+    set(0, "JBScope" .. i, { bg = bg:sub(1, 7) })  -- Strip alpha
+end
+
+-- Export colors
+M.colors = colors
+
+-- Scope highlight namespace
+local scope_ns = vim.api.nvim_create_namespace("jb_scope_highlight")
+
+-- Cache for scope data per buffer to avoid unnecessary redraws
+local scope_cache = {}
+
+-- Different queries for different languages
+local scope_queries = {
+    c = [[
+        (compound_statement) @scope
+    ]],
+    cpp = [[
+        (compound_statement) @scope
+    ]],
+    lua = [[
+        (function_definition) @scope
+        (if_statement) @scope
+        (for_statement) @scope
+        (while_statement) @scope
+    ]],
+    typescript = [[
+        (statement_block) @scope
+    ]],
+    tsx = [[
+        (statement_block) @scope
+    ]],
+    javascript = [[
+        (statement_block) @scope
+    ]],
+}
+
+-- Parse all scopes in a buffer (called on text change, not cursor move)
+local function parse_scopes(bufnr)
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+    if not ok or not parser then
+        return nil
+    end
+
+    local tree = parser:parse()[1]
+    if not tree then return nil end
+
+    local root = tree:root()
+    local lang = parser:lang()
+
+    local query_string = scope_queries[lang]
+    if not query_string then return nil end
+
+    local query
+    local success = pcall(function()
+        query = vim.treesitter.query.parse(lang, query_string)
+    end)
+
+    if not success or not query then
+        return nil
+    end
+
+    -- Collect all scopes
+    local all_scopes = {}
+    for id, node in query:iter_captures(root, bufnr, 0, -1) do
+        local start_row, _, end_row, _ = node:range()
+        table.insert(all_scopes, {
+            start_row = start_row,
+            end_row = end_row,
+            size = end_row - start_row,
+        })
+    end
+
+    return all_scopes
+end
+
+-- Find scopes containing a specific line
+local function find_containing_scopes(all_scopes, cursor_row)
+    if not all_scopes then return {} end
+
+    local containing = {}
+    for _, scope in ipairs(all_scopes) do
+        if cursor_row >= scope.start_row and cursor_row <= scope.end_row then
+            table.insert(containing, scope)
+        end
+    end
+
+    -- Sort by size (smallest/innermost first)
+    table.sort(containing, function(a, b)
+        return a.size < b.size
+    end)
+
+    return containing
+end
+
+-- Generate a fingerprint for the current scope state
+local function scope_fingerprint(scopes)
+    if not scopes or #scopes == 0 then return "" end
+    local parts = {}
+    for _, s in ipairs(scopes) do
+        table.insert(parts, s.start_row .. ":" .. s.end_row)
+    end
+    return table.concat(parts, ",")
+end
+
+-- Apply scope highlights (only redraws if scopes actually changed)
+function M.highlight_scopes(bufnr, winid, force)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    winid = winid or vim.api.nvim_get_current_win()
+
+    -- Initialize cache for this buffer if needed
+    if not scope_cache[bufnr] then
+        scope_cache[bufnr] = {
+            all_scopes = nil,
+            last_fingerprint = "",
+            dirty = true,
+        }
+    end
+
+    local cache = scope_cache[bufnr]
+
+    -- Reparse scopes if dirty (text changed)
+    if cache.dirty or not cache.all_scopes then
+        cache.all_scopes = parse_scopes(bufnr)
+        cache.dirty = false
+    end
+
+    -- Get cursor position
+    local cursor = vim.api.nvim_win_get_cursor(winid)
+    local cursor_row = cursor[1] - 1  -- 0-indexed
+
+    -- Find scopes containing cursor
+    local containing_scopes = find_containing_scopes(cache.all_scopes, cursor_row)
+    local fingerprint = scope_fingerprint(containing_scopes)
+
+    -- Skip redraw if scopes haven't changed (cursor moved within same scope)
+    if not force and fingerprint == cache.last_fingerprint then
+        return
+    end
+
+    cache.last_fingerprint = fingerprint
+
+    -- Clear and reapply highlights
+    vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1)
+
+    -- Apply highlights - innermost scope gets first color, outer scopes get subsequent colors
+    for depth, scope in ipairs(containing_scopes) do
+        local cycle_idx = ((depth - 1) % #colors.back_cycle) + 1
+        local hl_group = "JBScope" .. cycle_idx
+
+        for line = scope.start_row, scope.end_row do
+            vim.api.nvim_buf_set_extmark(bufnr, scope_ns, line, 0, {
+                line_hl_group = hl_group,
+                priority = 100 - depth,  -- Inner scopes have higher priority
+            })
+        end
+    end
+end
+
+-- Mark buffer scopes as dirty (needs reparse)
+local function mark_dirty(bufnr)
+    if scope_cache[bufnr] then
+        scope_cache[bufnr].dirty = true
+    end
+end
+
+-- Debounce timer per buffer
+local debounce_timers = {}
+local DEBOUNCE_MS = 50  -- 50ms debounce for cursor movement
+
+-- Debounced highlight update
+local function debounced_highlight(bufnr)
+    -- Cancel any pending timer for this buffer
+    if debounce_timers[bufnr] then
+        debounce_timers[bufnr]:stop()
+        debounce_timers[bufnr] = nil
+    end
+
+    -- Create new timer
+    local timer = vim.uv.new_timer()
+    debounce_timers[bufnr] = timer
+
+    timer:start(DEBOUNCE_MS, 0, vim.schedule_wrap(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            M.highlight_scopes(bufnr)
+        end
+        if debounce_timers[bufnr] == timer then
+            debounce_timers[bufnr] = nil
+        end
+        timer:stop()
+        timer:close()
+    end))
+end
+
+-- Enable scope highlighting for a buffer
+function M.enable_scope_highlight(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+    -- Initialize cache
+    scope_cache[bufnr] = {
+        all_scopes = nil,
+        last_fingerprint = "",
+        dirty = true,
+    }
+
+    -- Initial highlight (immediate, not debounced)
+    vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            M.highlight_scopes(bufnr, nil, true)
+        end
+    end)
+
+    local group = vim.api.nvim_create_augroup("JBScopeHighlight" .. bufnr, { clear = true })
+
+    -- Cursor movement: debounced, uses cache
+    vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+        group = group,
+        buffer = bufnr,
+        callback = function()
+            debounced_highlight(bufnr)
+        end,
+    })
+
+    -- Text changes: mark dirty, then debounced update
+    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+        group = group,
+        buffer = bufnr,
+        callback = function()
+            mark_dirty(bufnr)
+            debounced_highlight(bufnr)
+        end,
+    })
+
+    -- Clean up cache when buffer is deleted
+    vim.api.nvim_create_autocmd("BufDelete", {
+        group = group,
+        buffer = bufnr,
+        callback = function()
+            scope_cache[bufnr] = nil
+            if debounce_timers[bufnr] then
+                debounce_timers[bufnr]:stop()
+                debounce_timers[bufnr]:close()
+                debounce_timers[bufnr] = nil
+            end
+        end,
+    })
+end
+
+-- Disable scope highlighting for a buffer
+function M.disable_scope_highlight(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1)
+    pcall(vim.api.nvim_del_augroup_by_name, "JBScopeHighlight" .. bufnr)
+    scope_cache[bufnr] = nil
+    if debounce_timers[bufnr] then
+        debounce_timers[bufnr]:stop()
+        debounce_timers[bufnr]:close()
+        debounce_timers[bufnr] = nil
+    end
+end
+
+-- Auto-enable for supported filetypes
+function M.setup_scope_highlight()
+    local group = vim.api.nvim_create_augroup("JBScopeSetup", { clear = true })
+    vim.api.nvim_create_autocmd("FileType", {
+        group = group,
+        pattern = { "c", "cpp", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
+        callback = function(ev)
+            vim.schedule(function()
+                M.enable_scope_highlight(ev.buf)
+            end)
+        end,
+    })
+
+    -- Also enable for current buffer if it matches
+    local ft = vim.bo.filetype
+    if ft == "c" or ft == "cpp" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
+        vim.schedule(function()
+            M.enable_scope_highlight(vim.api.nvim_get_current_buf())
+        end)
+    end
+end
+
+-- Store module globally so it can be accessed after colorscheme load
+vim.g.jb_theme = M
+
+-- Enable scope highlighting with optimized debouncing
+M.setup_scope_highlight()
+
+return M
