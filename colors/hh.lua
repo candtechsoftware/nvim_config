@@ -1,89 +1,110 @@
 -- HH theme for Neovim
--- Based on 4coder Fleury-style colors with modifications
--- Lighter background, blue enum values, mode-based cursors
+-- Based on 4coder Fleury-style colors
+-- Dark background (#0c0c0c), mode-based cursors, scope highlighting
 
 local M = {}
 
--- Color palette
+-- Color palette (matched to 4coder Fleury theme)
 local colors = {
-  -- Core background/foreground (lighter than fleury)
-  bar_bg = "#1f1f27",        -- Status bar background
-  base = "#cb9401",          -- Status bar text / golden accent
-  pop1 = "#70971e",          -- Olive green for prompts
-  pop2 = "#cb9401",          -- Annotations
-  back = "#181818",          -- Main background (lighter than #0c0c0c)
-  margin = "#181818",        -- Frame colors
+  -- Core background/foreground
+  bar_bg = "#1f1f27",        -- defcolor_bar: Status bar background
+  base = "#cb9401",          -- defcolor_base: Status bar text / golden accent
+  pop1 = "#70971e",          -- defcolor_pop1: Color of prompts
+  pop2 = "#cb9401",          -- defcolor_pop2: Annotations
+  back = "#0c0c0c",          -- defcolor_back: Text area background
+  margin = "#0c0c0c",        -- defcolor_margin: Frame around inactive panel
+  margin_hover = "#00ff00",  -- defcolor_margin_hover
+  margin_active = "#0c0c0c", -- defcolor_margin_active
 
   -- List/hover colors
-  list_item_hover = "#1e2428",
-  list_item_active = "#2d3640",
+  list_item_hover = "#171e20",  -- defcolor_list_item_hover
+  list_item_active = "#2d3640", -- defcolor_list_item_active
 
   -- Cursor colors for different modes
-  cursor_normal = "#00ee00",   -- Green for normal mode
-  cursor_insert = "#ee7700",   -- Orange for insert mode
+  cursor_normal = "#00ee00",   -- defcolor_cursor[0]: Green for normal mode
+  cursor_insert = "#ee7700",   -- defcolor_cursor[1]: Orange for insert mode
   cursor_visual = "#cb9401",   -- Gold for visual mode
   cursor_replace = "#ff0000",  -- Red for replace mode
   cursor_command = "#70971e",  -- Olive for command mode
-  cursor_inactive = "#404040", -- Gray for inactive
+  cursor_inactive = "#404040", -- fleury_color_cursor_inactive
 
-  at_cursor = "#181818",
-  highlight_line = "#1f1f27",
-  highlight = "#315268",     -- Search highlight background
-  at_highlight = "#c4b82b",  -- Search highlight text
-  mark = "#494949",
+  at_cursor = "#0c0c0c",       -- defcolor_at_cursor
+  highlight_line = "#1f1f27",  -- defcolor_highlight_cursor_line
+  highlight = "#315268",       -- defcolor_highlight: Search highlight background
+  at_highlight = "#c4b82b",    -- defcolor_at_highlight: Search highlight text
+  mark = "#494949",            -- defcolor_mark
 
   -- Text colors
-  text_default = "#a08563",  -- Regular text (warm tan)
-  comment = "#686868",       -- Comments (gray)
-  keyword = "#ac7b0b",       -- Keywords (amber)
-  string = "#6b8e23",        -- String constants (olive)
-  constant = "#6b8e23",      -- Other constants
-  preproc = "#dab98f",       -- Preprocessor (light tan)
+  text_default = "#a08563",  -- defcolor_text_default: Regular text (warm tan)
+  comment = "#686868",       -- defcolor_comment: Comments (gray)
+  comment_pop1 = "#00a000",  -- defcolor_comment_pop[0]: Green highlight in comments
+  comment_pop2 = "#a00000",  -- defcolor_comment_pop[1]: Red highlight in comments
+  keyword = "#ac7b0b",       -- defcolor_keyword: Keywords (amber)
+  string = "#6b8e23",        -- defcolor_str_constant: String constants (olive)
+  constant = "#6b8e23",      -- defcolor_int/float/bool_constant
+  preproc = "#dab98f",       -- defcolor_preproc: Preprocessor (light tan)
 
   -- Special colors
-  special = "#ff0000",       -- Special characters
-  ghost = "#5b4d3c",         -- Ghost characters
-  paste = "#ffbb00",         -- Paste highlight
-  undo = "#80005d",          -- Undo highlight
+  special = "#ff0000",       -- defcolor_special_character
+  ghost = "#5b4d3c",         -- defcolor_ghost_character
+  highlight_junk = "#3a0000", -- defcolor_highlight_junk
+  highlight_white = "#003a3a", -- defcolor_highlight_white
+  paste = "#ffbb00",         -- defcolor_paste
+  undo = "#80005d",          -- defcolor_undo
 
   -- Line numbers
-  line_numbers_bg = "#141414",
-  line_numbers_text = "#404040",
+  line_numbers_bg = "#101010",   -- defcolor_line_numbers_back
+  line_numbers_text = "#404040", -- defcolor_line_numbers_text
 
-  -- Indexer/semantic colors
-  index_type = "#d8a51d",         -- Types (gold)
-  index_function = "#cc5735",     -- Functions (rust red)
-  index_constant = "#5a9bcf",     -- Constants/enums (BLUE instead of teal)
-  index_macro = "#478980",        -- Macros (teal)
-  index_decl = "#c04047",         -- Declarations (red)
+  -- Indexer/semantic colors (fleury_color_index_*)
+  index_type = "#d8a51d",         -- fleury_color_index_product_type/sum_type: Types (gold)
+  index_function = "#cc5735",     -- fleury_color_index_function: Functions (rust red)
+  index_constant = "#478980",     -- fleury_color_index_constant: Constants (teal, original)
+  index_macro = "#478980",        -- fleury_color_index_macro: Macros (teal)
+  index_decl = "#c04047",         -- fleury_color_index_decl: Declarations (red)
+  index_4coder_command = "#23de33", -- fleury_color_index_4coder_command
+  index_comment_tag = "#00ff00", -- fleury_color_index_comment_tag
 
   -- Error/diagnostic
-  error = "#ff0000",
+  error = "#ff0000",              -- fleury_color_error_annotation
 
   -- Operator/syntax
-  syntax_crap = "#907553",        -- Braces, semicolons (brown)
-  operators = "#907553",          -- Operators (brown)
+  syntax_crap = "#907553",        -- fleury_color_syntax_crap: Braces, semicolons (brown)
+  operators = "#907553",          -- fleury_color_operators: Operators (brown)
+
+  -- Pane colors
+  inactive_pane_overlay = "#000000", -- fleury_color_inactive_pane_overlay (transparent in original)
+  inactive_pane_bg = "#0c0c0c",      -- fleury_color_inactive_pane_background
+  file_progress_bar = "#232323",     -- fleury_color_file_progress_bar
 
   -- Brace matching
-  brace_highlight = "#b09573",   -- Active brace (light brown)
-  brace_line = "#9ba290",        -- Brace connection lines
-  token_highlight = "#2f2f37",   -- Token highlighting
+  brace_highlight = "#b09573",   -- fleury_color_brace_highlight: Active brace
+  brace_line = "#9ba290",        -- fleury_color_brace_line: Brace connection lines
+  brace_annotation = "#9ba290",  -- fleury_color_brace_annotation
+  token_highlight = "#2f2f37",   -- fleury_color_token_highlight
 
   -- Cycle colors for text variations
-  text_cycle1 = "#c0a583",
-  text_cycle2 = "#b09573",
+  text_cycle1 = "#c0a583",       -- defcolor_text_cycle[0]
+  text_cycle2 = "#b09573",       -- defcolor_text_cycle[1]
 
   -- Mode colors
-  cursor_macro = "#de2368",      -- Macro recording (pink)
-  cursor_power = "#efaf2f",      -- Power mode (bright yellow)
+  cursor_macro = "#de2368",      -- fleury_color_cursor_macro: Macro recording (pink)
+  cursor_power = "#efaf2f",      -- fleury_color_cursor_power_mode: Power mode
+
+  -- Plot cycle colors
+  plot_cycle = { "#03d3fc", "#22b80b", "#f0bb0c", "#f0500c" },
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- More visible tints applied to nested scopes
+  -- Subtle tints visible against #0c0c0c background
   back_cycle = {
-    "#201818",  -- Level 1: red tint
-    "#182018",  -- Level 2: green tint
-    "#181820",  -- Level 3: blue tint
-    "#202018",  -- Level 4: yellow tint
+    "#141216",  -- Level 1: subtle purple/magenta tint
+    "#121614",  -- Level 2: subtle green tint
+    "#121416",  -- Level 3: subtle blue tint
+    "#161412",  -- Level 4: subtle amber/orange tint
+    "#161216",  -- Level 5: subtle pink tint
+    "#121616",  -- Level 6: subtle cyan tint
+    "#141412",  -- Level 7: subtle olive tint
+    "#141216",  -- Level 8: subtle violet tint
   },
 }
 
@@ -177,10 +198,10 @@ function M.setup()
   hl(0, "FoldColumn", { fg = colors.comment, bg = colors.line_numbers_bg })
 
   -- Diff mode
-  hl(0, "DiffAdd", { bg = "#1a2f1a" })
-  hl(0, "DiffChange", { bg = "#2f2f1a" })
-  hl(0, "DiffDelete", { fg = colors.error, bg = "#2f1a1a" })
-  hl(0, "DiffText", { bg = "#3f3f2a", bold = true })
+  hl(0, "DiffAdd", { bg = "#0c1a0c" })
+  hl(0, "DiffChange", { bg = "#1a1a0c" })
+  hl(0, "DiffDelete", { fg = colors.error, bg = "#1a0c0c" })
+  hl(0, "DiffText", { bg = "#2a2a14", bold = true })
 
   -- Spell checking
   hl(0, "SpellBad", { sp = colors.error, undercurl = true })
@@ -378,9 +399,9 @@ function M.setup()
   hl(0, "DiagnosticHint", { fg = colors.comment })
   hl(0, "DiagnosticOk", { fg = colors.cursor_normal })
 
-  hl(0, "DiagnosticVirtualTextError", { fg = colors.error, bg = "#1f1414" })
-  hl(0, "DiagnosticVirtualTextWarn", { fg = colors.cursor_insert, bg = "#1f1814" })
-  hl(0, "DiagnosticVirtualTextInfo", { fg = colors.pop1, bg = "#141f14" })
+  hl(0, "DiagnosticVirtualTextError", { fg = colors.error, bg = "#180c0c" })
+  hl(0, "DiagnosticVirtualTextWarn", { fg = colors.cursor_insert, bg = "#18120c" })
+  hl(0, "DiagnosticVirtualTextInfo", { fg = colors.pop1, bg = "#0c180c" })
   hl(0, "DiagnosticVirtualTextHint", { fg = colors.comment })
 
   hl(0, "DiagnosticUnderlineError", { sp = colors.error, undercurl = true })
@@ -481,6 +502,9 @@ local scope_queries = {
   ]],
   cpp = [[
     (compound_statement) @scope
+  ]],
+  jai = [[
+    (block) @scope
   ]],
   lua = [[
     (function_definition) @scope
@@ -728,7 +752,7 @@ function M.setup_scope_highlight()
   local group = vim.api.nvim_create_augroup("HHScopeSetup", { clear = true })
   vim.api.nvim_create_autocmd("FileType", {
     group = group,
-    pattern = { "c", "cpp", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
+    pattern = { "c", "cpp", "jai", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
     callback = function(ev)
       vim.schedule(function()
         M.enable_scope_highlight(ev.buf)
@@ -738,7 +762,7 @@ function M.setup_scope_highlight()
 
   -- Also enable for current buffer if it matches
   local ft = vim.bo.filetype
-  if ft == "c" or ft == "cpp" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
+  if ft == "c" or ft == "cpp" or ft == "jai" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
     vim.schedule(function()
       M.enable_scope_highlight(vim.api.nvim_get_current_buf())
     end)

@@ -94,10 +94,14 @@ local colors = {
     cursor_line_highlight = "#1A1A1AFF",
     -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
     back_cycle = {
-        "#0a2e2eFF",  -- Level 1: slightly lighter teal
-        "#072e26FF",  -- Level 2: green tint
-        "#072632FF",  -- Level 3: blue tint
-        "#0e2626FF",  -- Level 4: red tint
+        "#0c2a2a",  -- Level 1: lighter teal
+        "#0a2e24",  -- Level 2: emerald green tint
+        "#0a2430",  -- Level 3: ocean blue tint
+        "#102828",  -- Level 4: warm teal tint
+        "#0e242e",  -- Level 5: deep navy tint
+        "#0c2c28",  -- Level 6: seafoam tint
+        "#0a2a30",  -- Level 7: steel cyan tint
+        "#0e2a26",  -- Level 8: jade tint
     },
     color_preview_title_bar = "#1A1A1AFF",
     code_addition = "#33B333FF",
@@ -440,6 +444,9 @@ local scope_queries = {
     cpp = [[
         (compound_statement) @scope
     ]],
+    jai = [[
+        (block) @scope
+    ]],
     lua = [[
         (function_definition) @scope
         (if_statement) @scope
@@ -686,7 +693,7 @@ function M.setup_scope_highlight()
     local group = vim.api.nvim_create_augroup("JBScopeSetup", { clear = true })
     vim.api.nvim_create_autocmd("FileType", {
         group = group,
-        pattern = { "c", "cpp", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
+        pattern = { "c", "cpp", "jai", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
         callback = function(ev)
             vim.schedule(function()
                 M.enable_scope_highlight(ev.buf)
@@ -696,7 +703,7 @@ function M.setup_scope_highlight()
 
     -- Also enable for current buffer if it matches
     local ft = vim.bo.filetype
-    if ft == "c" or ft == "cpp" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
+    if ft == "c" or ft == "cpp" or ft == "jai" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
         vim.schedule(function()
             M.enable_scope_highlight(vim.api.nvim_get_current_buf())
         end)

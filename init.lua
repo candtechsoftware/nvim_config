@@ -91,7 +91,7 @@ require("notes").setup()
 require("config.clipboard").setup()
 
 -- Load color scheme
-vim.cmd.colorscheme("hh")
+vim.cmd.colorscheme("jb")
 
 
 -- Build telescope-fzf-native if needed (silently)
