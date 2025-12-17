@@ -1,0 +1,91 @@
+# Ghostty Configuration
+# Docs: https://ghostty.org/docs/config/reference
+
+# =============================================================================
+# Font Settings
+# =============================================================================
+font-family = "Liberation Mono"
+font-size = 15
+font-synthetic-style = no-bold, no-italic, no-bold-italic
+font-feature = -liga
+font-feature = -calt
+font-feature = -dlig
+
+# =============================================================================
+# Shell & Integration
+# =============================================================================
+shell-integration = zsh
+shell-integration-features = no-cursor
+
+# =============================================================================
+# Cursor
+# =============================================================================
+cursor-style = block
+
+# =============================================================================
+# Keybindings
+# =============================================================================
+keybind = cmd+shift+x=close_surface
+keybind = cmd+/=toggle_quick_terminal
+keybind = cmd+shift+l=new_split:left
+keybind = cmd+shift+r=new_split:right
+keybind = cmd+shift+[=goto_split:previous
+keybind = cmd+shift+]=goto_split:next
+
+# =============================================================================
+# Shaders
+# =============================================================================
+custom-shader = ./shaders/cursor.glsl
+custom-shader-animation = true
+
+# =============================================================================
+# Theme: HH (4coder Fleury) - ACTIVE
+# =============================================================================
+# background = #0c0c0c
+# foreground = #a08563
+# cursor-color = #00ee00
+# cursor-text = #0c0c0c
+# selection-background = #315268
+# selection-foreground = #c4b82b
+# palette = 0=#0c0c0c
+# palette = 1=#cc5735
+# palette = 2=#6b8e23
+# palette = 3=#cb9401
+# palette = 4=#5a9bcf
+# palette = 5=#de2368
+# palette = 6=#478980
+# palette = 7=#a08563
+# palette = 8=#686868
+# palette = 9=#c04047
+# palette = 10=#70971e
+# palette = 11=#d8a51d
+# palette = 12=#5a9bcf
+# palette = 13=#80005d
+# palette = 14=#478980
+# palette = 15=#dab98f
+
+# =============================================================================
+# Theme: JB (Teal) - INACTIVE
+# =============================================================================
+background = #072626
+foreground = #D3B58D
+cursor-color = #90EE90
+cursor-text = #072626
+selection-background = #0000FF
+selection-foreground = #D3B58D
+palette = 0=#072626
+palette = 1=#E67D74
+palette = 2=#3DDF23
+palette = 3=#E0AD82
+palette = 4=#98FB98
+palette = 5=#D699B5
+palette = 6=#0FDFAF
+palette = 7=#D3B58D
+palette = 8=#87919D
+palette = 9=#E67D74
+palette = 10=#3DDF23
+palette = 11=#E0AD82
+palette = 12=#98FB98
+palette = 13=#D699B5
+palette = 14=#7FFFD4
+palette = 15=#BFC9DB
