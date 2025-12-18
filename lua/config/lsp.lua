@@ -182,8 +182,11 @@ function M.setup()
             client.server_capabilities.hoverProvider = { timeout_ms = 1500 }
         end
 
-        -- Set omnifunc for completion
-        vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
+        -- Enable LSP completion for this buffer
+        -- In Neovim 0.11+, use vim.lsp.completion.enable() instead of omnifunc
+        if vim.lsp.completion then
+            vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
+        end
 
         -- Use omnifunc-based completion (Tab keymaps are in keymaps.lua)
         -- Trigger with <C-x><C-o> or auto-trigger on typing

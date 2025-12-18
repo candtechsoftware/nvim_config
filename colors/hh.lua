@@ -1,6 +1,6 @@
 -- HH theme for Neovim
 -- Based on 4coder Fleury-style colors
--- Dark background (#0c0c0c), mode-based cursors, scope highlighting
+-- Dark background (#1e1e1e), mode-based cursors, scope highlighting
 
 local M = {}
 
@@ -11,10 +11,10 @@ local colors = {
   base = "#cb9401",          -- defcolor_base: Status bar text / golden accent
   pop1 = "#70971e",          -- defcolor_pop1: Color of prompts
   pop2 = "#cb9401",          -- defcolor_pop2: Annotations
-  back = "#0c0c0c",          -- defcolor_back: Text area background
-  margin = "#0c0c0c",        -- defcolor_margin: Frame around inactive panel
+  back = "#1e1e1e",          -- defcolor_back: Text area background
+  margin = "#1e1e1e",        -- defcolor_margin: Frame around inactive panel
   margin_hover = "#00ff00",  -- defcolor_margin_hover
-  margin_active = "#0c0c0c", -- defcolor_margin_active
+  margin_active = "#1e1e1e", -- defcolor_margin_active
 
   -- List/hover colors
   list_item_hover = "#171e20",  -- defcolor_list_item_hover
@@ -28,7 +28,7 @@ local colors = {
   cursor_command = "#70971e",  -- Olive for command mode
   cursor_inactive = "#404040", -- fleury_color_cursor_inactive
 
-  at_cursor = "#0c0c0c",       -- defcolor_at_cursor
+  at_cursor = "#1e1e1e",       -- defcolor_at_cursor
   highlight_line = "#1f1f27",  -- defcolor_highlight_cursor_line
   highlight = "#315268",       -- defcolor_highlight: Search highlight background
   at_highlight = "#c4b82b",    -- defcolor_at_highlight: Search highlight text
@@ -53,7 +53,7 @@ local colors = {
   undo = "#80005d",          -- defcolor_undo
 
   -- Line numbers
-  line_numbers_bg = "#101010",   -- defcolor_line_numbers_back
+  line_numbers_bg = "#1e1e1e",   -- defcolor_line_numbers_back
   line_numbers_text = "#404040", -- defcolor_line_numbers_text
 
   -- Indexer/semantic colors (fleury_color_index_*)
@@ -74,7 +74,7 @@ local colors = {
 
   -- Pane colors
   inactive_pane_overlay = "#000000", -- fleury_color_inactive_pane_overlay (transparent in original)
-  inactive_pane_bg = "#0c0c0c",      -- fleury_color_inactive_pane_background
+  inactive_pane_bg = "#1e1e1e",      -- fleury_color_inactive_pane_background
   file_progress_bar = "#232323",     -- fleury_color_file_progress_bar
 
   -- Brace matching
@@ -95,7 +95,7 @@ local colors = {
   plot_cycle = { "#03d3fc", "#22b80b", "#f0bb0c", "#f0500c" },
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- Subtle tints visible against #0c0c0c background
+  -- Subtle tints visible against #1e1e1e background
   back_cycle = {
     "#141216",  -- Level 1: subtle purple/magenta tint
     "#121614",  -- Level 2: subtle green tint
