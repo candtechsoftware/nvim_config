@@ -58,16 +58,17 @@ function M.setup()
                 ".next/",
                 "coverage/",
             },
-            layout_strategy = "horizontal",
+            layout_strategy = "vertical",
             layout_config = {
-                horizontal = {
-                    prompt_position = "top",
-                    preview_width = 0.55,
+                vertical = {
+                    prompt_position = "bottom",
+                    mirror = false,
+                    preview_height = 0.4,
                 },
-                width = 0.9,
-                height = 0.85,
+                width = 0.8,
+                height = 0.8,
             },
-            sorting_strategy = "ascending",
+            sorting_strategy = "descending",
         },
         pickers = {
             find_files = {

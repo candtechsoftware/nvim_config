@@ -374,6 +374,18 @@ function M.setup()
   hl(0, "@tag.attribute", { fg = colors.text_cycle1 })
   hl(0, "@tag.delimiter", { fg = colors.syntax_crap })
 
+  -- Jai-specific
+  hl(0, "@keyword.jai", { fg = colors.keyword })
+  hl(0, "@storageclass.jai", { fg = colors.keyword })
+  hl(0, "@function.jai", { fg = colors.index_function })
+  hl(0, "@function.call.jai", { fg = colors.index_function })
+  hl(0, "@operator.jai", { fg = colors.operators })
+  hl(0, "@punctuation.special.jai", { fg = colors.operators })
+  hl(0, "@punctuation.delimiter.jai", { fg = colors.operators })
+  hl(0, "@variable.jai", { fg = colors.text_default })
+  hl(0, "@variable.builtin.jai", { fg = colors.index_constant })
+  hl(0, "@constant.builtin.jai", { fg = colors.index_constant })
+
   -- LSP semantic tokens
   hl(0, "@lsp.type.class", { fg = colors.index_type })
   hl(0, "@lsp.type.comment", { fg = colors.comment })

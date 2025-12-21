@@ -90,6 +90,9 @@ require("notes").setup()
 -- Load and setup clipboard manager
 require("config.clipboard").setup()
 
+-- Load and setup divider comments (renders lines above //- comments)
+require("divider_comments").setup()
+
 -- Load color scheme
 vim.cmd.colorscheme("hh")
 
