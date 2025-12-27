@@ -11,20 +11,45 @@
 ; KEYWORDS
 ; ============================================================================
 
-((identifier) @keyword
-  (#any-of? @keyword
-    "if" "xx" "ifx" "for" "then" "else" "null" "case" "enum" "true" "cast"
-    "while" "break" "using" "defer" "false" "union" "return" "struct" "inline"
-    "remove" "continue" "operator" "interface" "switch" "size_of" "type_of"
-    "code_of" "context" "type_info" "no_inline" "enum_flags" "is_constant"
-    "push_context" "initializer_of" "type_info_none"
-    "type_info_procedures_are_void_pointers"))
+; Literal keyword nodes
+[
+  "if"
+  "xx"
+  "ifx"
+  "for"
+  "then"
+  "else"
+  "null"
+  "case"
+  "enum"
+  "true"
+  "cast"
+  "while"
+  "break"
+  "using"
+  "defer"
+  "false"
+  "union"
+  "return"
+  "struct"
+  "inline"
+  "remove"
+  "type_of"
+  "continue"
+  "operator"
+  "no_inline"
+  "interface"
+  "enum_flags"
+  "push_context"
+] @keyword
 
-((identifier) @keyword.return
-  (#eq? @keyword.return "return"))
+"return" @keyword.return
 
-((identifier) @keyword.conditional
-  (#any-of? @keyword.conditional "if" "else" "case" "break"))
+[
+  "if"
+  "else"
+  "case"
+] @keyword.conditional
 
 ((if_expression
   [
@@ -35,8 +60,12 @@
   (#set! "priority" 105))
 
 ; Repeats/loops
-((identifier) @keyword.repeat
-  (#any-of? @keyword.repeat "for" "while" "continue"))
+[
+  "for"
+  "while"
+  "continue"
+] @keyword.repeat
+
 
 ; ============================================================================
 ; VARIABLES
@@ -70,7 +99,7 @@ named_argument: (identifier) @variable
 ; ============================================================================
 
 ; Procedure declarations with various patterns
-(procedure_declaration (identifier) @function.definition (block))
+(procedure_declaration (identifier) @function (block))
 
 ; Function calls
 (call_expression function: (identifier) @function.call)
@@ -78,7 +107,7 @@ named_argument: (identifier) @variable
 ; Procedure/function name patterns from Emacs mode
 ; Match function declarations like: name :: () {...}
 (const_declaration
-  name: (identifier) @function.definition
+  name: (identifier) @function
   value: (procedure))
 
 ; ============================================================================
