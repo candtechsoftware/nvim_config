@@ -19,6 +19,10 @@ local function on_attach(client, bufnr)
 
     -- Navigation
     vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+    vim.keymap.set("n", "gv", function()
+        vim.cmd("vsplit")
+        vim.lsp.buf.definition()
+    end, opts)
     vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
 
     vim.keymap.set("n", "<leader>vws", vim.lsp.buf.workspace_symbol, opts)
