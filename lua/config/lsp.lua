@@ -187,7 +187,10 @@ function M.setup()
         end
 
         -- Enable LSP completion for this buffer
-        -- In Neovim 0.11+, use vim.lsp.completion.enable() instead of omnifunc
+        -- Set omnifunc for <C-x><C-o> completion
+        vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
+
+        -- In Neovim 0.11+, also enable the new completion API
         if vim.lsp.completion then
             vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
         end
@@ -433,6 +436,7 @@ function M.start_lsp(bufnr)
                         init_options = config.init_options,
                         on_attach = function(client, buf)
                             on_attach(client, buf)
+                            vim.bo[buf].omnifunc = 'v:lua.vim.lsp.omnifunc'
                             if vim.lsp.completion then
                                 vim.lsp.completion.enable(true, client.id, buf, {
                                     autotrigger = true,
