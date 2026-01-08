@@ -127,19 +127,21 @@ function M.setup()
   hl(0, "FloatBorder", { fg = colors.syntax_crap, bg = colors.list_item_hover })
   hl(0, "FloatTitle", { fg = colors.base, bg = colors.list_item_hover })
 
-  -- Cursor and selection - let terminal handle cursor to prevent flickering
-  -- hl(0, "Cursor", { fg = colors.at_cursor, bg = colors.cursor_normal })
-  -- hl(0, "lCursor", { fg = colors.at_cursor, bg = colors.cursor_normal })
-  -- hl(0, "CursorIM", { fg = colors.at_cursor, bg = colors.cursor_insert })
-  -- hl(0, "TermCursor", { fg = colors.at_cursor, bg = colors.cursor_normal })
-  -- hl(0, "TermCursorNC", { fg = colors.at_cursor, bg = colors.cursor_inactive })
-
-  -- Mode-specific cursor highlights (for statusline/plugins that use them)
+  -- Mode-specific cursor highlight groups
   hl(0, "CursorNormal", { fg = colors.at_cursor, bg = colors.cursor_normal })
   hl(0, "CursorInsert", { fg = colors.at_cursor, bg = colors.cursor_insert })
   hl(0, "CursorVisual", { fg = colors.at_cursor, bg = colors.cursor_visual })
   hl(0, "CursorReplace", { fg = colors.at_cursor, bg = colors.cursor_replace })
   hl(0, "CursorCommand", { fg = colors.at_cursor, bg = colors.cursor_command })
+
+  -- Set guicursor with mode-specific colors (all block cursors)
+  vim.opt.guicursor = {
+    "n-c:block-CursorNormal",           -- Normal/Command: green block
+    "i-ci-ve:block-CursorInsert",       -- Insert: orange block
+    "v-V:block-CursorVisual",           -- Visual: gold block
+    "r-cr:block-CursorReplace",         -- Replace: red block
+    "o:block-CursorNormal",             -- Operator-pending: green block
+  }
 
   hl(0, "CursorLine", { bg = colors.highlight_line })
   hl(0, "CursorColumn", { bg = colors.highlight_line })

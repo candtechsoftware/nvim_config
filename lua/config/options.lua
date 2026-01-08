@@ -1,14 +1,5 @@
 -- Neovim options (migrated from set.lua)
 
--- Diagnostic configuration
-vim.diagnostic.config({
-    virtual_text = {
-        prefix = '●', -- Custom prefix
-        source = "if_many", -- Show source when multiple
-        severity = { min = vim.diagnostic.severity.WARN },
-    }
-})
-
 -- Cursor configuration - disable all blinking
 vim.opt.guicursor = "a:block-blinkon0"
 
@@ -83,8 +74,9 @@ if vim.g.neovide then
 end
 
 -- Optimized completion settings for performance and usability
-vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" } -- Show menu, don't auto-select/insert
-vim.opt.pumheight = 15 -- Slightly larger popup for better visibility
-vim.opt.pumwidth = 25 -- Consistent popup width
-vim.opt.shortmess:append("c") -- Don't show completion messages
-vim.opt.complete = ".,w,b,u" -- Faster completion sources (current buffer, windows, buffers, unloaded buffers)
+vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" }
+vim.opt.pumheight = 12
+vim.opt.pumwidth = 20
+vim.opt.pumblend = 10  -- Slight transparency for popup
+vim.opt.shortmess:append("c")
+vim.opt.complete = ".,w,b"  -- Fewer sources = faster
