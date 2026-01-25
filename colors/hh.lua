@@ -94,17 +94,20 @@ local colors = {
   -- Plot cycle colors
   plot_cycle = { "#03d3fc", "#22b80b", "#f0bb0c", "#f0500c" },
 
+  -- Custom yggdrasil macros (teal, same as index_macro from casey theme)
+  yg_keyword = "#478980",
+
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- Subtle tints visible against #0c0c0c background
+  -- Moderate tints visible against #0c0c0c background
   back_cycle = {
-    "#100e12",  -- Level 1: subtle purple/magenta tint
-    "#0e120e",  -- Level 2: subtle green tint
-    "#0e1012",  -- Level 3: subtle blue tint
-    "#12100e",  -- Level 4: subtle amber/orange tint
-    "#120e12",  -- Level 5: subtle pink tint
-    "#0e1212",  -- Level 6: subtle cyan tint
-    "#10100e",  -- Level 7: subtle olive tint
-    "#100e12",  -- Level 8: subtle violet tint
+    "#161419",  -- Level 1: purple/magenta tint
+    "#141816",  -- Level 2: green tint
+    "#141618",  -- Level 3: blue tint
+    "#181614",  -- Level 4: amber/orange tint
+    "#181418",  -- Level 5: pink tint
+    "#141818",  -- Level 6: cyan tint
+    "#161614",  -- Level 7: olive tint
+    "#161419",  -- Level 8: violet tint
   },
 }
 
@@ -228,11 +231,11 @@ function M.setup()
 
   -- Syntax highlighting
   hl(0, "Comment", { fg = colors.comment, italic = true })
-  hl(0, "Constant", { fg = colors.index_constant })  -- Blue for constants/enums
+  hl(0, "Constant", { fg = colors.constant })  -- Olive for all constants
   hl(0, "String", { fg = colors.string })
   hl(0, "Character", { fg = colors.string })
   hl(0, "Number", { fg = colors.constant })
-  hl(0, "Boolean", { fg = colors.index_constant })   -- Blue for booleans
+  hl(0, "Boolean", { fg = colors.constant })   -- Olive for booleans (matches defcolor_bool_constant)
   hl(0, "Float", { fg = colors.constant })
 
   hl(0, "Identifier", { fg = colors.text_default })
@@ -271,12 +274,12 @@ function M.setup()
 
   -- Treesitter highlight groups
   hl(0, "@variable", { fg = colors.text_default })
-  hl(0, "@variable.builtin", { fg = colors.index_constant })
+  hl(0, "@variable.builtin", { fg = colors.constant })  -- Olive
   hl(0, "@variable.parameter", { fg = colors.text_cycle1 })
   hl(0, "@variable.member", { fg = colors.text_default })
 
-  hl(0, "@constant", { fg = colors.index_constant })         -- Blue
-  hl(0, "@constant.builtin", { fg = colors.index_constant }) -- Blue
+  hl(0, "@constant", { fg = colors.constant })         -- Olive
+  hl(0, "@constant.builtin", { fg = colors.constant }) -- Olive
   hl(0, "@constant.macro", { fg = colors.index_macro })
 
   hl(0, "@module", { fg = colors.index_type })
@@ -288,14 +291,14 @@ function M.setup()
   hl(0, "@string.regexp", { fg = colors.cursor_insert })
   hl(0, "@string.escape", { fg = colors.special })
   hl(0, "@string.special", { fg = colors.special })
-  hl(0, "@string.special.symbol", { fg = colors.index_constant })
+  hl(0, "@string.special.symbol", { fg = colors.constant })  -- Olive
   hl(0, "@string.special.path", { fg = colors.string })
   hl(0, "@string.special.url", { fg = colors.index_function, underline = true })
 
   hl(0, "@character", { fg = colors.string })
   hl(0, "@character.special", { fg = colors.special })
 
-  hl(0, "@boolean", { fg = colors.index_constant })  -- Blue
+  hl(0, "@boolean", { fg = colors.constant })  -- Olive (defcolor_bool_constant)
   hl(0, "@number", { fg = colors.constant })
   hl(0, "@number.float", { fg = colors.constant })
 
@@ -393,15 +396,15 @@ function M.setup()
   hl(0, "@punctuation.delimiter.jai", { fg = colors.operators })
   hl(0, "@punctuation.bracket.jai", { fg = colors.syntax_crap })
   hl(0, "@variable.jai", { fg = colors.text_default })
-  hl(0, "@variable.builtin.jai", { fg = colors.index_constant })
+  hl(0, "@variable.builtin.jai", { fg = colors.constant })  -- Olive
   hl(0, "@variable.parameter.jai", { fg = colors.text_cycle1 })
-  hl(0, "@constant.jai", { fg = colors.index_constant })
-  hl(0, "@constant.builtin.jai", { fg = colors.index_constant })
+  hl(0, "@constant.jai", { fg = colors.constant })  -- Olive
+  hl(0, "@constant.builtin.jai", { fg = colors.constant })  -- Olive
   hl(0, "@type.jai", { fg = colors.index_type })
   hl(0, "@type.builtin.jai", { fg = colors.index_type })
   hl(0, "@string.jai", { fg = colors.string })
   hl(0, "@number.jai", { fg = colors.constant })
-  hl(0, "@boolean.jai", { fg = colors.index_constant })
+  hl(0, "@boolean.jai", { fg = colors.constant })  -- Olive
   hl(0, "@comment.jai", { fg = colors.comment, italic = true })
 
   -- LSP semantic tokens
@@ -409,7 +412,7 @@ function M.setup()
   hl(0, "@lsp.type.comment", { fg = colors.comment })
   hl(0, "@lsp.type.decorator", { fg = colors.preproc })
   hl(0, "@lsp.type.enum", { fg = colors.index_type })
-  hl(0, "@lsp.type.enumMember", { fg = colors.index_constant })  -- Blue for enum members
+  hl(0, "@lsp.type.enumMember", { fg = colors.constant })  -- Olive for enum members
   hl(0, "@lsp.type.function", { fg = colors.index_function })
   hl(0, "@lsp.type.interface", { fg = colors.index_type })
   hl(0, "@lsp.type.macro", { fg = colors.index_macro })
@@ -490,11 +493,20 @@ function M.setup()
   hl(0, "WhichKeyDesc", { fg = colors.text_default })
   hl(0, "WhichKeySeperator", { fg = colors.syntax_crap })
   hl(0, "WhichKeyFloat", { bg = colors.list_item_hover })
-  hl(0, "WhichKeyValue", { fg = colors.index_constant })
+  hl(0, "WhichKeyValue", { fg = colors.constant })  -- Olive
 
   -- C/C++ specific for enum values
-  hl(0, "@lsp.typemod.enumMember", { fg = colors.index_constant })
-  hl(0, "@lsp.typemod.enumMember.declaration", { fg = colors.index_constant })
+  hl(0, "@lsp.typemod.enumMember", { fg = colors.constant })  -- Olive
+  hl(0, "@lsp.typemod.enumMember.declaration", { fg = colors.constant })  -- Olive
+
+  -- Yggdrasil macros (yg_internal, yg_inline) - teal
+  hl(0, "YgKeyword", { fg = colors.yg_keyword })
+  -- Also override @keyword.modifier for yg_* (set via treesitter queries)
+  -- Note: This makes ALL @keyword.modifier teal, which is fine since static/const etc
+  -- should also be this color per casey theme (syntax_crap/operators color)
+
+  -- Yggdrasil types (Vec3, u32, f32, etc.) - gold like index_type
+  hl(0, "YgType", { fg = colors.index_type })
 
   -- Scope highlight groups for nested scope backgrounds (like 4coder back_cycle)
   for i, bg in ipairs(colors.back_cycle) do
@@ -800,6 +812,77 @@ function M.setup_scope_highlight()
 end
 
 M.setup()
+
+-- Track yg match IDs per window to avoid clearing other matches
+local yg_match_ids = {}
+
+-- Setup yg_* keyword and type highlighting for C/C++ files (uses matchadd for priority over treesitter)
+local function setup_yg_keywords()
+  local winid = vim.api.nvim_get_current_win()
+
+  -- Clear only our previous matches for this window
+  if yg_match_ids[winid] then
+    for _, id in ipairs(yg_match_ids[winid]) do
+      pcall(vim.fn.matchdelete, id, winid)
+    end
+  end
+  yg_match_ids[winid] = {}
+
+  local function add_match(group, pattern)
+    local id = vim.fn.matchadd(group, pattern, 100)
+    table.insert(yg_match_ids[winid], id)
+  end
+
+  -- Yggdrasil macros (teal)
+  add_match("YgKeyword", "\\<yg_internal\\>")
+  add_match("YgKeyword", "\\<yg_inline\\>")
+  add_match("YgKeyword", "\\<yg_global\\>")
+  add_match("YgKeyword", "\\<yg_local_persist\\>")
+
+  -- Yggdrasil base types (gold)
+  add_match("YgType", "\\<[usb]\\(8\\|16\\|32\\|64\\)\\>")  -- u8, s16, b32, etc.
+  add_match("YgType", "\\<f\\(32\\|64\\)\\>")              -- f32, f64
+  add_match("YgType", "\\<void\\>")                        -- void
+  add_match("YgType", "\\<Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\>")  -- Vec2, Vec3F32, etc.
+  add_match("YgType", "\\<Mat[34]\\(F32\\)\\?\\>")           -- Mat3, Mat4F32
+  add_match("YgType", "\\<Quaternion\\(F32\\)\\?\\>")      -- Quaternion, QuaternionF32
+  add_match("YgType", "\\<Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\>")  -- Rng1F32, Rng2S32, etc.
+  add_match("YgType", "\\<Arena\\>")
+  add_match("YgType", "\\<Scratch\\>")
+  add_match("YgType", "\\<String8\\>")
+  add_match("YgType", "\\<R_Handle\\>")
+  add_match("YgType", "\\<EntityHandle\\>")
+  add_match("YgType", "\\<EntityStore\\>")
+  add_match("YgType", "\\<EntityPool\\>")
+  add_match("YgType", "\\<EntityKind\\>")
+  add_match("YgType", "\\<EntityFlags\\>")
+  add_match("YgType", "\\<Entity\\>")
+  add_match("YgType", "\\<Direction8\\>")
+
+  -- Function declarations after yg_* macros (rust-red)
+  -- Pattern: yg_internal/yg_inline TYPE FUNCNAME( or TYPE *FUNCNAME(
+  add_match("Function", "\\<yg_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
+  add_match("Function", "\\<yg_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
+end
+
+local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
+vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter" }, {
+  group = yg_group,
+  pattern = { "*.c", "*.h", "*.cpp", "*.hpp" },
+  callback = setup_yg_keywords,
+})
+vim.api.nvim_create_autocmd("FileType", {
+  group = yg_group,
+  pattern = { "c", "cpp" },
+  callback = setup_yg_keywords,
+})
+
+-- Apply to current buffer if it's C/C++
+local ft = vim.bo.filetype
+local ext = vim.fn.expand("%:e")
+if ft == "c" or ft == "cpp" or ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" then
+  setup_yg_keywords()
+end
 
 -- Store module globally so it can be accessed after colorscheme load
 vim.g.hh_theme = M

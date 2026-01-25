@@ -6,6 +6,17 @@ if not _G.launch_cached_root then
   _G.launch_initial_cwd = vim.fn.getcwd()
 end
 
+local function get_os()
+  local uname = vim.uv.os_uname().sysname:lower()
+  if uname == "darwin" then
+    return "mac"
+  elseif uname == "linux" then
+    return "linux"
+  else
+    return "windows"
+  end
+end
+
 -- Parse error lines into quickfix entries
 local function parse_errors(lines, root)
   local qf_entries = {}
@@ -128,9 +139,20 @@ function M.setup()
     return
   end
 
-  -- vim.notify("Launch plugin loaded with root: " .. root)
+  -- Determine which key_map to use (OS-specific or flat)
+  local os_name = get_os()
+  local key_map = config.key_map
 
-  for key, cmd in pairs(config.key_map) do
+  -- Check if key_map has OS-specific structure
+  if config.key_map.linux or config.key_map.mac or config.key_map.windows then
+    key_map = config.key_map[os_name]
+    if not key_map then
+      -- No config for this OS, silently return
+      return
+    end
+  end
+
+  for key, cmd in pairs(key_map) do
     vim.keymap.set("n", key, function()
       -- Re-find the root in case we've switched projects
       local current_root = find_project_root()

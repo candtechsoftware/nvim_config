@@ -72,6 +72,7 @@ local function set_keymaps(bufnr)
   -- Navigation
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+  vim.keymap.set('n', '<leader>gi', vim.lsp.buf.implementation, opts)
   vim.keymap.set('n', 'gv', function()
     vim.cmd('vsplit')
     vim.lsp.buf.definition()
@@ -92,7 +93,9 @@ local function set_keymaps(bufnr)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
   -- Signature help in insert mode (manual trigger)
-  vim.keymap.set('i', '<C-h>', vim.lsp.buf.signature_help, opts)
+  vim.keymap.set('i', '<C-h>', function()
+    vim.lsp.buf.signature_help({ focusable = false, focus = false })
+  end, opts)
 
   -- Formatting (manual)
   vim.keymap.set('n', '<leader>f', function()
@@ -158,38 +161,131 @@ local function setup_handlers()
 
   -- Signature help handler - prevent focus stealing + fix activeParameter
   vim.lsp.handlers['textDocument/signatureHelp'] = function(err, result, ctx, config)
-    config = config or {}
-    config.focusable = false
-    config.focus = false
-    config.border = 'rounded'
-    config.max_width = 80
-    config.max_height = 15
-    config.close_events = { 'CursorMovedI', 'BufHidden', 'InsertLeave' }
-
-    -- Fix activeParameter - count commas before cursor to determine position
-    if result and result.signatures and #result.signatures > 0 then
-      local line = vim.api.nvim_get_current_line()
-      local col = vim.api.nvim_win_get_cursor(0)[2]
-      local before_cursor = line:sub(1, col)
-
-      -- Find the opening paren and count commas after it
-      local paren_pos = before_cursor:match('.*()%(')
-      if paren_pos then
-        local inside_parens = before_cursor:sub(paren_pos + 1)
-        -- Count commas (simple - doesn't handle nested parens/strings)
-        local comma_count = 0
-        for _ in inside_parens:gmatch(',') do
-          comma_count = comma_count + 1
+    if not result or not result.signatures or #result.signatures == 0 then
+      -- Close any existing signature help window
+      local wins = vim.api.nvim_list_wins()
+      for _, win in ipairs(wins) do
+        if vim.api.nvim_win_is_valid(win) then
+          local buf = vim.api.nvim_win_get_buf(win)
+          local ft = vim.bo[buf].filetype
+          if ft == 'markdown' and vim.api.nvim_win_get_config(win).relative ~= '' then
+            pcall(vim.api.nvim_win_close, win, true)
+          end
         end
-        -- Override activeParameter with our calculated value
-        result.activeParameter = comma_count
-        if result.signatures[1] then
-          result.signatures[1].activeParameter = comma_count
+      end
+      return
+    end
+
+    -- Fix activeParameter - count commas at current nesting level
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local before_cursor = line:sub(1, col)
+
+    -- Find the matching opening paren for our current context
+    local paren_depth = 0
+    local bracket_depth = 0
+    local brace_depth = 0
+    local in_string = false
+    local string_char = nil
+    local paren_pos = nil
+
+    -- Scan backwards to find the opening paren at depth 0
+    for i = #before_cursor, 1, -1 do
+      local c = before_cursor:sub(i, i)
+      local prev = i > 1 and before_cursor:sub(i - 1, i - 1) or ''
+
+      -- Handle string detection (simple - doesn't handle all escape sequences)
+      if (c == '"' or c == "'") and prev ~= '\\' then
+        if in_string and c == string_char then
+          in_string = false
+          string_char = nil
+        elseif not in_string then
+          in_string = true
+          string_char = c
+        end
+      elseif not in_string then
+        if c == ')' then paren_depth = paren_depth + 1
+        elseif c == '(' then
+          if paren_depth == 0 then
+            paren_pos = i
+            break
+          end
+          paren_depth = paren_depth - 1
+        elseif c == ']' then bracket_depth = bracket_depth + 1
+        elseif c == '[' then bracket_depth = bracket_depth - 1
+        elseif c == '}' then brace_depth = brace_depth + 1
+        elseif c == '{' then brace_depth = brace_depth - 1
         end
       end
     end
 
-    return vim.lsp.handlers.signature_help(err, result, ctx, config)
+    if paren_pos then
+      -- Count commas at depth 0 after the opening paren
+      local inside = before_cursor:sub(paren_pos + 1)
+      local comma_count = 0
+      paren_depth = 0
+      bracket_depth = 0
+      brace_depth = 0
+      in_string = false
+      string_char = nil
+
+      for i = 1, #inside do
+        local c = inside:sub(i, i)
+        local prev = i > 1 and inside:sub(i - 1, i - 1) or ''
+
+        if (c == '"' or c == "'") and prev ~= '\\' then
+          if in_string and c == string_char then
+            in_string = false
+            string_char = nil
+          elseif not in_string then
+            in_string = true
+            string_char = c
+          end
+        elseif not in_string then
+          if c == '(' then paren_depth = paren_depth + 1
+          elseif c == ')' then paren_depth = paren_depth - 1
+          elseif c == '[' then bracket_depth = bracket_depth + 1
+          elseif c == ']' then bracket_depth = bracket_depth - 1
+          elseif c == '{' then brace_depth = brace_depth + 1
+          elseif c == '}' then brace_depth = brace_depth - 1
+          elseif c == ',' and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 then
+            comma_count = comma_count + 1
+          end
+        end
+      end
+
+      result.activeParameter = comma_count
+      if result.signatures[1] then
+        result.signatures[1].activeParameter = comma_count
+      end
+    end
+
+    -- Create floating window manually to ensure no focus stealing
+    local lines = vim.lsp.util.convert_signature_help_to_markdown_lines(result, vim.bo[ctx.bufnr].filetype, {})
+    if not lines or #lines == 0 then
+      return
+    end
+
+    -- Store current window before creating float
+    local current_win = vim.api.nvim_get_current_win()
+    
+    local fbuf, fwin = vim.lsp.util.open_floating_preview(lines, 'markdown', {
+      border = 'rounded',
+      max_width = 80,
+      max_height = 15,
+      focus_id = 'signature_help',
+      focusable = false,
+      focus = false,
+    })
+
+    -- Force window to never be focusable and restore focus
+    if fwin and vim.api.nvim_win_is_valid(fwin) then
+      vim.api.nvim_win_set_config(fwin, { focusable = false })
+      -- Force focus back to original window
+      vim.api.nvim_set_current_win(current_win)
+    end
+
+    return fbuf, fwin
   end
 end
 
@@ -221,52 +317,77 @@ function M.setup()
       -- Set keymaps
       set_keymaps(bufnr)
 
+      -- Set omnifunc for <C-x><C-o>
+      vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
+
+      -- Set tagfunc for CTRL-] navigation
+      vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
+
       -- Enable native completion with auto-trigger on '.' etc
       if client:supports_method('textDocument/completion') then
         vim.lsp.completion.enable(true, client.id, bufnr, {
           autotrigger = true,
         })
 
-        -- Debounced completion trigger for smoother typing
-        local completion_timer = vim.uv.new_timer()
+        -- For jails: also trigger completion when typing identifiers
+        if client.name == 'jails' then
+          local comp_timer = vim.uv.new_timer()
+          vim.api.nvim_create_autocmd('TextChangedI', {
+            buffer = bufnr,
+            callback = function()
+              comp_timer:stop()
+              comp_timer:start(100, 0, vim.schedule_wrap(function()
+                -- Check we're still in the same buffer and it's valid
+                if vim.api.nvim_get_current_buf() ~= bufnr then return end
+                if not vim.api.nvim_buf_is_valid(bufnr) then return end
+                -- Check omnifunc is set before triggering
+                if vim.bo[bufnr].omnifunc == '' then return end
+                if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
+                  return
+                end
+                local col = vim.api.nvim_win_get_cursor(0)[2]
+                if col < 2 then return end
+                local line = vim.api.nvim_get_current_line()
+                -- Trigger if typing identifier chars (at least 2 chars)
+                if line:sub(1, col):match('[%w_][%w_]$') then
+                  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-x><C-o>', true, false, true), 'n', false)
+                end
+              end))
+            end,
+          })
+        end
+
+        -- Debounced signature help trigger
+        local sig_help_timer = vim.uv.new_timer()
         vim.api.nvim_create_autocmd('TextChangedI', {
           buffer = bufnr,
           callback = function()
-            completion_timer:stop()
-            completion_timer:start(50, 0, vim.schedule_wrap(function()
+            sig_help_timer:stop()
+            sig_help_timer:start(50, 0, vim.schedule_wrap(function()
+              -- Check we're still in the same buffer
+              if vim.api.nvim_get_current_buf() ~= bufnr then return end
+              if not vim.api.nvim_buf_is_valid(bufnr) then return end
               if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
                 return
               end
 
               local col = vim.api.nvim_win_get_cursor(0)[2]
-              if col < 2 then return end
+              if col < 1 then return end
 
               local line = vim.api.nvim_get_current_line()
               local char = line:sub(col, col)
-              local prev = line:sub(col - 1, col - 1)
 
-              -- Trigger signature help on ( or , or while inside parens
+              -- Trigger signature help on ( or ,
               if char == '(' or char == ',' then
-                vim.lsp.buf.signature_help()
-              -- Re-trigger signature help if we're likely inside function args
+                vim.lsp.buf.signature_help({ focusable = false, focus = false })
+              -- Re-trigger signature help if we're inside unclosed parens
               elseif line:sub(1, col):match('%([^)]*$') then
-                -- Inside unclosed parens - keep signature help updated
-                vim.lsp.buf.signature_help()
-              -- Trigger completion on word characters
-              elseif prev:match('%w') and char:match('%w') then
-                local keys = vim.api.nvim_replace_termcodes('<C-x><C-o>', true, false, true)
-                vim.api.nvim_feedkeys(keys, 'n', false)
+                vim.lsp.buf.signature_help({ focusable = false, focus = false })
               end
             end))
           end,
         })
       end
-
-      -- Set omnifunc as fallback for <C-x><C-o>
-      vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
-
-      -- Set tagfunc for CTRL-] navigation
-      vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
     end,
   })
 end

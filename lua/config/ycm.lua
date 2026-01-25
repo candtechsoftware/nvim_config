@@ -22,6 +22,7 @@ function M.setup()
             vim.keymap.set("n", "gd", "<cmd>YcmCompleter GoTo<CR>", opts)
             vim.keymap.set("n", "gD", "<cmd>YcmCompleter GoToDeclaration<CR>", opts)
             vim.keymap.set("n", "gi", "<cmd>YcmCompleter GoToInclude<CR>", opts)
+            vim.keymap.set("n", "<leader>gi", "<cmd>YcmCompleter GoToDefinition<CR>", opts)
             -- K uses YCMHover which shows popup that auto-closes on cursor move
             vim.keymap.set("n", "K", "<Plug>(YCMHover)", opts)
             vim.keymap.set("n", "<C-k>", "<cmd>YcmCompleter GetType<CR>", opts)

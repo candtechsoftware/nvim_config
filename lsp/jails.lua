@@ -51,6 +51,16 @@ if not cmd then
   }
 end
 
+-- Add jai_path if jai compiler isn't directly findable via whereis
+local jai_path = vim.fn.expand('~/gits/jai')
+if vim.fn.isdirectory(jai_path) == 1 then
+  table.insert(cmd, '-jai_path')
+  table.insert(cmd, jai_path)
+  -- macOS uses jai-macos, not jai
+  table.insert(cmd, '-jai_exe_name')
+  table.insert(cmd, 'jai-macos')
+end
+
 return {
   cmd = cmd,
   filetypes = { 'jai' },

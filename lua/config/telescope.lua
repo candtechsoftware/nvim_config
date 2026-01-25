@@ -191,9 +191,20 @@ function M.setup_keymaps()
         local root = get_project_root()
         builtin.live_grep({
             cwd = root,
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
+            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
+            on_input_filter_cb = function(prompt)
+                -- Match pattern: "search text **glob" (e.g. "my search **util.jai" or "my search **.ts")
+                local search, glob = prompt:match("^(.-)%s+%*%*(.+)$")
+                if search and glob ~= "" then
+                    return { prompt = search, updated_finder = require("telescope.finders").new_job(function(new_prompt)
+                        return vim.tbl_flatten({ "rg", "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case", "--glob", "**" .. glob, "--", new_prompt }
+                        )
+                    end, require("telescope.make_entry").gen_from_vimgrep({ cwd = root }), nil, root) }
+                end
+                return { prompt = prompt }
+            end,
         })
-    end, { desc = "Live grep (project root)" })
+    end, { desc = "Live grep (project root, use **file to filter)" })
 
     -- Add a keybinding for current directory search
     vim.keymap.set("n", "<leader>.", function()
@@ -260,6 +271,28 @@ function M.setup_keymaps()
             prompt_title = "Grep Jai Modules",
         })
     end, { desc = "Grep search in Jai modules" })
+
+    -- Grep with glob filter (use --- to separate search from glob)
+    -- Example: "my search text --- *.jai" or "function --- *.ts"
+    vim.keymap.set("n", "<leader>fg", function()
+        local root = get_project_root()
+        vim.ui.input({ prompt = "Search --- *.ext: " }, function(input)
+            if not input or input == "" then return end
+
+            local search, glob = input:match("^(.-)%s+%-%-%-%s+(%*.-)$")
+            if not search or search == "" then
+                search = input
+                glob = nil
+            end
+
+            builtin.live_grep({
+                cwd = root,
+                default_text = search,
+                glob_pattern = glob,
+                prompt_title = glob and ("Grep (" .. glob .. ")") or "Grep",
+            })
+        end)
+    end, { desc = "Grep with file type filter (search --- *.ext)" })
 end
 
 function M.setup_commands()

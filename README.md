@@ -129,3 +129,107 @@ npm update -g typescript
 - `:LspInfo` - Show active LSP clients
 - `:LspStop` - Stop LSP for current buffer
 - `:LspStart` - Start LSP for current buffer
+
+## Navigation Keybindings
+
+| Category | Key | Action |
+|----------|-----|--------|
+| **Page Movement** | `<C-d>` | Half page down (centered) |
+| | `<C-u>` | Half page up (centered) |
+| | `n` / `N` | Search next/prev (centered) |
+| **LSP Navigation** | `gd` | Go to definition |
+| | `gD` | Go to declaration |
+| | `gv` | Definition in vsplit |
+| | `<leader>vrr` | Find references |
+| | `<leader>gi` | Go to implementation |
+| | `<leader>vi` | Incoming calls |
+| **Diagnostics** | `[d` / `]d` | Prev/next diagnostic |
+| | `<leader>vd` | Show diagnostic float |
+| | `<leader>qf` | Diagnostics to quickfix |
+| **Telescope Symbols** | `<leader>ds` | Document symbols |
+| | `<leader>ws` | Workspace symbols |
+| | `<leader>vws` | Workspace symbol (LSP native) |
+| **Comments** | `[c` / `]c` | Prev/next comment |
+| **Quickfix** | `<C-k>` / `<C-j>` | Next/prev quickfix item |
+| | `<leader>k` / `<leader>j` | Next/prev location list |
+| **Harpoon** | `<leader>ha` | Add file to harpoon |
+| | `<C-h/t/n/s>` | Jump to slots 1-4 |
+| | `<C-e>` | Toggle harpoon menu |
+| **File Explorer** | `<leader>pv` | Open netrw |
+| **Tabs** | `<leader>t` | New tab |
+| | `<leader><Tab>` | Next tab |
+| | `<leader>tc` | Close tab |
+
+## Search Keybindings
+
+| Key | Action |
+|-----|--------|
+| `<leader>ff` | Find files |
+| `<leader>/` | Live grep (project root) |
+| `<leader>.` | Live grep (cwd) |
+| `<leader>gf` | Git files |
+| `<leader>pws` | Grep word under cursor |
+| `<leader>pWs` | Grep WORD under cursor |
+| `<leader>ps` | Grep visual selection |
+| `<leader>fg` | Live grep with file type filter (`search --- *.ext`) |
+
+## Git Keybindings
+
+| Key | Action |
+|-----|--------|
+| `<leader>gc` | Git commits |
+| `<leader>gb` | Git branches |
+| `<leader>gs` | Git status |
+
+## Editing Keybindings
+
+| Key | Action |
+|-----|--------|
+| `<leader>f` | Format file (jai-format for .jai, LSP for others) |
+| `<leader>s` | Search and replace word under cursor |
+| `<leader>y` | Copy to system clipboard |
+| `<leader>Y` | Copy line to system clipboard |
+| `<leader>d` | Delete without yanking |
+| `<leader>p` | Paste without yanking (visual mode) |
+| `<leader>pc` | Paste from system clipboard |
+| `J` | Join lines (cursor stays in place) |
+| `J` / `K` | Move selected lines down/up (visual mode) |
+
+## LSP Actions
+
+| Key | Action |
+|-----|--------|
+| `<leader>vca` | Code actions |
+| `<leader>vrn` | Rename symbol |
+| `K` | Hover documentation |
+| `<C-h>` | Signature help (insert mode) |
+
+## Completion
+
+| Key | Action |
+|-----|--------|
+| `<Tab>` / `<S-Tab>` | Navigate completion menu |
+| `<CR>` | Accept completion |
+
+## Notes
+
+| Key | Action |
+|-----|--------|
+| `<leader>n` | Open notes directory |
+| `<leader>ns` | Search notes content |
+| `<leader>nf` | Find notes by filename |
+| `<leader>nn` | Create new note |
+| `<leader>ng` | Notes git status |
+
+## Jai Language
+
+| Key | Action |
+|-----|--------|
+| `<leader>js` | Search Jai module symbols |
+| `<leader>jg` | Grep Jai modules |
+
+## Misc
+
+| Key | Action |
+|-----|--------|
+| `<leader><leader>` | Source current file |

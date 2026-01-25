@@ -93,8 +93,11 @@ require("config.clipboard").setup()
 -- Load and setup divider comments (renders lines above //- comments)
 require("divider_comments").setup()
 
+-- Load and setup render-markdown
+require("render-markdown").setup()
+
 -- Load color scheme
-vim.cmd.colorscheme("hh")
+vim.cmd.colorscheme("one")
 
 
 -- Build telescope-fzf-native if needed (silently)
