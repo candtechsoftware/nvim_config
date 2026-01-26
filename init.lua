@@ -97,7 +97,7 @@ require("divider_comments").setup()
 require("render-markdown").setup()
 
 -- Load color scheme
-vim.cmd.colorscheme("one")
+vim.cmd.colorscheme("bl")
 
 
 -- Build telescope-fzf-native if needed (silently)
