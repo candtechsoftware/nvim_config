@@ -99,6 +99,38 @@ require("render-markdown").setup()
 -- Load color scheme
 vim.cmd.colorscheme("bl")
 
+-- Comment tag highlights: NOTE(alex), TODO(alex), PERF(alex), etc.
+-- Applied after colorscheme so they work with all themes
+local function setup_comment_tags()
+    local set = vim.api.nvim_set_hl
+    set(0, "CommentTagNote",  { fg = "#2ab34f", bold = true })
+    set(0, "CommentTagTodo",  { fg = "#ffa900", bold = true })
+    set(0, "CommentTagPerf",  { fg = "#2895c7", bold = true })
+    set(0, "CommentTagFixme", { fg = "#ff0000", bold = true })
+    set(0, "CommentTagHack",  { fg = "#FF44DD", bold = true })
+end
+
+setup_comment_tags()
+
+-- Re-apply after colorscheme change
+vim.api.nvim_create_autocmd("ColorScheme", {
+    pattern = "*",
+    callback = setup_comment_tags,
+})
+
+-- Match patterns for NOTE(name)/TODO(name)/PERF(name) style comments
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "*",
+    callback = function()
+        vim.fn.matchadd("CommentTagNote",  [[\v<NOTE(\([^)]*\))?:?]])
+        vim.fn.matchadd("CommentTagTodo",  [[\v<TODO(\([^)]*\))?:?]])
+        vim.fn.matchadd("CommentTagPerf",  [[\v<PERF(\([^)]*\))?:?]])
+        vim.fn.matchadd("CommentTagFixme", [[\v<FIXME(\([^)]*\))?:?]])
+        vim.fn.matchadd("CommentTagHack",  [[\v<HACK(\([^)]*\))?:?]])
+        vim.fn.matchadd("CommentTagHack",  [[\v<XXX(\([^)]*\))?:?]])
+    end,
+})
+
 
 -- Build telescope-fzf-native if needed (silently)
 vim.api.nvim_create_autocmd("VimEnter", {

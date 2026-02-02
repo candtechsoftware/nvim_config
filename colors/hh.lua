@@ -499,6 +499,20 @@ function M.setup()
   hl(0, "@lsp.typemod.enumMember", { fg = colors.constant })  -- Olive
   hl(0, "@lsp.typemod.enumMember.declaration", { fg = colors.constant })  -- Olive
 
+  -- Objective-C/C++ specific highlighting
+  hl(0, "@keyword.objc", { fg = colors.keyword })
+  hl(0, "@keyword.directive.objc", { fg = colors.preproc })     -- @interface, @implementation, @end
+  hl(0, "@keyword.import.objc", { fg = colors.preproc })        -- @import
+  hl(0, "@keyword.modifier.objc", { fg = colors.keyword })      -- @property modifiers
+  hl(0, "@type.objc", { fg = colors.index_type })
+  hl(0, "@type.builtin.objc", { fg = colors.index_type })       -- id, NSString, etc.
+  hl(0, "@function.method.objc", { fg = colors.index_function })
+  hl(0, "@function.call.objc", { fg = colors.index_function })
+  hl(0, "@variable.member.objc", { fg = colors.text_default })
+  hl(0, "@punctuation.special.objc", { fg = colors.operators }) -- @ symbol, brackets in message sends
+  hl(0, "@string.objc", { fg = colors.string })                 -- @"string"
+  hl(0, "@constant.builtin.objc", { fg = colors.constant })     -- nil, YES, NO
+
   -- Yggdrasil macros (yg_internal, yg_inline) - teal
   hl(0, "YgKeyword", { fg = colors.yg_keyword })
   -- Also override @keyword.modifier for yg_* (set via treesitter queries)
@@ -543,6 +557,12 @@ local scope_queries = {
     (compound_statement) @scope
   ]],
   cpp = [[
+    (compound_statement) @scope
+  ]],
+  objc = [[
+    (compound_statement) @scope
+  ]],
+  objcpp = [[
     (compound_statement) @scope
   ]],
   jai = [[
@@ -794,7 +814,7 @@ function M.setup_scope_highlight()
   local group = vim.api.nvim_create_augroup("HHScopeSetup", { clear = true })
   vim.api.nvim_create_autocmd("FileType", {
     group = group,
-    pattern = { "c", "cpp", "jai", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
+    pattern = { "c", "cpp", "objc", "objcpp", "jai", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
     callback = function(ev)
       vim.schedule(function()
         M.enable_scope_highlight(ev.buf)
@@ -804,7 +824,7 @@ function M.setup_scope_highlight()
 
   -- Also enable for current buffer if it matches
   local ft = vim.bo.filetype
-  if ft == "c" or ft == "cpp" or ft == "jai" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
+  if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" or ft == "jai" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
     vim.schedule(function()
       M.enable_scope_highlight(vim.api.nvim_get_current_buf())
     end)
@@ -859,6 +879,10 @@ local function setup_yg_keywords()
   add_match("YgType", "\\<Entity\\>")
   add_match("YgType", "\\<Direction8\\>")
 
+  -- Return type after yg_internal/yg_inline (gold, like static would show the return type)
+  add_match("YgType", "\\<yg_internal\\s\\+\\zs\\w\\+\\ze")
+  add_match("YgType", "\\<yg_inline\\s\\+\\zs\\w\\+\\ze")
+
   -- Function declarations after yg_* macros (rust-red)
   -- Pattern: yg_internal/yg_inline TYPE FUNCNAME( or TYPE *FUNCNAME(
   add_match("Function", "\\<yg_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
@@ -868,19 +892,19 @@ end
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
 vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter" }, {
   group = yg_group,
-  pattern = { "*.c", "*.h", "*.cpp", "*.hpp" },
+  pattern = { "*.c", "*.h", "*.cpp", "*.hpp", "*.m", "*.mm" },
   callback = setup_yg_keywords,
 })
 vim.api.nvim_create_autocmd("FileType", {
   group = yg_group,
-  pattern = { "c", "cpp" },
+  pattern = { "c", "cpp", "objc", "objcpp" },
   callback = setup_yg_keywords,
 })
 
--- Apply to current buffer if it's C/C++
+-- Apply to current buffer if it's C/C++/ObjC
 local ft = vim.bo.filetype
 local ext = vim.fn.expand("%:e")
-if ft == "c" or ft == "cpp" or ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" then
+if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" or ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" or ext == "m" or ext == "mm" then
   setup_yg_keywords()
 end
 
