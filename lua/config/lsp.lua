@@ -5,6 +5,7 @@ local M = {}
 
 -- LSP servers to enable (configs are in lsp/*.lua)
 local servers = {
+  'clangd',
   'lua_ls',
   'gopls',
   'ts_ls',
@@ -70,9 +71,9 @@ local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
   -- Navigation
-  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+  vim.keymap.set('n', 'gd', '<C-]>', opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', '<leader>gi', vim.lsp.buf.implementation, opts)
+  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
   vim.keymap.set('n', 'gv', function()
     vim.cmd('vsplit')
     vim.lsp.buf.definition()
@@ -268,7 +269,7 @@ local function setup_handlers()
 
     -- Store current window before creating float
     local current_win = vim.api.nvim_get_current_win()
-    
+
     local fbuf, fwin = vim.lsp.util.open_floating_preview(lines, 'markdown', {
       border = 'rounded',
       max_width = 80,
@@ -314,6 +315,11 @@ function M.setup()
 
       local bufnr = args.buf
 
+      -- Disable diagnostics for clangd (unity builds produce false positives)
+      if client.name == 'clangd' then
+        vim.diagnostic.enable(false, { bufnr = bufnr })
+      end
+
       -- Set keymaps
       set_keymaps(bufnr)
 
@@ -323,39 +329,10 @@ function M.setup()
       -- Set tagfunc for CTRL-] navigation
       vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
 
-      -- Enable native completion with auto-trigger on '.' etc
+      -- Debounced signature help and completion triggers
       if client:supports_method('textDocument/completion') then
-        vim.lsp.completion.enable(true, client.id, bufnr, {
-          autotrigger = true,
-        })
-
-        -- For jails: also trigger completion when typing identifiers
-        if client.name == 'jails' then
-          local comp_timer = vim.uv.new_timer()
-          vim.api.nvim_create_autocmd('TextChangedI', {
-            buffer = bufnr,
-            callback = function()
-              comp_timer:stop()
-              comp_timer:start(100, 0, vim.schedule_wrap(function()
-                -- Check we're still in the same buffer and it's valid
-                if vim.api.nvim_get_current_buf() ~= bufnr then return end
-                if not vim.api.nvim_buf_is_valid(bufnr) then return end
-                -- Check omnifunc is set before triggering
-                if vim.bo[bufnr].omnifunc == '' then return end
-                if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
-                  return
-                end
-                local col = vim.api.nvim_win_get_cursor(0)[2]
-                if col < 2 then return end
-                local line = vim.api.nvim_get_current_line()
-                -- Trigger if typing identifier chars (at least 2 chars)
-                if line:sub(1, col):match('[%w_][%w_]$') then
-                  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-x><C-o>', true, false, true), 'n', false)
-                end
-              end))
-            end,
-          })
-        end
+        -- Ensure completion auto-trigger is set up (may already exist from ctags)
+        require('config.ctags').setup_completion(bufnr)
 
         -- Debounced signature help trigger
         local sig_help_timer = vim.uv.new_timer()
