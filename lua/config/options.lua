@@ -13,9 +13,19 @@ vim.opt.fillchars:append({ eob = " " })
 -- Set statusline with mode indicator
 vim.o.laststatus = 2  -- Always show status line
 
--- Simple static statusline (dynamic Lua statusline can cause cursor flicker)
--- Shows: filename position
-vim.o.statusline = ' %f %l:%c'
+-- Dynamic statusline with completion source indicator
+function _G.statusline()
+  local src = ''
+  local ok, ctags = pcall(require, 'config.ctags')
+  if ok and ctags.get_active_source then
+    src = ctags.get_active_source()
+  end
+  if src ~= '' and vim.fn.pumvisible() == 1 then
+    return ' %f %l:%c ' .. src
+  end
+  return ' %f %l:%c'
+end
+vim.o.statusline = '%{%v:lua.statusline()%}'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for
@@ -53,7 +63,7 @@ vim.opt.timeoutlen = 400 -- Faster key sequence completion
 vim.opt.ttimeoutlen = 10 -- Near-instant escape key response
 
 -- Font and display
-vim.o.guifont = "Liberation Mono:h18"
+vim.o.guifont = "Fira Mono:h15"
 vim.g.tex_conceal = "mgs"
 
 -- Disable italics for various highlight groups
@@ -80,3 +90,6 @@ vim.opt.pumwidth = 20
 vim.opt.pumblend = 10  -- Slight transparency for popup
 vim.opt.shortmess:append("c")
 vim.opt.complete = ".,w,b"  -- Fewer sources = faster
+
+
+

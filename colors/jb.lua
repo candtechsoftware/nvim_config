@@ -1,117 +1,131 @@
--- [26] JB colorscheme palette version (naysayer-matched). Do not delete.
+-- [28] JB colorscheme palette version (Emacs naysayer-matched). Do not delete.
 local M = {}
 
 local colors = {
-    -- Core backgrounds - Naysayer88: #042327
-    background0 = "#042327FF",
-    background1 = "#052c31FF",
-    background2 = "#0a3636FF",
-    background3 = "#0a3636FF",
-    background4 = "#0a3636FF",
+    -- Core backgrounds - Emacs naysayer: #062329
+    background0 = "#062329FF",
+    background1 = "#0b3335FF",
+    background2 = "#0e3d3fFF",
+    background3 = "#0e3d3fFF",
+    background4 = "#0e3d3fFF",
     selection_active = "#0000FFFF",
     selection_inactive = "#0000FF80",
     selection_highlight = "#63878a8e",
     search_result_active = "#63878a8e",
     search_result_inactive = "#63878a40",
-    scrollbar = "#b59e7aa4",
-    scrollbar_hover = "#B59E7AFF",
-    scrollbar_background = "#0423274C",
-    cursor = "#86E08FFF",
-    cursor_inactive = "#86E08F80",
-    paste_animation = "#2ca1984C",
-    splitter = "#B59E7AFF",
-    splitter_hover = "#B59E7AFF",
+    scrollbar = "#d1b897a4",
+    scrollbar_hover = "#d1b897FF",
+    scrollbar_background = "#0623294C",
+    cursor = "#90ee90FF",
+    cursor_inactive = "#90ee9080",
+    paste_animation = "#2ec09c4C",
+    splitter = "#b8a070FF",
+    splitter_hover = "#b8a070FF",
     letter_highlight = "#FFFFFFFF",
-    list_cursor_lite = "#b59e7a19",
-    list_cursor = "#b59e7aa4",
-    shadow_dark = "#04232733",
-    shadow_transparent = "#04232700",
-    text_input_label = "#B59E7AFF",
-    ui_default = "#bdb395FF",
-    ui_dim = "#b59e7a65",
+    list_cursor_lite = "#d1b89719",
+    list_cursor = "#d1b897a4",
+    shadow_dark = "#06232933",
+    shadow_transparent = "#06232900",
+    text_input_label = "#d1b897FF",
+    ui_default = "#d1b897FF",
+    ui_dim = "#d1b89765",
     ui_neutral = "#4C4C4CFF",
     ui_warning = "#ffaa00FF",
     ui_warning_dim = "#986032FF",
     ui_error = "#772222FF",
     ui_error_bright = "#FF0000FF",
-    ui_success = "#31B72CFF",
-    region_scope_export = "#052c31FF",
-    region_scope_file = "#052c31FF",
-    region_scope_module = "#052c31FF",
+    ui_success = "#44b340FF",
+    region_scope_export = "#0b3335FF",
+    region_scope_file = "#0b3335FF",
+    region_scope_module = "#0b3335FF",
     region_header = "#0c141fFF",
     region_success = "#226022FF",
     region_warning = "#986032FF",
     region_error = "#772222FF",
     region_heredoc = "#0c141fFF",
-    build_panel_background = "#042327FF",
-    build_panel_scrollbar = "#b59e7a40",
-    build_panel_scrollbar_hover = "#b59e7aa4",
-    build_panel_scrollbar_background = "#0423274C",
-    build_panel_title_bar = "#052c31FF",
-    -- JB default text: #bdb395 (everything except comments/strings/directives)
-    code_default = "#bdb395FF",
-    -- JB comments: #31B72C (green)
-    code_comment = "#31B72CFF",
-    -- All code tokens same as default (JB minimal style)
-    code_type = "#bdb395FF",
-    code_function = "#bdb395FF",
-    code_punctuation = "#bdb395FF",
-    code_operation = "#bdb395FF",
-    -- JB strings: #2ca198 (teal)
-    code_string_literal = "#2ca198FF",
-    code_value = "#bdb395FF",
-    code_highlight = "#B59E7AFF",
+    build_panel_background = "#062329FF",
+    build_panel_scrollbar = "#d1b89740",
+    build_panel_scrollbar_hover = "#d1b897a4",
+    build_panel_scrollbar_background = "#0623294C",
+    build_panel_title_bar = "#0b3335FF",
+    -- JB default text: #d1b897 (warm tan/gold)
+    code_default = "#d1b897FF",
+    -- Comments: #44b340 (lighter green)
+    code_comment = "#44b340FF",
+    -- Types: #8cde94 (mid green)
+    code_type = "#8cde94FF",
+    -- Functions: tan (same as default)
+    code_function = "#d1b897FF",
+    -- Punctuation: tan (same as default)
+    code_punctuation = "#d1b897FF",
+    -- Operators: tan (same as default)
+    code_operation = "#d1b897FF",
+    -- Strings: #2ec09c (dark green/teal)
+    code_string_literal = "#2ec09cFF",
+    -- Constants: #7ad0c6 (light teal)
+    code_value = "#7ad0c6FF",
+    code_highlight = "#d1b897FF",
     code_error = "#FF0000FF",
-    code_keyword = "#bdb395FF",
-    code_warning = "#FFFFFFFF",
+    -- Keywords (if/else/for/while/return): #ffffff (white)
+    code_keyword = "#ffffffFF",
+    code_warning = "#ffaa00FF",
     code_invalid = "#FF0000FF",
-    code_multiline_string = "#2ca198FF",
-    code_raw_string = "#2ca198FF",
-    code_char_literal = "#2ca198FF",
-    code_identifier = "#bdb395FF",
-    code_note = "#bdb395FF",
-    code_number = "#bdb395FF",
-    code_multiline_comment = "#31B72CFF",
-    code_modifier = "#bdb395FF",
-    code_attribute = "#bdb395FF",
-    code_enum_variant = "#bdb395FF",
-    -- Directives/macros: #d4d464 (yellow - #import, #load, #placeholder, #if, etc.)
-    code_macro = "#d4d464FF",
-    code_builtin_variable = "#bdb395FF",
-    code_builtin_function = "#bdb395FF",
-    code_builtin_exception = "#bdb395FF",
-    code_directive = "#d4d464FF",
-    code_directive_modifier = "#d4d464FF",
-    code_header = "#bdb395FF",
-    code_header2 = "#bdb395FF",
-    code_header3 = "#bdb395FF",
-    code_header4 = "#bdb395FF",
-    code_header5 = "#bdb395FF",
-    code_header6 = "#bdb395FF",
-    ruler = "#B59E7AFF",
-    bracket_highlight = "#B59E7AFF",
-    indent_guide = "#b59e7a26",
-    active_pane_border = "#B59E7AFF",
+    code_multiline_string = "#2ec09cFF",
+    code_raw_string = "#2ec09cFF",
+    code_char_literal = "#2ec09cFF",
+    -- Variables/identifiers: tan (same as default)
+    code_identifier = "#d1b897FF",
+    -- Notes: tan (same as default)
+    code_note = "#d1b897FF",
+    -- Numbers: #7ad0c6 (light teal, same as constants)
+    code_number = "#7ad0c6FF",
+    code_multiline_comment = "#44b340FF",
+    -- StorageClass/Structure/Typedef: white (same as keywords)
+    code_modifier = "#ffffffFF",
+    code_attribute = "#d1b897FF",
+    code_enum_variant = "#d1b897FF",
+    -- Macros/PreProc/Include/Define: #8cde94 (mid green)
+    code_macro = "#8cde94FF",
+    -- Builtins: tan (same as default)
+    code_builtin_variable = "#d1b897FF",
+    code_builtin_function = "#d1b897FF",
+    code_builtin_exception = "#d1b897FF",
+    -- Directives: #8cde94 (mid green, same as macros)
+    code_directive = "#8cde94FF",
+    code_directive_modifier = "#8cde94FF",
+    code_header = "#d1b897FF",
+    code_header2 = "#d1b897FF",
+    code_header3 = "#d1b897FF",
+    code_header4 = "#d1b897FF",
+    code_header5 = "#d1b897FF",
+    code_header6 = "#d1b897FF",
+    ruler = "#d1b897FF",
+    bracket_highlight = "#d1b897FF",
+    indent_guide = "#d1b89726",
+    active_pane_border = "#d1b897FF",
     inactive_pane_dim_overlay = "#0c141fFF",
-    code_comment_highlight1 = "#bdb395FF",
+    code_comment_highlight1 = "#d1b897FF",
     code_comment_highlight2 = "#FF0000FF",
     code_comment_highlight3 = "#FFFFFFFF",
-    code_comment_highlight4 = "#bdb395FF",
+    code_comment_highlight4 = "#d1b897FF",
+    -- Yellow (for Special, rainbow delimiters, etc.)
+    yellow = "#E6DB74FF",
+    orange = "#FD971FFF",
     -- Cursor line
-    cursor_line_highlight = "#052c31FF",
-    -- Scope background cycle colors - close to main bg #042327
+    cursor_line_highlight = "#0b3335FF",
+    -- Scope background cycle colors - close to main bg #062329
     back_cycle = {
-        "#052528", -- Level 1: barely lighter
-        "#06272a", -- Level 2
-        "#07292c", -- Level 3
-        "#082b2e", -- Level 4
-        "#092d30", -- Level 5
-        "#0a2f32", -- Level 6
-        "#0b3134", -- Level 7
-        "#0c3336",
+        "#082529", -- Level 1: barely lighter
+        "#0a272b", -- Level 2
+        "#0c292d", -- Level 3
+        "#0e2b2f", -- Level 4
+        "#102d31", -- Level 5
+        "#122f33", -- Level 6
+        "#143135", -- Level 7
+        "#163337",
     },
-    color_preview_title_bar = "#052c31FF",
-    code_addition = "#31B72CFF",
+    color_preview_title_bar = "#0b3335FF",
+    code_addition = "#44b340FF",
     code_deletion = "#E64D4DFF",
     region_addition = "#2260224C",
     region_deletion = "#7722224C",
@@ -180,6 +194,8 @@ set(0, "Pmenu", { fg = colors.code_default, bg = colors.background2 })
 set(0, "PmenuSel", { fg = colors.background0, bg = colors.selection_highlight })
 set(0, "PmenuSbar", { bg = colors.scrollbar_background })
 set(0, "PmenuThumb", { bg = colors.scrollbar })
+set(0, "PmenuExtra", { fg = colors.ui_dim, bg = colors.background2 })
+set(0, "PmenuExtraSel", { fg = colors.ui_dim, bg = colors.selection_highlight })
 set(0, "WildMenu", { fg = colors.background0, bg = colors.selection_active })
 set(0, "CursorLineFold", { bg = colors.cursor_line_highlight })
 set(0, "CursorLineSign", { bg = colors.cursor_line_highlight })
@@ -203,7 +219,7 @@ set(0, "Statement", { fg = colors.code_keyword })
 set(0, "Operator", { fg = colors.code_operation })
 set(0, "Keyword", { fg = colors.code_keyword })
 set(0, "Type", { fg = colors.code_type })
-set(0, "Structure", { fg = colors.code_type })
+set(0, "Structure", { fg = colors.code_keyword })
 set(0, "StorageClass", { fg = colors.code_modifier })
 set(0, "PreProc", { fg = colors.code_directive })
 set(0, "Include", { fg = colors.code_directive })
@@ -212,8 +228,8 @@ set(0, "Macro", { fg = colors.code_macro })
 set(0, "PreCondit", { fg = colors.code_directive_modifier })
 set(0, "Conditional", { fg = colors.code_keyword })
 set(0, "Repeat", { fg = colors.code_keyword })
-set(0, "Label", { fg = colors.code_note })
-set(0, "Special", { fg = colors.code_note })
+set(0, "Label", { fg = colors.code_keyword })
+set(0, "Special", { fg = colors.code_string_literal })
 set(0, "Delimiter", { fg = colors.code_punctuation })
 set(0, "Underlined", { underline = true })
 set(0, "Bold", { bold = true })
@@ -261,13 +277,15 @@ set(0, "@method", { link = "Function" })
 set(0, "@module", { fg = colors.code_directive })
 set(0, "@constructor", { fg = colors.code_enum_variant })
 set(0, "@keyword", { link = "Keyword" })
-set(0, "@keyword.function", { fg = colors.code_keyword })
-set(0, "@keyword.operator", { fg = colors.code_operation })
-set(0, "@keyword.return", { fg = colors.code_keyword, bold = true })
+set(0, "@keyword.function", { link = "Keyword" })
+set(0, "@keyword.operator", { link = "Keyword" })
+set(0, "@keyword.return", { link = "Keyword" })
 set(0, "@keyword.conditional", { link = "Keyword" })
 set(0, "@keyword.repeat", { link = "Keyword" })
-set(0, "@keyword.import", { fg = colors.code_directive })
+set(0, "@keyword.import", { link = "Keyword" })
+set(0, "@keyword.import.c", { fg = colors.code_directive })
 set(0, "@keyword.directive", { fg = colors.code_directive })
+set(0, "@keyword.directive.define", { fg = colors.code_directive })
 set(0, "@keyword.modifier", { fg = colors.code_modifier })
 set(0, "@operator", { link = "Operator" })
 set(0, "@tag", { fg = colors.code_header })
@@ -395,6 +413,14 @@ set(0, "IblScope", { fg = colors.code_highlight })
 set(0, "IlluminatedWordText", { bg = colors.selection_highlight })
 set(0, "IlluminatedWordRead", { bg = colors.selection_highlight })
 set(0, "IlluminatedWordWrite", { bg = colors.selection_highlight })
+
+-- Rainbow delimiters (matching Emacs naysayer)
+set(0, "rainbowcol1", { fg = "#AE81FF" })  -- violet
+set(0, "rainbowcol2", { fg = "#66D9EF" })  -- blue
+set(0, "rainbowcol3", { fg = "#A6E22E" })  -- green
+set(0, "rainbowcol4", { fg = colors.yellow })  -- yellow
+set(0, "rainbowcol5", { fg = colors.orange })  -- orange
+set(0, "rainbowcol6", { fg = "#F92672" })  -- red
 
 -- Elext / lexical scope groups
 set(0, "FocusRegionScopeExport", { fg = colors.code_note, bg = colors.region_scope_export })

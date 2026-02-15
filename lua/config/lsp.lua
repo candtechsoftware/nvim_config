@@ -71,7 +71,20 @@ local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
   -- Navigation
-  vim.keymap.set('n', 'gd', '<C-]>', opts)
+  vim.keymap.set('n', 'gd', function()
+    local params = vim.lsp.util.make_position_params()
+    local results = vim.lsp.buf_request_sync(0, 'textDocument/definition', params, 1000)
+    if results then
+      for _, res in pairs(results) do
+        if res.result and not vim.tbl_isempty(res.result) then
+          vim.lsp.buf.definition()
+          return
+        end
+      end
+    end
+    -- LSP found nothing — fall back to ctags
+    require('config.ctags').jump()
+  end, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
   vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
   vim.keymap.set('n', 'gv', function()
