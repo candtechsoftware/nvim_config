@@ -353,7 +353,7 @@ function M.setup()
           buffer = bufnr,
           callback = function()
             sig_help_timer:stop()
-            sig_help_timer:start(50, 0, vim.schedule_wrap(function()
+            sig_help_timer:start(150, 0, vim.schedule_wrap(function()
               -- Check we're still in the same buffer
               if vim.api.nvim_get_current_buf() ~= bufnr then return end
               if not vim.api.nvim_buf_is_valid(bufnr) then return end

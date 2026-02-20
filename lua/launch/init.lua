@@ -176,28 +176,25 @@ function M.setup()
         end,
         on_exit = function(_, exit_code)
           vim.schedule(function()
-            if exit_code ~= 0 then
-              local qf_entries = parse_errors(output_lines, current_root)
-              if #qf_entries > 0 then
-                vim.fn.setqflist(qf_entries, "r")
-                vim.fn.setqflist({}, "a", { title = "Build Errors: " .. cmd })
-                vim.cmd("copen")
-                -- Debug: show first error path
-                vim.notify("Build FAILED - " .. #qf_entries .. " error(s). First: " .. qf_entries[1].filename, vim.log.levels.ERROR)
-              else
-                -- No parseable errors, show raw output
-                vim.fn.setqflist({}, "r")
-                for _, line in ipairs(output_lines) do
-                  if line ~= "" then
-                    vim.fn.setqflist({ { text = line } }, "a")
-                  end
+            local qf_entries = parse_errors(output_lines, current_root)
+            if #qf_entries > 0 then
+              vim.fn.setqflist(qf_entries, "r")
+              vim.fn.setqflist({}, "a", { title = "Build Errors: " .. cmd })
+              vim.cmd("copen")
+              vim.notify("Build FAILED - " .. #qf_entries .. " error(s)", vim.log.levels.ERROR)
+            elseif exit_code ~= 0 then
+              -- Non-zero exit but no parseable errors, show raw output
+              vim.fn.setqflist({}, "r")
+              for _, line in ipairs(output_lines) do
+                if line ~= "" then
+                  vim.fn.setqflist({ { text = line } }, "a")
                 end
-                vim.fn.setqflist({}, "a", { title = "Build Output: " .. cmd })
-                vim.cmd("copen")
-                vim.notify("Build FAILED (exit code " .. exit_code .. ")", vim.log.levels.ERROR)
               end
+              vim.fn.setqflist({}, "a", { title = "Build Output: " .. cmd })
+              vim.cmd("copen")
+              vim.notify("Build FAILED (exit code " .. exit_code .. ")", vim.log.levels.ERROR)
             else
-              -- Clear quickfix on success
+              -- No errors and exit 0: success
               vim.fn.setqflist({}, "r")
               vim.fn.setqflist({}, "a", { title = "Build: SUCCESS" })
               vim.cmd("cclose")

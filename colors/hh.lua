@@ -585,6 +585,9 @@ local scope_queries = {
   ]],
 }
 
+-- Cached compiled queries (query strings never change, no need to recompile)
+local compiled_queries = {}
+
 -- Parse all scopes in a buffer (called on text change, not cursor move)
 local function parse_scopes(bufnr)
   local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
@@ -601,14 +604,12 @@ local function parse_scopes(bufnr)
   local query_string = scope_queries[lang]
   if not query_string then return nil end
 
-  local query
-  local success = pcall(function()
-    query = vim.treesitter.query.parse(lang, query_string)
-  end)
-
-  if not success or not query then
-    return nil
+  if not compiled_queries[lang] then
+    local success, q = pcall(vim.treesitter.query.parse, lang, query_string)
+    if not success then return nil end
+    compiled_queries[lang] = q
   end
+  local query = compiled_queries[lang]
 
   -- Collect all scopes
   local all_scopes = {}
@@ -771,6 +772,18 @@ function M.enable_scope_highlight(bufnr)
     end,
   })
 
+  -- Buffer/window enter: force re-highlight (extmarks may have been cleared)
+  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      if scope_cache[bufnr] then
+        scope_cache[bufnr].last_fingerprint = ""
+      end
+      M.highlight_scopes(bufnr, nil, true)
+    end,
+  })
+
   -- Text changes: mark dirty, then debounced update
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
     group = group,
@@ -822,6 +835,23 @@ function M.setup_scope_highlight()
     end,
   })
 
+  -- Re-highlight all active scope buffers on colorscheme change
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = function()
+      for bufnr, _ in pairs(scope_cache) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          scope_cache[bufnr].last_fingerprint = ""
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(bufnr) then
+              M.highlight_scopes(bufnr, nil, true)
+            end
+          end)
+        end
+      end
+    end,
+  })
+
   -- Also enable for current buffer if it matches
   local ft = vim.bo.filetype
   if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" or ft == "jai" or ft == "lua" or ft == "typescript" or ft == "typescriptreact" or ft == "javascript" or ft == "javascriptreact" then
@@ -859,6 +889,12 @@ local function setup_yg_keywords()
   add_match("YgKeyword", "\\<yg_global\\>")
   add_match("YgKeyword", "\\<yg_local_persist\\>")
 
+  -- Ark macros (teal, same as yg)
+  add_match("YgKeyword", "\\<ark_internal\\>")
+  add_match("YgKeyword", "\\<ark_inline\\>")
+  add_match("YgKeyword", "\\<ark_global\\>")
+  add_match("YgKeyword", "\\<ark_local_persist\\>")
+
   -- Yggdrasil base types (gold)
   add_match("YgType", "\\<[usb]\\(8\\|16\\|32\\|64\\)\\>")  -- u8, s16, b32, etc.
   add_match("YgType", "\\<f\\(32\\|64\\)\\>")              -- f32, f64
@@ -882,11 +918,13 @@ local function setup_yg_keywords()
   -- Return type after yg_internal/yg_inline (gold, like static would show the return type)
   add_match("YgType", "\\<yg_internal\\s\\+\\zs\\w\\+\\ze")
   add_match("YgType", "\\<yg_inline\\s\\+\\zs\\w\\+\\ze")
+  add_match("YgType", "\\<ark_internal\\s\\+\\zs\\w\\+\\ze")
+  add_match("YgType", "\\<ark_inline\\s\\+\\zs\\w\\+\\ze")
 
-  -- Function declarations after yg_* macros (rust-red)
-  -- Pattern: yg_internal/yg_inline TYPE FUNCNAME( or TYPE *FUNCNAME(
-  add_match("Function", "\\<yg_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
-  add_match("Function", "\\<yg_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
+  -- Function declarations after ark_*/yg_* macros (rust-red)
+  -- Pattern: PREFIX TYPE FUNCNAME( or PREFIX TYPE *FUNCNAME(
+  add_match("Function", "\\<\\(ark\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
+  add_match("Function", "\\<\\(ark\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
 end
 
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })

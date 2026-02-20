@@ -1,8 +1,16 @@
 ; extends
 
-; Treat ark_* macros as storage class modifiers
+; Treat ark_*/yg_* macros as keyword modifiers (parser may classify as type_identifier or identifier)
 ((identifier) @keyword.modifier
-  (#any-of? @keyword.modifier "ark_internal" "ark_inline" "ark_global" "ark_local_persist"))
+  (#any-of? @keyword.modifier
+    "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
+    "yg_internal" "yg_inline" "yg_global" "yg_local_persist"))
+
+((type_identifier) @keyword.modifier
+  (#any-of? @keyword.modifier
+    "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
+    "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
+  (#set! priority 101))
 
 ; Fix function declarations that start with ark_* macros
 ; Pattern: ark_internal TYPE funcname(...) or ark_internal TYPE *funcname(...)
