@@ -72,18 +72,18 @@ local function set_keymaps(bufnr)
 
   -- Navigation
   vim.keymap.set('n', 'gd', function()
-    local params = vim.lsp.util.make_position_params()
-    local results = vim.lsp.buf_request_sync(0, 'textDocument/definition', params, 1000)
-    if results then
-      for _, res in pairs(results) do
-        if res.result and not vim.tbl_isempty(res.result) then
-          vim.lsp.buf.definition()
-          return
-        end
-      end
+    -- Try ctags first (covers unity builds and project-local symbols)
+    local word = vim.fn.expand('<cword>')
+    local saved_tagfunc = vim.bo.tagfunc
+    vim.bo.tagfunc = ''
+    local tags = vim.fn.taglist('^' .. word .. '$')
+    vim.bo.tagfunc = saved_tagfunc
+    if #tags > 0 then
+      require('config.ctags').jump()
+      return
     end
-    -- LSP found nothing — fall back to ctags
-    require('config.ctags').jump()
+    -- No ctags match — try LSP
+    vim.lsp.buf.definition()
   end, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
   vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
@@ -93,7 +93,23 @@ local function set_keymaps(bufnr)
   end, opts)
 
   -- Workspace
-  vim.keymap.set('n', '<leader>vws', vim.lsp.buf.workspace_symbol, opts)
+  vim.keymap.set('n', '<leader>vws', function()
+    local ok, results = pcall(function()
+      local params = { query = '' }
+      return vim.lsp.buf_request_sync(0, 'textDocument/symbol', params, 1000)
+        or vim.lsp.buf_request_sync(0, 'workspace/symbol', params, 1000)
+    end)
+    if ok and results then
+      for _, res in pairs(results) do
+        if res.result and type(res.result) == 'table' and not vim.tbl_isempty(res.result) then
+          vim.lsp.buf.workspace_symbol()
+          return
+        end
+      end
+    end
+    -- LSP returned nothing useful — fall back to ctags
+    require('config.ctags').workspace_symbols()
+  end, opts)
 
   -- Diagnostics
   vim.keymap.set('n', '<leader>vd', vim.diagnostic.open_float, opts)

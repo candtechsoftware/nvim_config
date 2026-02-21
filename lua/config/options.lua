@@ -63,8 +63,6 @@ vim.opt.redrawtime = 1500 -- Time in ms for redrawing screen
 vim.opt.timeoutlen = 400 -- Faster key sequence completion
 vim.opt.ttimeoutlen = 10 -- Near-instant escape key response
 
--- Font and display
-vim.o.guifont = "Fira Mono:h15"
 vim.g.tex_conceal = "mgs"
 
 -- Disable italics for various highlight groups

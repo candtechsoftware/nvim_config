@@ -507,4 +507,96 @@ end
 
 M.setup_completion = setup_completion_trigger
 
+--- Open a Telescope picker with all project tags (workspace symbols via ctags).
+function M.workspace_symbols()
+  local has_telescope, pickers = pcall(require, 'telescope.pickers')
+  if not has_telescope then
+    vim.notify('Telescope not available', vim.log.levels.WARN)
+    return
+  end
+  local finders = require('telescope.finders')
+  local conf = require('telescope.config').values
+  local actions = require('telescope.actions')
+  local action_state = require('telescope.actions.state')
+  local entry_display = require('telescope.pickers.entry_display')
+
+  local root = get_project_root()
+  if not root then
+    vim.notify('Could not determine project root', vim.log.levels.WARN)
+    return
+  end
+
+  local tp = tags_path(root)
+  local file = io.open(tp, 'r')
+  if not file then
+    vim.notify('No tags file found. Run :TagGen first.', vim.log.levels.WARN)
+    return
+  end
+
+  local entries = {}
+  for line in file:lines() do
+    if not line:match('^!_') then
+      local name, filename, pattern_rest = line:match('^([^\t]+)\t([^\t]+)\t(.*)')
+      if name and not name:match('::') then
+        local kind = line:match('\tkind:(%w+)') or line:match('\t(%a)\t') or line:match('\t(%a)$') or '?'
+        local lnum = line:match('\tline:(%d+)')
+        table.insert(entries, {
+          name = name,
+          kind = kind,
+          filename = filename,
+          lnum = lnum and tonumber(lnum) or 1,
+        })
+      end
+    end
+  end
+  file:close()
+
+  local displayer = entry_display.create({
+    separator = ' ',
+    items = {
+      { width = 6 },
+      { width = 40 },
+      { remaining = true },
+    },
+  })
+
+  local function make_display(entry)
+    return displayer({
+      { '[' .. entry.kind .. ']', 'TelescopeResultsComment' },
+      entry.value,
+      { vim.fn.fnamemodify(entry.filename, ':~:.'), 'TelescopeResultsLineNr' },
+    })
+  end
+
+  pickers.new({}, {
+    prompt_title = 'Workspace Symbols (Tags)',
+    finder = finders.new_table({
+      results = entries,
+      entry_maker = function(item)
+        return {
+          value = item.name,
+          display = make_display,
+          ordinal = item.name,
+          filename = item.filename,
+          lnum = item.lnum,
+          kind = item.kind,
+        }
+      end,
+    }),
+    sorter = conf.generic_sorter({}),
+    previewer = conf.grep_previewer({}),
+    attach_mappings = function(prompt_bufnr, _)
+      actions.select_default:replace(function()
+        actions.close(prompt_bufnr)
+        local selection = action_state.get_selected_entry()
+        if selection then
+          vim.cmd('edit ' .. vim.fn.fnameescape(selection.filename))
+          vim.api.nvim_win_set_cursor(0, { selection.lnum, 0 })
+        end
+      end)
+      return true
+    end,
+  }):find()
+end
+
 return M
