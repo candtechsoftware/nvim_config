@@ -17,9 +17,6 @@
 [submodule "pack/plugins/start/nvim-treesitter"]
 	path = pack/plugins/start/nvim-treesitter
 	url = https://github.com/nvim-treesitter/nvim-treesitter.git
-[submodule "pack/plugins/start/YouCompleteMe"]
-	path = pack/plugins/start/YouCompleteMe
-	url = https://github.com/ycm-core/YouCompleteMe.git
 [submodule "pack/plugins/start/render-markdown.nvim"]
 	path = pack/plugins/start/render-markdown.nvim
 	url = https://github.com/MeanderingProgrammer/render-markdown.nvim.git
