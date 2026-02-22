@@ -70,17 +70,21 @@ end
 local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
+  local c_filetypes = { c = true, cpp = true, objc = true, objcpp = true }
+
   -- Navigation
   vim.keymap.set('n', 'gd', function()
-    -- Try ctags first (covers unity builds and project-local symbols)
-    local word = vim.fn.expand('<cword>')
-    local saved_tagfunc = vim.bo.tagfunc
-    vim.bo.tagfunc = ''
-    local tags = vim.fn.taglist('^' .. word .. '$')
-    vim.bo.tagfunc = saved_tagfunc
-    if #tags > 0 then
-      require('config.ctags').jump()
-      return
+    -- Try ctags first for C/C++ (covers unity builds and project-local symbols)
+    if c_filetypes[vim.bo.filetype] then
+      local word = vim.fn.expand('<cword>')
+      local saved_tagfunc = vim.bo.tagfunc
+      vim.bo.tagfunc = ''
+      local tags = vim.fn.taglist('^' .. word .. '$')
+      vim.bo.tagfunc = saved_tagfunc
+      if #tags > 0 then
+        require('config.ctags').jump()
+        return
+      end
     end
     -- No ctags match — try LSP
     vim.lsp.buf.definition()
@@ -107,19 +111,23 @@ local function set_keymaps(bufnr)
       end
     end
 
-    -- Try ctags first (synchronous)
-    local saved_tagfunc = vim.bo.tagfunc
-    vim.bo.tagfunc = ''
-    local tags = vim.fn.taglist('^' .. word .. '$')
-    vim.bo.tagfunc = saved_tagfunc
-
-    if #tags > 0 then
-      vim.api.nvim_set_current_win(target_win)
+    -- Try ctags first for C/C++ (synchronous)
+    if c_filetypes[vim.bo.filetype] then
+      local saved_tagfunc = vim.bo.tagfunc
       vim.bo.tagfunc = ''
-      pcall(vim.cmd, 'tag ' .. vim.fn.fnameescape(word))
+      local tags = vim.fn.taglist('^' .. word .. '$')
       vim.bo.tagfunc = saved_tagfunc
-      vim.api.nvim_set_current_win(cur_win)
-    else
+
+      if #tags > 0 then
+        vim.api.nvim_set_current_win(target_win)
+        vim.bo.tagfunc = ''
+        pcall(vim.cmd, 'tag ' .. vim.fn.fnameescape(word))
+        vim.bo.tagfunc = saved_tagfunc
+        vim.api.nvim_set_current_win(cur_win)
+        return
+      end
+    end
+    do
       -- LSP (async) — use on_list to control where the result opens
       vim.lsp.buf.definition({
         on_list = function(options)
