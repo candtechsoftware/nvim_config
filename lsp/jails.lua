@@ -56,9 +56,11 @@ local jai_path = vim.fn.expand('~/gits/jai')
 if vim.fn.isdirectory(jai_path) == 1 then
   table.insert(cmd, '-jai_path')
   table.insert(cmd, jai_path)
-  -- macOS uses jai-macos, not jai
+  -- Platform-specific jai binary name
+  local sysname = vim.uv.os_uname().sysname:lower()
+  local exe_name = sysname == 'darwin' and 'jai-macos' or 'jai-linux'
   table.insert(cmd, '-jai_exe_name')
-  table.insert(cmd, 'jai-macos')
+  table.insert(cmd, exe_name)
 end
 
 return {

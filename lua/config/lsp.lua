@@ -400,19 +400,19 @@ function M.setup()
       -- Set tagfunc for CTRL-] navigation
       vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
 
-      -- Debounced signature help and completion triggers
+      -- Auto-trigger completion
       if client:supports_method('textDocument/completion') then
-        -- Ensure completion auto-trigger is set up (may already exist from ctags)
         require('config.ctags').setup_completion(bufnr)
+      end
 
-        -- Debounced signature help trigger
+      -- Debounced signature help trigger (independent of completion)
+      if client:supports_method('textDocument/signatureHelp') then
         local sig_help_timer = vim.uv.new_timer()
         vim.api.nvim_create_autocmd('TextChangedI', {
           buffer = bufnr,
           callback = function()
             sig_help_timer:stop()
             sig_help_timer:start(150, 0, vim.schedule_wrap(function()
-              -- Check we're still in the same buffer
               if vim.api.nvim_get_current_buf() ~= bufnr then return end
               if not vim.api.nvim_buf_is_valid(bufnr) then return end
               if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then

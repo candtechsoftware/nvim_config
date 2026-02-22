@@ -354,14 +354,17 @@ local function trigger_lsp_completion(bufnr, startcol, base)
     local items = {}
     for _, item in ipairs(lsp_items) do
       local word = item.textEdit and item.textEdit.newText or item.insertText or item.label
-      -- Skip snippet-style entries with placeholders
-      if word and not word:match('%$') then
-        table.insert(items, {
-          word = word,
-          abbr = item.label,
-          menu = '[LSP]',
-          info = item.documentation and (type(item.documentation) == 'string' and item.documentation or item.documentation.value) or '',
-        })
+      if word then
+        -- Strip snippet placeholders ($0, $1, ${1:foo}) → use plain text
+        word = word:gsub('%$%{%d+:[^}]*%}', ''):gsub('%$%d+', ''):gsub('%(%)$', '')
+        if word ~= '' then
+          table.insert(items, {
+            word = word,
+            abbr = item.label,
+            menu = '[LSP]',
+            info = item.documentation and (type(item.documentation) == 'string' and item.documentation or item.documentation.value) or '',
+          })
+        end
       end
     end
 
