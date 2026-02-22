@@ -88,8 +88,50 @@ local function set_keymaps(bufnr)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
   vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
   vim.keymap.set('n', 'gv', function()
-    vim.cmd('vsplit')
-    vim.lsp.buf.definition()
+    local cur_win = vim.api.nvim_get_current_win()
+    local word = vim.fn.expand('<cword>')
+
+    -- Find or create the target split window
+    local target_win
+    local wins = vim.api.nvim_tabpage_list_wins(0)
+    if #wins < 2 then
+      vim.cmd('vsplit')
+      target_win = vim.api.nvim_get_current_win()
+      vim.api.nvim_set_current_win(cur_win)
+    else
+      for _, w in ipairs(wins) do
+        if w ~= cur_win then
+          target_win = w
+          break
+        end
+      end
+    end
+
+    -- Try ctags first (synchronous)
+    local saved_tagfunc = vim.bo.tagfunc
+    vim.bo.tagfunc = ''
+    local tags = vim.fn.taglist('^' .. word .. '$')
+    vim.bo.tagfunc = saved_tagfunc
+
+    if #tags > 0 then
+      vim.api.nvim_set_current_win(target_win)
+      vim.bo.tagfunc = ''
+      pcall(vim.cmd, 'tag ' .. vim.fn.fnameescape(word))
+      vim.bo.tagfunc = saved_tagfunc
+      vim.api.nvim_set_current_win(cur_win)
+    else
+      -- LSP (async) — use on_list to control where the result opens
+      vim.lsp.buf.definition({
+        on_list = function(options)
+          if not options.items or #options.items == 0 then return end
+          local item = options.items[1]
+          vim.api.nvim_set_current_win(target_win)
+          vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
+          vim.api.nvim_win_set_cursor(target_win, { item.lnum, item.col - 1 })
+          vim.api.nvim_set_current_win(cur_win)
+        end
+      })
+    end
   end, opts)
 
   -- Workspace
