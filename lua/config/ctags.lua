@@ -187,12 +187,14 @@ local function trigger_keyword_completion(bufnr, startcol, base)
   local items = {}
   local seen = {}
 
-  -- Buffer words
-  local buf_matches = vim.fn.getcompletion(base, 'buffer') or {}
-  for _, word in ipairs(buf_matches) do
-    if not seen[word] then
-      seen[word] = true
-      table.insert(items, { word = word, menu = '[Buf]' })
+  -- Scan current buffer for matching words
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  for _, line in ipairs(lines) do
+    for word in line:gmatch('[%w_]+') do
+      if #word >= 2 and word:sub(1, #base) == base and not seen[word] then
+        seen[word] = true
+        table.insert(items, { word = word, menu = '[Buf]' })
+      end
     end
   end
 
@@ -476,19 +478,24 @@ function M.setup()
     end,
   })
 
-  -- On BufWritePost: incremental tag update for saved file only
+  -- On BufWritePost: debounced incremental tag update for saved file only
+  local save_timer = vim.uv.new_timer()
+
   vim.api.nvim_create_autocmd('BufWritePost', {
     group = group,
     pattern = { '*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.cxx', '*.m', '*.mm' },
     callback = function()
-      local root = get_project_root()
-      if not root then return end
-      local tp = tags_path(root)
-      if vim.fn.filereadable(tp) == 0 then
-        generate_tags(root, tp)
-      else
-        update_tags_for_file(root, tp, vim.api.nvim_buf_get_name(0))
-      end
+      save_timer:stop()
+      save_timer:start(500, 0, vim.schedule_wrap(function()
+        local root = get_project_root()
+        if not root then return end
+        local tp = tags_path(root)
+        if vim.fn.filereadable(tp) == 0 then
+          generate_tags(root, tp)
+        else
+          update_tags_for_file(root, tp, vim.api.nvim_buf_get_name(0))
+        end
+      end))
     end,
   })
 
