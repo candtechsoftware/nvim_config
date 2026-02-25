@@ -20,35 +20,24 @@ vim.keymap.set('v', '<leader>pc', '"+p', { noremap = true, silent = true })
 
 -- Format the file - use jai-format for .jai files, LSP for others
 vim.keymap.set("n", "<leader>f", function()
-    if vim.bo.filetype == "jai" then
-        -- Save cursor position and view
+    if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
         local view = vim.fn.winsaveview()
-        
-        -- Write buffer to temp file in /tmp (away from any .jai-format configs)
         local tmpfile = "/tmp/jai-format-buffer.jai"
         local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
         vim.fn.writefile(lines, tmpfile)
-        
-        -- Run jai-format from /tmp to use default config
-        local result = vim.fn.system("cd /tmp && jai-format -to_stdout " .. tmpfile .. " 2>/dev/null")
+        local result = vim.fn.system("cd /tmp && jai-format -to_stdout -silent " .. tmpfile .. " 2>/dev/null")
         local exit_code = vim.v.shell_error
-        
-        -- Clean up temp file
         vim.fn.delete(tmpfile)
-        
         if exit_code == 0 and result ~= "" then
-            -- Split result into lines and set buffer content
             local new_lines = vim.split(result, "\n", { plain = true })
-            -- Remove trailing empty line if present (jai-format adds one)
             if new_lines[#new_lines] == "" then
                 table.remove(new_lines)
             end
             vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
-            -- Restore view
-            vim.fn.winrestview(view)
         else
             vim.notify("jai-format failed: " .. result, vim.log.levels.ERROR)
         end
+        vim.fn.winrestview(view)
     else
         vim.lsp.buf.format()
     end

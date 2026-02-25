@@ -355,14 +355,25 @@ local function trigger_lsp_completion(bufnr, startcol, base)
     for _, item in ipairs(lsp_items) do
       local word = item.textEdit and item.textEdit.newText or item.insertText or item.label
       if word then
+        word = tostring(word)
         -- Strip snippet placeholders ($0, $1, ${1:foo}) → use plain text
         word = word:gsub('%$%{%d+:[^}]*%}', ''):gsub('%$%d+', ''):gsub('%(%)$', '')
         if word ~= '' then
+          local info = ''
+          if item.documentation then
+            if type(item.documentation) == 'string' then
+              info = item.documentation
+            elseif type(item.documentation) == 'table' and item.documentation.value then
+              info = tostring(item.documentation.value)
+            else
+              info = tostring(item.documentation)
+            end
+          end
           table.insert(items, {
             word = word,
-            abbr = item.label,
+            abbr = tostring(item.label),
             menu = '[LSP]',
-            info = item.documentation and (type(item.documentation) == 'string' and item.documentation or item.documentation.value) or '',
+            info = info,
           })
         end
       end

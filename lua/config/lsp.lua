@@ -177,9 +177,29 @@ local function set_keymaps(bufnr)
     vim.lsp.buf.signature_help({ focusable = false, focus = false })
   end, opts)
 
-  -- Formatting (manual)
+  -- Formatting (manual) - use jai-format for Jai, LSP for others
   vim.keymap.set('n', '<leader>f', function()
-    vim.lsp.buf.format({ async = false })
+    if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
+      local view = vim.fn.winsaveview()
+      local tmpfile = "/tmp/jai-format-buffer.jai"
+      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+      vim.fn.writefile(lines, tmpfile)
+      local result = vim.fn.system("cd /tmp && jai-format -to_stdout -silent " .. tmpfile .. " 2>/dev/null")
+      local exit_code = vim.v.shell_error
+      vim.fn.delete(tmpfile)
+      if exit_code == 0 and result ~= "" then
+        local new_lines = vim.split(result, "\n", { plain = true })
+        if new_lines[#new_lines] == "" then
+          table.remove(new_lines)
+        end
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
+      else
+        vim.notify("jai-format failed: " .. result, vim.log.levels.ERROR)
+      end
+      vim.fn.winrestview(view)
+    else
+      vim.lsp.buf.format({ async = false })
+    end
   end, opts)
 
   -- Diagnostics to quickfix/loclist
