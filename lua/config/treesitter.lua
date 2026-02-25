@@ -35,13 +35,6 @@ function M.setup()
     })
 
     vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-        pattern = "*.jai",
-        callback = function()
-            vim.bo.filetype = "jai"
-        end,
-    })
-
-    vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
         pattern = "*.zig",
         callback = function()
             vim.bo.filetype = "zig"
