@@ -619,14 +619,12 @@ local function setup_completion_trigger(bufnr)
           return
         end
 
-        -- 2+ identifier chars: keyword completion (LSP for Jai)
+        -- 2+ identifier chars: keyword completion
         if col >= 2 and before:match('[%w_][%w_]$') then
           local base = before:match('([%w_]+)$') or ''
           local startcol = col - #base + 1
           local prefix = before:sub(1, startcol - 1)
           if prefix:match('%.$') or prefix:match('->$') then
-            trigger_lsp_completion(bufnr, startcol, base)
-          elseif vim.bo[bufnr].filetype == 'jai' then
             trigger_lsp_completion(bufnr, startcol, base)
           else
             trigger_keyword_completion(bufnr, startcol, base)
@@ -737,7 +735,71 @@ function M.setup()
   end, { desc = 'Generate/regenerate system library ctags' })
 end
 
+--- LSP-only auto-trigger (for non-C/C++ languages like Jai).
+--- Same TextChangedI debounce pattern as setup_completion_trigger but uses
+--- LSP completion for plain identifier typing instead of keyword/ctags.
+local function setup_lsp_completion_trigger(bufnr)
+  if vim.b[bufnr]._lsp_comp_trigger then return end
+  vim.b[bufnr]._lsp_comp_trigger = true
+
+  local comp_timer = vim.uv.new_timer()
+  vim.api.nvim_create_autocmd('TextChangedI', {
+    buffer = bufnr,
+    callback = function()
+      comp_timer:stop()
+      comp_timer:start(100, 0, vim.schedule_wrap(function()
+        if vim.api.nvim_get_current_buf() ~= bufnr then return end
+        if not vim.api.nvim_buf_is_valid(bufnr) then return end
+        if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
+          return
+        end
+
+        local col = vim.api.nvim_win_get_cursor(0)[2]
+        if col < 1 then return end
+
+        local line = vim.api.nvim_get_current_line()
+        local before = line:sub(1, col)
+
+        -- Dot access: trigger LSP immediately
+        if before:match('%.$') then
+          trigger_lsp_completion(bufnr, col + 1, '')
+          return
+        end
+
+        -- Typing after dot: LSP with partial base
+        if before:match('%.[%w_]$') then
+          local base = before:match('([%w_]+)$') or ''
+          local startcol = col - #base + 1
+          trigger_lsp_completion(bufnr, startcol, base)
+          return
+        end
+
+        -- 2+ identifier chars: LSP completion (not just keyword/ctags)
+        if col >= 2 and before:match('[%w_][%w_]$') then
+          local base = before:match('([%w_]+)$') or ''
+          local startcol = col - #base + 1
+          local prefix = before:sub(1, startcol - 1)
+          if prefix:match('%.$') then
+            trigger_lsp_completion(bufnr, startcol, base)
+          else
+            trigger_lsp_completion(bufnr, startcol, base)
+          end
+        end
+      end))
+    end,
+  })
+
+  -- Clear source indicator when completion finishes
+  vim.api.nvim_create_autocmd('CompleteDonePre', {
+    buffer = bufnr,
+    callback = function()
+      active_source = ''
+    end,
+  })
+end
+
 M.setup_completion = setup_completion_trigger
+M.setup_lsp_completion = setup_lsp_completion_trigger
 
 --- Open a Telescope picker with all project tags (workspace symbols via ctags).
 function M.workspace_symbols()

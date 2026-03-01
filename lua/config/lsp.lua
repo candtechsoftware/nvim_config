@@ -428,9 +428,14 @@ function M.setup()
       -- Set tagfunc for CTRL-] navigation
       vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
 
-      -- Auto-trigger completion
+      -- Auto-trigger completion (C/C++ uses ctags-based, others use native LSP completion)
+      local ft = vim.bo[bufnr].filetype
       if client:supports_method('textDocument/completion') then
-        require('config.ctags').setup_completion(bufnr)
+        if ft == 'c' or ft == 'cpp' or ft == 'objc' or ft == 'objcpp' then
+          require('config.ctags').setup_completion(bufnr)
+        elseif ft == 'jai' then
+          require('config.ctags').setup_lsp_completion(bufnr)
+        end
       end
 
       -- Debounced signature help trigger (independent of completion)
