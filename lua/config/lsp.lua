@@ -8,7 +8,7 @@ local servers = {
   'clangd',
   'lua_ls',
   'gopls',
-  'ts_ls',
+  'tsgo',
   'rust_analyzer',
   'zls',
   'ols',
@@ -433,7 +433,7 @@ function M.setup()
       if client:supports_method('textDocument/completion') then
         if ft == 'c' or ft == 'cpp' or ft == 'objc' or ft == 'objcpp' then
           require('config.ctags').setup_completion(bufnr)
-        elseif ft == 'jai' then
+        else
           require('config.ctags').setup_lsp_completion(bufnr)
         end
       end

@@ -56,7 +56,7 @@ require("divider_comments").setup()
 require("render-markdown").setup()
 
 -- Load color scheme
-vim.cmd.colorscheme("hh")
+vim.cmd.colorscheme("cc")
 
 -- Comment tag highlights: NOTE(alex), TODO(alex), PERF(alex), etc.
 -- Applied after colorscheme so they work with all themes
