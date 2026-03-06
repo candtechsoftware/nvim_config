@@ -314,6 +314,21 @@ function M.jump()
     return
   end
 
+  -- Filter out system tags if any project tags exist
+  local root = get_project_root()
+  if root then
+    local project_tags = {}
+    for _, tag in ipairs(tags) do
+      local abs = vim.fn.fnamemodify(tag.filename, ':p')
+      if abs:sub(1, #root) == root then
+        table.insert(project_tags, tag)
+      end
+    end
+    if #project_tags > 0 then
+      tags = project_tags
+    end
+  end
+
   -- Single match: jump directly
   if #tags == 1 then
     vim.bo.tagfunc = ''
@@ -528,7 +543,9 @@ local function trigger_lsp_completion(bufnr, startcol, base)
     return
   end
 
-  local params = vim.lsp.util.make_position_params()
+  local client = vim.lsp.get_clients({ bufnr = bufnr })[1]
+  local encoding = client and client.offset_encoding or 'utf-16'
+  local params = vim.lsp.util.make_position_params(0, encoding)
   vim.lsp.buf_request(bufnr, 'textDocument/completion', params, function(err, result)
     if err or not result then
       trigger_member_completion(bufnr, startcol, base)
@@ -892,5 +909,7 @@ function M.workspace_symbols()
     end,
   }):find()
 end
+
+M.get_project_root = get_project_root
 
 return M

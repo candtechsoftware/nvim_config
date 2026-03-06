@@ -81,9 +81,16 @@ local function set_keymaps(bufnr)
       vim.bo.tagfunc = ''
       local tags = vim.fn.taglist('^' .. word .. '$')
       vim.bo.tagfunc = saved_tagfunc
-      if #tags > 0 then
-        require('config.ctags').jump()
-        return
+      -- Only use ctags if at least one match is from the project
+      local root = require('config.ctags').get_project_root()
+      if root then
+        for _, tag in ipairs(tags) do
+          local abs = vim.fn.fnamemodify(tag.filename, ':p')
+          if abs:sub(1, #root) == root then
+            require('config.ctags').jump()
+            return
+          end
+        end
       end
     end
     -- No ctags match — try LSP
