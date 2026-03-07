@@ -62,11 +62,11 @@ vim.cmd.colorscheme("cc")
 -- Applied after colorscheme so they work with all themes
 local function setup_comment_tags()
     local set = vim.api.nvim_set_hl
-    set(0, "CommentTagNote",  { fg = "#2ab34f", bold = true })
-    set(0, "CommentTagTodo",  { fg = "#ffa900", bold = true })
-    set(0, "CommentTagPerf",  { fg = "#2895c7", bold = true })
-    set(0, "CommentTagFixme", { fg = "#ff0000", bold = true })
-    set(0, "CommentTagHack",  { fg = "#FF44DD", bold = true })
+    set(0, "CommentTagNote",  { fg = "#2ab34f" })
+    set(0, "CommentTagTodo",  { fg = "#ffa900" })
+    set(0, "CommentTagPerf",  { fg = "#2895c7" })
+    set(0, "CommentTagFixme", { fg = "#ff0000" })
+    set(0, "CommentTagHack",  { fg = "#FF44DD" })
 end
 
 setup_comment_tags()
