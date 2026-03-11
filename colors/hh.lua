@@ -889,11 +889,11 @@ local function setup_yg_keywords()
   add_match("YgKeyword", "\\<yg_global\\>")
   add_match("YgKeyword", "\\<yg_local_persist\\>")
 
-  -- Ark macros (teal, same as yg)
-  add_match("YgKeyword", "\\<ark_internal\\>")
-  add_match("YgKeyword", "\\<ark_inline\\>")
-  add_match("YgKeyword", "\\<ark_global\\>")
-  add_match("YgKeyword", "\\<ark_local_persist\\>")
+  -- Arc macros (teal, same as yg)
+  add_match("YgKeyword", "\\<arc_internal\\>")
+  add_match("YgKeyword", "\\<arc_inline\\>")
+  add_match("YgKeyword", "\\<arc_global\\>")
+  add_match("YgKeyword", "\\<arc_local_persist\\>")
 
   -- Yggdrasil base types (gold)
   add_match("YgType", "\\<[usb]\\(8\\|16\\|32\\|64\\)\\>")  -- u8, s16, b32, etc.
@@ -918,13 +918,13 @@ local function setup_yg_keywords()
   -- Return type after yg_internal/yg_inline (gold, like static would show the return type)
   add_match("YgType", "\\<yg_internal\\s\\+\\zs\\w\\+\\ze")
   add_match("YgType", "\\<yg_inline\\s\\+\\zs\\w\\+\\ze")
-  add_match("YgType", "\\<ark_internal\\s\\+\\zs\\w\\+\\ze")
-  add_match("YgType", "\\<ark_inline\\s\\+\\zs\\w\\+\\ze")
+  add_match("YgType", "\\<arc_internal\\s\\+\\zs\\w\\+\\ze")
+  add_match("YgType", "\\<arc_inline\\s\\+\\zs\\w\\+\\ze")
 
   -- Function declarations after ark_*/yg_* macros (rust-red)
   -- Pattern: PREFIX TYPE FUNCNAME( or PREFIX TYPE *FUNCNAME(
-  add_match("Function", "\\<\\(ark\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
-  add_match("Function", "\\<\\(ark\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
+  add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
+  add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
 end
 
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
