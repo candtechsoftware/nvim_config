@@ -486,11 +486,13 @@ local function trigger_member_completion(bufnr, startcol, base)
   -- No type inferred and no base typed = can't provide useful results
   if not inferred_type and base == '' then return end
 
-  -- Slow path: taglist fallback
+  -- Slow path: taglist fallback (only when we have a base to narrow results)
+  -- taglist('.') matches every tag and is catastrophically slow with large tag files
+  if base == '' then return end
+
   local saved = vim.bo[bufnr].tagfunc
   vim.bo[bufnr].tagfunc = ''
-  local pattern = base ~= '' and ('^' .. base) or '.'
-  local all_tags = vim.fn.taglist(pattern)
+  local all_tags = vim.fn.taglist('^' .. base)
   vim.bo[bufnr].tagfunc = saved
 
   local items = {}
@@ -622,17 +624,18 @@ local function setup_completion_trigger(bufnr)
         local line = vim.api.nvim_get_current_line()
         local before = line:sub(1, col)
 
-        -- Member access: . or -> triggers LSP completion
+        -- Member access: . or -> triggers ctags member completion directly
+        -- (skips LSP — clangd doesn't work well with unity builds)
         if before:match('%.$') or before:match('->$') then
-          trigger_lsp_completion(bufnr, col + 1, '')
+          trigger_member_completion(bufnr, col + 1, '')
           return
         end
 
-        -- Typing member name after . or -> : LSP with member-tag fallback
+        -- Typing member name after . or ->
         if before:match('%.[%w_]$') or before:match('%->[%w_]$') then
           local base = before:match('([%w_]+)$') or ''
           local startcol = col - #base + 1
-          trigger_lsp_completion(bufnr, startcol, base)
+          trigger_member_completion(bufnr, startcol, base)
           return
         end
 
@@ -642,7 +645,7 @@ local function setup_completion_trigger(bufnr)
           local startcol = col - #base + 1
           local prefix = before:sub(1, startcol - 1)
           if prefix:match('%.$') or prefix:match('->$') then
-            trigger_lsp_completion(bufnr, startcol, base)
+            trigger_member_completion(bufnr, startcol, base)
           else
             trigger_keyword_completion(bufnr, startcol, base)
           end
