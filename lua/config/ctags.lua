@@ -560,32 +560,41 @@ local function trigger_lsp_completion(bufnr, startcol, base)
       return
     end
 
+    -- Safely extract a string value, skipping Blobs and other non-string types.
+    -- Also strip null bytes which can cause E976 (Blob as String) when passed
+    -- back to Vim via vim.fn.complete().
+    local function safe_str(v)
+      if type(v) ~= 'string' then return nil end
+      return v:gsub('%z', '')
+    end
+
     local items = {}
     for _, item in ipairs(lsp_items) do
-      local word = item.textEdit and item.textEdit.newText or item.insertText or item.label
-      if word then
-        word = tostring(word)
-        -- Strip snippet placeholders ($0, $1, ${1:foo}) → use plain text
-        word = word:gsub('%$%{%d+:[^}]*%}', ''):gsub('%$%d+', ''):gsub('%(%)$', '')
-        if word ~= '' then
-          local info = ''
-          if item.documentation then
-            if type(item.documentation) == 'string' then
-              info = item.documentation
-            elseif type(item.documentation) == 'table' and item.documentation.value then
-              info = tostring(item.documentation.value)
-            else
-              info = tostring(item.documentation)
-            end
-          end
-          table.insert(items, {
-            word = word,
-            abbr = tostring(item.label),
-            menu = '[LSP]',
-            info = info,
-          })
-        end
+      local raw
+      if type(item.textEdit) == 'table' then
+        raw = item.textEdit.newText
       end
+      if not raw then raw = item.insertText end
+      if not raw then raw = item.label end
+      local word = safe_str(raw)
+      if not word then goto next_item end
+      -- Strip snippet placeholders ($0, $1, ${1:foo}) → use plain text
+      word = word:gsub('%$%{%d+:[^}]*%}', ''):gsub('%$%d+', ''):gsub('%(%)$', '')
+      if word ~= '' then
+        local info = ''
+        if type(item.documentation) == 'string' then
+          info = safe_str(item.documentation) or ''
+        elseif type(item.documentation) == 'table' and type(item.documentation.value) == 'string' then
+          info = safe_str(item.documentation.value) or ''
+        end
+        table.insert(items, {
+          word = word,
+          abbr = safe_str(item.label) or word,
+          menu = '[LSP]',
+          info = info,
+        })
+      end
+      ::next_item::
     end
 
     if #items == 0 then
@@ -597,7 +606,12 @@ local function trigger_lsp_completion(bufnr, startcol, base)
       if vim.api.nvim_get_current_buf() ~= bufnr then return end
       if vim.fn.pumvisible() == 1 then return end
       active_source = '[LSP]'
-      vim.fn.complete(startcol, items)
+      local ok, err = pcall(vim.fn.complete, startcol, items)
+      if not ok then
+        vim.schedule(function()
+          vim.notify('completion error: ' .. tostring(err), vim.log.levels.DEBUG)
+        end)
+      end
     end)
   end)
 end
