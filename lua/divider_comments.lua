@@ -162,7 +162,7 @@ function M.setup()
   })
 
   -- Debounced render for text changes (avoids race with treesitter)
-  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+  vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave" }, {
     group = group,
     callback = function()
       render_debounced()

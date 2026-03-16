@@ -20,3 +20,6 @@
 [submodule "pack/plugins/start/render-markdown.nvim"]
 	path = pack/plugins/start/render-markdown.nvim
 	url = https://github.com/MeanderingProgrammer/render-markdown.nvim.git
+[submodule "pack/plugins/start/blink.cmp"]
+	path = pack/plugins/start/blink.cmp
+	url = https://github.com/Saghen/blink.cmp.git

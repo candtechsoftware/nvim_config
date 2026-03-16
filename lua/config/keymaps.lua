@@ -18,31 +18,6 @@ vim.keymap.set({"n", "v"}, "<leader>d", "\"_d") -- Delete without yanking
 vim.keymap.set('n', '<leader>pc', '"+p', { noremap = true, silent = true })
 vim.keymap.set('v', '<leader>pc', '"+p', { noremap = true, silent = true })
 
--- Format the file - use jai-format for .jai files, LSP for others
-vim.keymap.set("n", "<leader>f", function()
-    if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
-        local view = vim.fn.winsaveview()
-        local tmpfile = "/tmp/jai-format-buffer.jai"
-        local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-        vim.fn.writefile(lines, tmpfile)
-        local result = vim.fn.system("cd /tmp && jai-format -to_stdout -silent " .. tmpfile .. " 2>/dev/null")
-        local exit_code = vim.v.shell_error
-        vim.fn.delete(tmpfile)
-        if exit_code == 0 and result ~= "" then
-            local new_lines = vim.split(result, "\n", { plain = true })
-            if new_lines[#new_lines] == "" then
-                table.remove(new_lines)
-            end
-            vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
-        else
-            vim.notify("jai-format failed: " .. result, vim.log.levels.ERROR)
-        end
-        vim.fn.winrestview(view)
-    else
-        vim.lsp.buf.format()
-    end
-end)
-
 -- Quickfix navigation
 vim.keymap.set("n", "<C-k>", "<cmd>cnext<CR>zz") -- Move to the next quickfix item
 vim.keymap.set("n", "<C-j>", "<cmd>cprev<CR>zz") -- Move to the previous quickfix item
@@ -63,30 +38,6 @@ vim.keymap.set("n", "<leader><leader>", function()
     vim.cmd("so")
 end) -- Source the file
 
-
-vim.keymap.set("i", "<Tab>", function()
-    if vim.fn.pumvisible() == 1 then
-        return "<C-n>"
-    else
-        return "<Tab>"
-    end
-end, { expr = true, desc = "Navigate completion menu" })
-
-vim.keymap.set("i", "<S-Tab>", function()
-    if vim.fn.pumvisible() == 1 then
-        return "<C-p>"
-    else
-        return "<S-Tab>"
-    end
-end, { expr = true, desc = "Navigate completion menu backwards" })
-
-vim.keymap.set("i", "<CR>", function()
-    if vim.fn.pumvisible() == 1 then
-        return "<C-y>"
-    else
-        return "<CR>"
-    end
-end, { expr = true, desc = "Accept completion or new line" })
 
 -- Notes keybindings
 vim.keymap.set("n", "<leader>ns", function()

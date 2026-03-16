@@ -179,11 +179,6 @@ local function set_keymaps(bufnr)
   vim.keymap.set('n', '<leader>vrn', vim.lsp.buf.rename, opts)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
-  -- Signature help in insert mode (manual trigger)
-  vim.keymap.set('i', '<C-h>', function()
-    vim.lsp.buf.signature_help({ focusable = false, focus = false })
-  end, opts)
-
   -- Formatting (manual) - use jai-format for Jai, LSP for others
   vim.keymap.set('n', '<leader>f', function()
     if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
@@ -254,7 +249,7 @@ local function setup_diagnostics()
   })
 end
 
----Configure LSP handlers (hover, signature help)
+---Configure LSP handlers (hover)
 local function setup_handlers()
   -- Hover handler - configure appearance
   vim.lsp.handlers['textDocument/hover'] = function(err, result, ctx, config)
@@ -264,135 +259,6 @@ local function setup_handlers()
     config.max_width = 80
     config.max_height = 20
     return vim.lsp.handlers.hover(err, result, ctx, config)
-  end
-
-  -- Signature help handler - prevent focus stealing + fix activeParameter
-  vim.lsp.handlers['textDocument/signatureHelp'] = function(err, result, ctx, config)
-    if not result or not result.signatures or #result.signatures == 0 then
-      -- Close any existing signature help window
-      local wins = vim.api.nvim_list_wins()
-      for _, win in ipairs(wins) do
-        if vim.api.nvim_win_is_valid(win) then
-          local buf = vim.api.nvim_win_get_buf(win)
-          local ft = vim.bo[buf].filetype
-          if ft == 'markdown' and vim.api.nvim_win_get_config(win).relative ~= '' then
-            pcall(vim.api.nvim_win_close, win, true)
-          end
-        end
-      end
-      return
-    end
-
-    -- Fix activeParameter - count commas at current nesting level
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    local before_cursor = line:sub(1, col)
-
-    -- Find the matching opening paren for our current context
-    local paren_depth = 0
-    local bracket_depth = 0
-    local brace_depth = 0
-    local in_string = false
-    local string_char = nil
-    local paren_pos = nil
-
-    -- Scan backwards to find the opening paren at depth 0
-    for i = #before_cursor, 1, -1 do
-      local c = before_cursor:sub(i, i)
-      local prev = i > 1 and before_cursor:sub(i - 1, i - 1) or ''
-
-      -- Handle string detection (simple - doesn't handle all escape sequences)
-      if (c == '"' or c == "'") and prev ~= '\\' then
-        if in_string and c == string_char then
-          in_string = false
-          string_char = nil
-        elseif not in_string then
-          in_string = true
-          string_char = c
-        end
-      elseif not in_string then
-        if c == ')' then paren_depth = paren_depth + 1
-        elseif c == '(' then
-          if paren_depth == 0 then
-            paren_pos = i
-            break
-          end
-          paren_depth = paren_depth - 1
-        elseif c == ']' then bracket_depth = bracket_depth + 1
-        elseif c == '[' then bracket_depth = bracket_depth - 1
-        elseif c == '}' then brace_depth = brace_depth + 1
-        elseif c == '{' then brace_depth = brace_depth - 1
-        end
-      end
-    end
-
-    if paren_pos then
-      -- Count commas at depth 0 after the opening paren
-      local inside = before_cursor:sub(paren_pos + 1)
-      local comma_count = 0
-      paren_depth = 0
-      bracket_depth = 0
-      brace_depth = 0
-      in_string = false
-      string_char = nil
-
-      for i = 1, #inside do
-        local c = inside:sub(i, i)
-        local prev = i > 1 and inside:sub(i - 1, i - 1) or ''
-
-        if (c == '"' or c == "'") and prev ~= '\\' then
-          if in_string and c == string_char then
-            in_string = false
-            string_char = nil
-          elseif not in_string then
-            in_string = true
-            string_char = c
-          end
-        elseif not in_string then
-          if c == '(' then paren_depth = paren_depth + 1
-          elseif c == ')' then paren_depth = paren_depth - 1
-          elseif c == '[' then bracket_depth = bracket_depth + 1
-          elseif c == ']' then bracket_depth = bracket_depth - 1
-          elseif c == '{' then brace_depth = brace_depth + 1
-          elseif c == '}' then brace_depth = brace_depth - 1
-          elseif c == ',' and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 then
-            comma_count = comma_count + 1
-          end
-        end
-      end
-
-      result.activeParameter = comma_count
-      if result.signatures[1] then
-        result.signatures[1].activeParameter = comma_count
-      end
-    end
-
-    -- Create floating window manually to ensure no focus stealing
-    local lines = vim.lsp.util.convert_signature_help_to_markdown_lines(result, vim.bo[ctx.bufnr].filetype, {})
-    if not lines or #lines == 0 then
-      return
-    end
-
-    -- Store current window before creating float
-    local current_win = vim.api.nvim_get_current_win()
-
-    local fbuf, fwin = vim.lsp.util.open_floating_preview(lines, 'markdown', {
-      border = 'rounded',
-      max_width = 80,
-      max_height = 15,
-      focus_id = 'signature_help',
-      focusable = false,
-      focus = false,
-    })
-
-    -- Force window to never be focusable and restore focus
-    if fwin and vim.api.nvim_win_is_valid(fwin) then
-      vim.api.nvim_win_set_config(fwin, { focusable = false })
-      -- Force focus back to original window
-      vim.api.nvim_set_current_win(current_win)
-    end
-
-    return fbuf, fwin
   end
 end
 
@@ -435,47 +301,6 @@ function M.setup()
       -- Set tagfunc for CTRL-] navigation
       vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
 
-      -- Auto-trigger completion (C/C++ uses ctags-based, others use native LSP completion)
-      local ft = vim.bo[bufnr].filetype
-      if client:supports_method('textDocument/completion') then
-        if ft == 'c' or ft == 'cpp' or ft == 'objc' or ft == 'objcpp' then
-          require('config.ctags').setup_completion(bufnr)
-        else
-          require('config.ctags').setup_lsp_completion(bufnr)
-        end
-      end
-
-      -- Debounced signature help trigger (independent of completion)
-      if client:supports_method('textDocument/signatureHelp') then
-        local sig_help_timer = vim.uv.new_timer()
-        vim.api.nvim_create_autocmd('TextChangedI', {
-          buffer = bufnr,
-          callback = function()
-            sig_help_timer:stop()
-            sig_help_timer:start(150, 0, vim.schedule_wrap(function()
-              if vim.api.nvim_get_current_buf() ~= bufnr then return end
-              if not vim.api.nvim_buf_is_valid(bufnr) then return end
-              if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
-                return
-              end
-
-              local col = vim.api.nvim_win_get_cursor(0)[2]
-              if col < 1 then return end
-
-              local line = vim.api.nvim_get_current_line()
-              local char = line:sub(col, col)
-
-              -- Trigger signature help on ( or ,
-              if char == '(' or char == ',' then
-                vim.lsp.buf.signature_help({ focusable = false, focus = false })
-              -- Re-trigger signature help if we're inside unclosed parens
-              elseif line:sub(1, col):match('%([^)]*$') then
-                vim.lsp.buf.signature_help({ focusable = false, focus = false })
-              end
-            end))
-          end,
-        })
-      end
     end,
   })
 end

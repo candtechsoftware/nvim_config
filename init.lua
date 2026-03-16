@@ -25,6 +25,9 @@ require("config.keymaps")
 require("config.lsp").setup()
 require("config.ctags").setup()
 
+-- Load and setup blink.cmp (completion framework)
+require("config.blink").setup()
+
 -- Load and setup native treesitter
 local treesitter = require("config.treesitter")
 treesitter.setup()
@@ -100,6 +103,13 @@ vim.api.nvim_create_autocmd("VimEnter", {
 
         if vim.fn.isdirectory(fzf_path) == 1 and vim.fn.filereadable(so_file) == 0 then
             vim.fn.system("cd " .. vim.fn.shellescape(fzf_path) .. " && make >/dev/null 2>&1")
+        end
+
+        -- Build blink.cmp Rust fuzzy matcher if needed
+        local blink_path = vim.fn.stdpath("config") .. "/pack/plugins/start/blink.cmp"
+        local blink_lib = blink_path .. "/target/release"
+        if vim.fn.isdirectory(blink_path) == 1 and vim.fn.isdirectory(blink_lib) == 0 then
+            vim.fn.system("cd " .. vim.fn.shellescape(blink_path) .. " && cargo build --release >/dev/null 2>&1")
         end
     end,
 })

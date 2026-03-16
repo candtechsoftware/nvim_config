@@ -51,6 +51,13 @@ end
 local member_cache = {}
 -- Tag name cache: { project_root -> { name -> kind } }
 local tag_name_cache = {}
+-- Reverse index: { project_root -> { filename -> { [name]=true } } }
+local file_entries = {}
+-- Mtime tracking: { filepath -> mtime_sec }
+local cache_mtime = {}
+-- Cache version counters (bumped on cache update, used by blink source)
+local cache_version = 0
+local system_cache_version = 0
 
 -- System tags infrastructure
 local SYSTEM_TAGS_PATH = '/tmp/nvim-ctags/system-tags'
@@ -95,79 +102,209 @@ local function get_system_includes()
   return dirs
 end
 
-local function build_member_cache(root)
-  local tp = tags_path(root)
-  local file = io.open(tp, 'r')
-  if not file then return end
-
-  local by_parent = {}
-  local names = {}
-  for line in file:lines() do
-    if not line:match('^!_') then
-      local name = line:match('^([^\t]+)')
-      if name and not name:match('::') then
-        -- Extract kind from the line
-        local kind = line:match('\tkind:(%w+)') or line:match('\t(%a)\t') or line:match('\t(%a)$')
-        if kind then
-          names[name] = kind
-        end
-        -- Check if it's a member
-        local is_member = kind == 'member' or kind == 'm'
-        if is_member then
-          local parent = line:match('\tstruct:([^\t\n]+)')
-            or line:match('\tunion:([^\t\n]+)')
-            or line:match('\tclass:([^\t\n]+)')
-          if parent then
-            if not by_parent[parent] then by_parent[parent] = {} end
-            table.insert(by_parent[parent], {
-              word = name,
-              menu = '[' .. parent .. ']',
-              info = 'member of ' .. parent,
-            })
-          end
-        end
-      end
-    end
+-- Parse a single ctags line, returns (name, filename, kind, parent) or nil
+local function parse_tag_line(line)
+  if line:byte(1) == 33 then return nil end -- skip !_ metadata lines
+  local name, filename = line:match('^([^\t]+)\t([^\t]+)')
+  if not name or name:find('::', 1, true) then return nil end
+  local kind = line:match('\tkind:(%w+)') or line:match('\t(%a)\t') or line:match('\t(%a)$')
+  if not kind then return nil end
+  local parent = nil
+  if kind == 'member' or kind == 'm' then
+    parent = line:match('\tstruct:([^\t\n]+)')
+      or line:match('\tunion:([^\t\n]+)')
+      or line:match('\tclass:([^\t\n]+)')
   end
-  file:close()
-  member_cache[root] = by_parent
-  tag_name_cache[root] = names
+  return name, filename, kind, parent
 end
 
-local function build_system_member_cache()
-  local file = io.open(SYSTEM_TAGS_PATH, 'r')
-  if not file then return end
+-- Add parsed tag to cache tables
+local function add_to_caches(name, filename, kind, parent, by_parent, names, findex)
+  names[name] = kind
+  if parent then
+    if not by_parent[parent] then by_parent[parent] = {} end
+    table.insert(by_parent[parent], {
+      word = name,
+      menu = '[' .. parent .. ']',
+      info = 'member of ' .. parent,
+    })
+  end
+  if findex then
+    if not findex[filename] then findex[filename] = {} end
+    findex[filename][name] = true
+  end
+end
 
-  local by_parent = {}
-  local names = {}
-  for line in file:lines() do
-    if not line:match('^!_') then
-      local name = line:match('^([^\t]+)')
-      if name and not name:match('::') then
-        local kind = line:match('\tkind:(%w+)') or line:match('\t(%a)\t') or line:match('\t(%a)$')
-        if kind then
-          names[name] = kind
+-- Async chunked cache building using libuv.
+-- Reads file in 64KB chunks, parses tags, yields between chunks so the
+-- editor stays responsive even for the 105MB system tags file.
+-- Calls on_done(by_parent, names, findex) when complete, or on_done(nil) on error.
+local function build_cache_async(filepath, on_done)
+  vim.uv.fs_open(filepath, 'r', 438, function(err, fd)
+    if err or not fd then
+      if on_done then vim.schedule(function() on_done(nil) end) end
+      return
+    end
+    vim.uv.fs_fstat(fd, function(serr, stat)
+      if serr or not stat then
+        vim.uv.fs_close(fd, function() end)
+        if on_done then vim.schedule(function() on_done(nil) end) end
+        return
+      end
+
+      local CHUNK = 65536
+      local by_parent = {}
+      local names = {}
+      local findex = {}
+      local leftover = ''
+      local offset = 0
+      local file_size = stat.size
+
+      local function finish()
+        if #leftover > 0 then
+          local n, fn, k, p = parse_tag_line(leftover)
+          if n then add_to_caches(n, fn, k, p, by_parent, names, findex) end
         end
-        local is_member = kind == 'member' or kind == 'm'
-        if is_member then
-          local parent = line:match('\tstruct:([^\t\n]+)')
-            or line:match('\tunion:([^\t\n]+)')
-            or line:match('\tclass:([^\t\n]+)')
-          if parent then
-            if not by_parent[parent] then by_parent[parent] = {} end
-            table.insert(by_parent[parent], {
-              word = name,
-              menu = '[' .. parent .. ']',
-              info = 'member of ' .. parent,
-            })
-          end
+        vim.uv.fs_close(fd, function() end)
+        if on_done then
+          vim.schedule(function() on_done(by_parent, names, findex) end)
         end
       end
+
+      local function read_chunk()
+        if offset >= file_size then finish(); return end
+        vim.uv.fs_read(fd, CHUNK, offset, function(rerr, data)
+          if rerr or not data or #data == 0 then finish(); return end
+          offset = offset + #data
+          local block = leftover .. data
+          local last_nl = nil
+          for i = #block, 1, -1 do
+            if block:byte(i) == 10 then last_nl = i; break end
+          end
+          if last_nl then
+            local complete = block:sub(1, last_nl - 1)
+            leftover = block:sub(last_nl + 1)
+            for line in complete:gmatch('[^\n]+') do
+              local n, fn, k, p = parse_tag_line(line)
+              if n then add_to_caches(n, fn, k, p, by_parent, names, findex) end
+            end
+          else
+            leftover = block
+          end
+          -- Yield to event loop between chunks so editor stays responsive
+          vim.schedule(read_chunk)
+        end)
+      end
+      read_chunk()
+    end)
+  end)
+end
+
+-- Check if file mtime changed since last cache build
+local function mtime_changed(filepath)
+  local stat = vim.uv.fs_stat(filepath)
+  if not stat then return false end
+  local mtime = stat.mtime.sec
+  if cache_mtime[filepath] and cache_mtime[filepath] == mtime then
+    return false
+  end
+  cache_mtime[filepath] = mtime
+  return true
+end
+
+-- Async project cache build (replaces synchronous build_member_cache)
+local function build_member_cache_async(root, force)
+  local tp = tags_path(root)
+  if not force and not mtime_changed(tp) then return end
+  if force then
+    local stat = vim.uv.fs_stat(tp)
+    if stat then cache_mtime[tp] = stat.mtime.sec end
+  end
+  build_cache_async(tp, function(by_parent, names, findex)
+    if not by_parent then return end
+    member_cache[root] = by_parent
+    tag_name_cache[root] = names
+    file_entries[root] = findex
+    cache_version = cache_version + 1
+  end)
+end
+
+-- Async system cache build (replaces synchronous build_system_member_cache)
+local function build_system_member_cache_async(force)
+  if not force and not mtime_changed(SYSTEM_TAGS_PATH) then return end
+  if force then
+    local stat = vim.uv.fs_stat(SYSTEM_TAGS_PATH)
+    if stat then cache_mtime[SYSTEM_TAGS_PATH] = stat.mtime.sec end
+  end
+  build_cache_async(SYSTEM_TAGS_PATH, function(by_parent, names)
+    if not by_parent then return end
+    system_member_cache = by_parent
+    system_tag_name_cache = names
+    system_cache_version = system_cache_version + 1
+  end)
+end
+
+-- Incremental cache update for a single file (avoids full rebuild on save)
+local function update_cache_for_file(root, filepath)
+  local relpath = filepath
+  if filepath:sub(1, #root) == root then
+    relpath = filepath:sub(#root + 2)
+  end
+
+  -- Remove old entries for this file from caches
+  local fent = file_entries[root]
+  if fent then
+    -- Try both absolute and relative paths (tags file may use either)
+    local old_names = fent[filepath] or fent[relpath]
+    if old_names then
+      local mc = member_cache[root]
+      local tnc = tag_name_cache[root]
+      if tnc then
+        for name in pairs(old_names) do tnc[name] = nil end
+      end
+      if mc then
+        for parent, members in pairs(mc) do
+          for i = #members, 1, -1 do
+            if old_names[members[i].word] then
+              table.remove(members, i)
+            end
+          end
+          if #members == 0 then mc[parent] = nil end
+        end
+      end
+      fent[filepath] = nil
+      fent[relpath] = nil
     end
   end
-  file:close()
-  system_member_cache = by_parent
-  system_tag_name_cache = names
+
+  -- Run ctags on just this file to get new entries
+  vim.fn.jobstart({
+    'ctags', '-f', '-',
+    '--languages=C,C++,ObjectiveC',
+    '--fields=+nKz',
+    '--extras=+q',
+    filepath,
+  }, {
+    stdout_buffered = true,
+    on_stdout = function(_, data)
+      if not data then return end
+      vim.schedule(function()
+        local mc = member_cache[root] or {}
+        local tnc = tag_name_cache[root] or {}
+        local fi = file_entries[root] or {}
+        for _, line in ipairs(data) do
+          if line ~= '' then
+            local n, fn, k, p = parse_tag_line(line)
+            if n then add_to_caches(n, fn, k, p, mc, tnc, fi) end
+          end
+        end
+        member_cache[root] = mc
+        tag_name_cache[root] = tnc
+        file_entries[root] = fi
+        cache_version = cache_version + 1
+      end)
+    end,
+  })
 end
 
 local function generate_system_tags(opts)
@@ -245,7 +382,7 @@ local function generate_system_tags(opts)
       system_tags_generating = false
       vim.schedule(function()
         if code == 0 then
-          build_system_member_cache()
+          build_system_member_cache_async(true)
           if opts.notify then vim.notify('System tags generated: ' .. SYSTEM_TAGS_PATH) end
         else
           if opts.notify then vim.notify('System tags generation failed (exit ' .. code .. ')', vim.log.levels.ERROR) end
@@ -270,7 +407,7 @@ local function generate_tags(root, outpath)
     on_exit = function(_, code)
       if code == 0 then
         vim.schedule(function()
-          build_member_cache(root)
+          build_member_cache_async(root, true)
         end)
       end
     end,
@@ -294,7 +431,7 @@ local function update_tags_for_file(root, outpath, filepath)
   }, {
     on_exit = function(_, code)
       if code == 0 then
-        vim.schedule(function() build_member_cache(root) end)
+        vim.schedule(function() update_cache_for_file(root, filepath) end)
       end
     end,
   })
@@ -355,60 +492,6 @@ function M.jump()
   end)
 end
 
--- Active completion source for statusline
-local active_source = ''
-
-function M.get_active_source()
-  return active_source
-end
-
-local function trigger_keyword_completion(bufnr, startcol, base)
-  local items = {}
-  local seen = {}
-
-  -- Scan current buffer for matching words
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  for _, line in ipairs(lines) do
-    for word in line:gmatch('[%w_]+') do
-      if #word >= 2 and word:sub(1, #base) == base and not seen[word] then
-        seen[word] = true
-        table.insert(items, { word = word, menu = '[Buf]' })
-      end
-    end
-  end
-
-  -- Tag matches from cache (only for C/C++ where ctags are set up)
-  local has_tags = false
-  local ft = vim.bo[bufnr].filetype
-  if ft == 'c' or ft == 'cpp' or ft == 'objc' or ft == 'objcpp' then
-    local root = get_project_root()
-    if root and tag_name_cache[root] then
-      for name, kind in pairs(tag_name_cache[root]) do
-        if name:sub(1, #base) == base and not seen[name] then
-          seen[name] = true
-          has_tags = true
-          table.insert(items, { word = name, menu = '[Tag:' .. kind .. ']' })
-        end
-      end
-    end
-    -- System tag name cache
-    if system_tag_name_cache then
-      for name, kind in pairs(system_tag_name_cache) do
-        if name:sub(1, #base) == base and not seen[name] then
-          seen[name] = true
-          has_tags = true
-          table.insert(items, { word = name, menu = '[Tag:' .. kind .. ']' })
-        end
-      end
-    end
-  end
-
-  if #items > 0 then
-    active_source = has_tags and '[Buf+Tag]' or '[Buf]'
-    vim.fn.complete(startcol, items)
-  end
-end
-
 -- Try to infer the type of the variable before . or ->
 local function infer_type_at_cursor(bufnr)
   local col = vim.api.nvim_win_get_cursor(0)[2]
@@ -441,242 +524,6 @@ local function infer_type_at_cursor(bufnr)
   return nil
 end
 
-local function trigger_member_completion(bufnr, startcol, base)
-  local inferred_type = infer_type_at_cursor(bufnr)
-  local root = get_project_root()
-
-  -- Try cache first (fast path) - merge project + system caches
-  if inferred_type then
-    local items = {}
-    local seen = {}
-    -- Project cache
-    if root and member_cache[root] then
-      local members = member_cache[root][inferred_type]
-      if members then
-        for _, m in ipairs(members) do
-          if base == '' or m.word:sub(1, #base) == base then
-            seen[m.word] = true
-            table.insert(items, m)
-          end
-        end
-      end
-    end
-    -- System cache
-    if system_member_cache then
-      local members = system_member_cache[inferred_type]
-      if members then
-        for _, m in ipairs(members) do
-          if not seen[m.word] and (base == '' or m.word:sub(1, #base) == base) then
-            table.insert(items, m)
-          end
-        end
-      end
-    end
-    if #items > 0 then
-      vim.schedule(function()
-        if vim.api.nvim_get_current_buf() ~= bufnr then return end
-        if vim.fn.pumvisible() == 1 then return end
-        active_source = '[' .. inferred_type .. ']'
-        vim.fn.complete(startcol, items)
-      end)
-      return
-    end
-  end
-
-  -- No type inferred and no base typed = can't provide useful results
-  if not inferred_type and base == '' then return end
-
-  -- Slow path: taglist fallback (only when we have a base to narrow results)
-  -- taglist('.') matches every tag and is catastrophically slow with large tag files
-  if base == '' then return end
-
-  local saved = vim.bo[bufnr].tagfunc
-  vim.bo[bufnr].tagfunc = ''
-  local all_tags = vim.fn.taglist('^' .. base)
-  vim.bo[bufnr].tagfunc = saved
-
-  local items = {}
-  local seen = {}
-  for _, tag in ipairs(all_tags) do
-    if tag.kind == 'member' then
-      local name = tag.name
-      if not name:match('::') then
-        local parent = tag['struct'] or tag['union'] or tag['class'] or tag['typeref'] or ''
-        -- If we know the type, only show members of that type
-        if not inferred_type or parent == inferred_type then
-          if base == '' or name:sub(1, #base) == base then
-            if not seen[name] then
-              seen[name] = true
-              table.insert(items, {
-                word = name,
-                menu = parent ~= '' and ('[' .. parent .. ']') or '[Tag:m]',
-                info = parent ~= '' and ('member of ' .. parent) or '',
-              })
-            end
-          end
-        end
-      end
-    end
-  end
-
-  if #items > 0 then
-    vim.schedule(function()
-      if vim.api.nvim_get_current_buf() ~= bufnr then return end
-      if vim.fn.pumvisible() == 1 then return end
-      active_source = inferred_type and ('[' .. inferred_type .. ']') or '[Tag:m]'
-      vim.fn.complete(startcol, items)
-    end)
-  end
-end
-
-local function trigger_lsp_completion(bufnr, startcol, base)
-  local clients = vim.lsp.get_clients({ bufnr = bufnr })
-  local has_lsp = false
-  for _, client in ipairs(clients) do
-    if client.server_capabilities.completionProvider then
-      has_lsp = true
-      break
-    end
-  end
-
-  if not has_lsp then
-    -- Fall back to keyword completion if no LSP
-    trigger_keyword_completion(bufnr, startcol, base)
-    return
-  end
-
-  local client = vim.lsp.get_clients({ bufnr = bufnr })[1]
-  local encoding = client and client.offset_encoding or 'utf-16'
-  local params = vim.lsp.util.make_position_params(0, encoding)
-  vim.lsp.buf_request(bufnr, 'textDocument/completion', params, function(err, result)
-    if err or not result then
-      trigger_member_completion(bufnr, startcol, base)
-      return
-    end
-
-    local lsp_items = result.items or result
-    if #lsp_items == 0 then
-      trigger_member_completion(bufnr, startcol, base)
-      return
-    end
-
-    -- Safely extract a string value, skipping Blobs and other non-string types.
-    -- Also strip null bytes which can cause E976 (Blob as String) when passed
-    -- back to Vim via vim.fn.complete().
-    local function safe_str(v)
-      if type(v) ~= 'string' then return nil end
-      return v:gsub('%z', '')
-    end
-
-    local items = {}
-    for _, item in ipairs(lsp_items) do
-      local raw
-      if type(item.textEdit) == 'table' then
-        raw = item.textEdit.newText
-      end
-      if not raw then raw = item.insertText end
-      if not raw then raw = item.label end
-      local word = safe_str(raw)
-      if not word then goto next_item end
-      -- Strip snippet placeholders ($0, $1, ${1:foo}) → use plain text
-      word = word:gsub('%$%{%d+:[^}]*%}', ''):gsub('%$%d+', ''):gsub('%(%)$', '')
-      if word ~= '' then
-        local info = ''
-        if type(item.documentation) == 'string' then
-          info = safe_str(item.documentation) or ''
-        elseif type(item.documentation) == 'table' and type(item.documentation.value) == 'string' then
-          info = safe_str(item.documentation.value) or ''
-        end
-        table.insert(items, {
-          word = word,
-          abbr = safe_str(item.label) or word,
-          menu = '[LSP]',
-          info = info,
-        })
-      end
-      ::next_item::
-    end
-
-    if #items == 0 then
-      trigger_member_completion(bufnr, startcol, base)
-      return
-    end
-
-    vim.schedule(function()
-      if vim.api.nvim_get_current_buf() ~= bufnr then return end
-      if vim.fn.pumvisible() == 1 then return end
-      active_source = '[LSP]'
-      local ok, err = pcall(vim.fn.complete, startcol, items)
-      if not ok then
-        vim.schedule(function()
-          vim.notify('completion error: ' .. tostring(err), vim.log.levels.DEBUG)
-        end)
-      end
-    end)
-  end)
-end
-
-local function setup_completion_trigger(bufnr)
-  if vim.b[bufnr]._comp_trigger then return end
-  vim.b[bufnr]._comp_trigger = true
-
-  local comp_timer = vim.uv.new_timer()
-  vim.api.nvim_create_autocmd('TextChangedI', {
-    buffer = bufnr,
-    callback = function()
-      comp_timer:stop()
-      comp_timer:start(100, 0, vim.schedule_wrap(function()
-        if vim.api.nvim_get_current_buf() ~= bufnr then return end
-        if not vim.api.nvim_buf_is_valid(bufnr) then return end
-        if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
-          return
-        end
-
-        local col = vim.api.nvim_win_get_cursor(0)[2]
-        if col < 1 then return end
-
-        local line = vim.api.nvim_get_current_line()
-        local before = line:sub(1, col)
-
-        -- Member access: . or -> triggers ctags member completion directly
-        -- (skips LSP — clangd doesn't work well with unity builds)
-        if before:match('%.$') or before:match('->$') then
-          trigger_member_completion(bufnr, col + 1, '')
-          return
-        end
-
-        -- Typing member name after . or ->
-        if before:match('%.[%w_]$') or before:match('%->[%w_]$') then
-          local base = before:match('([%w_]+)$') or ''
-          local startcol = col - #base + 1
-          trigger_member_completion(bufnr, startcol, base)
-          return
-        end
-
-        -- 2+ identifier chars: keyword completion
-        if col >= 2 and before:match('[%w_][%w_]$') then
-          local base = before:match('([%w_]+)$') or ''
-          local startcol = col - #base + 1
-          local prefix = before:sub(1, startcol - 1)
-          if prefix:match('%.$') or prefix:match('->$') then
-            trigger_member_completion(bufnr, startcol, base)
-          else
-            trigger_keyword_completion(bufnr, startcol, base)
-          end
-        end
-      end))
-    end,
-  })
-
-  -- Clear source indicator when completion finishes
-  vim.api.nvim_create_autocmd('CompleteDonePre', {
-    buffer = bufnr,
-    callback = function()
-      active_source = ''
-    end,
-  })
-end
-
 function M.setup()
   local group = vim.api.nvim_create_augroup('ctags_fallback', { clear = true })
 
@@ -700,13 +547,11 @@ function M.setup()
       vim.opt.tags:append(tp)
       ::skip_add::
 
-      -- Generate tags if file doesn't exist, otherwise build cache if needed
+      -- Generate tags if file doesn't exist, otherwise build cache async if needed
       if vim.fn.filereadable(tp) == 0 then
         generate_tags(root, tp)
       elseif not member_cache[root] then
-        vim.schedule(function()
-          build_member_cache(root)
-        end)
+        build_member_cache_async(root)
       end
 
       -- System tags: add to tags option and auto-generate if missing
@@ -721,13 +566,9 @@ function M.setup()
       if vim.fn.filereadable(SYSTEM_TAGS_PATH) == 0 then
         generate_system_tags()
       elseif not system_member_cache then
-        vim.schedule(function()
-          build_system_member_cache()
-        end)
+        build_system_member_cache_async()
       end
 
-      -- Auto-trigger buffer keyword completion (works without LSP)
-      setup_completion_trigger(args.buf)
     end,
   })
 
@@ -768,72 +609,6 @@ function M.setup()
     generate_system_tags({ notify = true })
   end, { desc = 'Generate/regenerate system library ctags' })
 end
-
---- LSP-only auto-trigger (for non-C/C++ languages like Jai).
---- Same TextChangedI debounce pattern as setup_completion_trigger but uses
---- LSP completion for plain identifier typing instead of keyword/ctags.
-local function setup_lsp_completion_trigger(bufnr)
-  if vim.b[bufnr]._lsp_comp_trigger then return end
-  vim.b[bufnr]._lsp_comp_trigger = true
-
-  local comp_timer = vim.uv.new_timer()
-  vim.api.nvim_create_autocmd('TextChangedI', {
-    buffer = bufnr,
-    callback = function()
-      comp_timer:stop()
-      comp_timer:start(100, 0, vim.schedule_wrap(function()
-        if vim.api.nvim_get_current_buf() ~= bufnr then return end
-        if not vim.api.nvim_buf_is_valid(bufnr) then return end
-        if vim.fn.pumvisible() == 1 or vim.api.nvim_get_mode().mode ~= 'i' then
-          return
-        end
-
-        local col = vim.api.nvim_win_get_cursor(0)[2]
-        if col < 1 then return end
-
-        local line = vim.api.nvim_get_current_line()
-        local before = line:sub(1, col)
-
-        -- Dot access: trigger LSP immediately
-        if before:match('%.$') then
-          trigger_lsp_completion(bufnr, col + 1, '')
-          return
-        end
-
-        -- Typing after dot: LSP with partial base
-        if before:match('%.[%w_]$') then
-          local base = before:match('([%w_]+)$') or ''
-          local startcol = col - #base + 1
-          trigger_lsp_completion(bufnr, startcol, base)
-          return
-        end
-
-        -- 2+ identifier chars: LSP completion (not just keyword/ctags)
-        if col >= 2 and before:match('[%w_][%w_]$') then
-          local base = before:match('([%w_]+)$') or ''
-          local startcol = col - #base + 1
-          local prefix = before:sub(1, startcol - 1)
-          if prefix:match('%.$') then
-            trigger_lsp_completion(bufnr, startcol, base)
-          else
-            trigger_lsp_completion(bufnr, startcol, base)
-          end
-        end
-      end))
-    end,
-  })
-
-  -- Clear source indicator when completion finishes
-  vim.api.nvim_create_autocmd('CompleteDonePre', {
-    buffer = bufnr,
-    callback = function()
-      active_source = ''
-    end,
-  })
-end
-
-M.setup_completion = setup_completion_trigger
-M.setup_lsp_completion = setup_lsp_completion_trigger
 
 --- Open a Telescope picker with all project tags (workspace symbols via ctags).
 function M.workspace_symbols()
@@ -928,5 +703,13 @@ function M.workspace_symbols()
 end
 
 M.get_project_root = get_project_root
+M.infer_type_at_cursor = infer_type_at_cursor
+
+function M.get_member_cache() return member_cache end
+function M.get_tag_name_cache() return tag_name_cache end
+function M.get_system_member_cache() return system_member_cache end
+function M.get_system_tag_name_cache() return system_tag_name_cache end
+function M.get_cache_version() return cache_version end
+function M.get_system_cache_version() return system_cache_version end
 
 return M

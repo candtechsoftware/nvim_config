@@ -13,19 +13,7 @@ vim.opt.fillchars:append({ eob = " " })
 -- Set statusline with mode indicator
 vim.o.laststatus = 2  -- Always show status line
 
--- Dynamic statusline with completion source indicator
-function _G.statusline()
-  local src = ''
-  local ok, ctags = pcall(require, 'config.ctags')
-  if ok and ctags.get_active_source then
-    src = ctags.get_active_source()
-  end
-  if src ~= '' and vim.fn.pumvisible() == 1 then
-    return ' %f %l:%c ' .. src
-  end
-  return ' %f %l:%c'
-end
-vim.o.statusline = '%{%v:lua.statusline()%}'
+vim.o.statusline = ' %f %l:%c'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for
@@ -81,14 +69,5 @@ if vim.g.neovide then
     vim.g.neovide_position_animation_length = 0.01
     vim.g.neovide_scroll_animation_length = 0.01
 end
-
--- Optimized completion settings for performance and usability
-vim.opt.completeopt = { "menu", "menuone", "noselect", "noinsert" }
-vim.opt.pumheight = 12
-vim.opt.pumwidth = 20
-vim.opt.pumblend = 10  -- Slight transparency for popup
-vim.opt.shortmess:append("c")
-vim.opt.complete = ".,w,b"  -- Fewer sources = faster
-
 
 
