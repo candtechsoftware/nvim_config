@@ -1,12 +1,10 @@
 -- Custom blink.cmp source for ctags completion (C/C++ member access + keyword)
 -- Bridges existing ctags caches from config.ctags into blink.cmp's source API
+--
+-- Performance: uses 2-char prefix hash index built during async cache read.
+-- No vim.fn calls on the completion hot path (avoids command-line flash).
 
 local ctags_source = {}
-
--- Pre-built keyword items cache (rebuilt only when cache version changes)
-local keyword_items = {}
-local keyword_cache_ver = -1
-local keyword_sys_cache_ver = -1
 
 local CompletionItemKind = {
   Field = 5,
@@ -19,7 +17,6 @@ local CompletionItemKind = {
   Module = 9,
 }
 
--- Map ctags kind letters/names to LSP CompletionItemKind
 local kind_map = {
   member = CompletionItemKind.Field,
   m = CompletionItemKind.Field,
@@ -75,7 +72,6 @@ function ctags_source:get_completions(context, callback)
     local inferred_type = ctags.infer_type_at_cursor(context.bufnr)
     if inferred_type then
       local seen = {}
-      -- Project member cache
       local mc = ctags.get_member_cache()
       local root = ctags.get_project_root()
       if root and mc[root] then
@@ -94,7 +90,6 @@ function ctags_source:get_completions(context, callback)
           end
         end
       end
-      -- System member cache
       local smc = ctags.get_system_member_cache()
       if smc then
         local members = smc[inferred_type]
@@ -113,55 +108,42 @@ function ctags_source:get_completions(context, callback)
         end
       end
     end
+    callback({
+      items = items,
+      is_incomplete_forward = true,
+      is_incomplete_backward = true,
+    })
   else
-    -- Keyword completion: use pre-built items cache, rebuild only when version changes
-    local cv = ctags.get_cache_version()
-    local scv = ctags.get_system_cache_version()
-    if cv ~= keyword_cache_ver or scv ~= keyword_sys_cache_ver then
-      local new_items = {}
-      local seen = {}
-      local root = ctags.get_project_root()
-      local tnc = ctags.get_tag_name_cache()
-      if root and tnc[root] then
-        for name, kind in pairs(tnc[root]) do
-          if not seen[name] then
-            seen[name] = true
-            table.insert(new_items, {
-              label = name,
-              kind = kind_map[kind] or CompletionItemKind.Variable,
-              detail = '[Tag:' .. kind .. ']',
-            })
-          end
-        end
-      end
-      local stnc = ctags.get_system_tag_name_cache()
-      if stnc then
-        for name, kind in pairs(stnc) do
-          if not seen[name] then
-            seen[name] = true
-            table.insert(new_items, {
-              label = name,
-              kind = kind_map[kind] or CompletionItemKind.Variable,
-              detail = '[Tag:' .. kind .. ']',
-            })
-          end
-        end
-      end
-      keyword_items = new_items
-      keyword_cache_ver = cv
-      keyword_sys_cache_ver = scv
+    -- Keyword completion: fast prefix lookup (no vim.fn calls)
+    local keyword = before:match('([%w_]+)$') or ''
+    if #keyword < 2 then
+      -- Too short for ctags — tell blink to re-query when more chars typed
+      callback({
+        items = {},
+        is_incomplete_forward = true,
+        is_incomplete_backward = true,
+      })
+      return
     end
-    items = keyword_items
-  end
 
-  -- blink.cmp handles fuzzy filtering - return all items
-  -- Only mark member completion as incomplete (type inference can change);
-  -- keyword items are static and safe to cache across keystrokes
-  callback({
-    items = items,
-    is_incomplete_forward = is_member and true or false,
-    is_incomplete_backward = is_member and true or false,
-  })
+    -- Defer to next event loop tick so blink's trigger handling completes first
+    vim.schedule(function()
+      local matches = ctags.get_prefix_matches(keyword:lower(), 200)
+      for _, m in ipairs(matches) do
+        items[#items + 1] = {
+          label = m.name,
+          kind = kind_map[m.kind] or CompletionItemKind.Variable,
+          detail = '[Tag:' .. (m.kind or '?') .. ']',
+        }
+      end
+      -- Got items: tell blink to cache and filter locally (no re-query)
+      callback({
+        items = items,
+        is_incomplete_forward = false,
+        is_incomplete_backward = false,
+      })
+    end)
+  end
 end
 
 return ctags_source

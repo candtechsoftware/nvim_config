@@ -53,17 +53,22 @@ local member_cache = {}
 local tag_name_cache = {}
 -- Reverse index: { project_root -> { filename -> { [name]=true } } }
 local file_entries = {}
+-- Prefix index: { project_root -> { "ab" -> {name1, name2, ...} } }
+local tag_prefix_index = {}
 -- Mtime tracking: { filepath -> mtime_sec }
 local cache_mtime = {}
 -- Cache version counters (bumped on cache update, used by blink source)
 local cache_version = 0
 local system_cache_version = 0
+-- Per-buffer root cache (avoids vim.fn calls during completion)
+local buf_root = {} -- { bufnr -> root }
 
 -- System tags infrastructure
 local SYSTEM_TAGS_PATH = '/tmp/nvim-ctags/system-tags'
 local system_includes_cache = nil
 local system_member_cache = nil -- { TypeName -> [{word, menu, info}, ...] }
 local system_tag_name_cache = nil -- { name -> kind }
+local system_tag_prefix_index = nil -- { "ab" -> {name1, name2, ...} }
 local system_tags_generating = false
 
 local function get_system_includes()
@@ -119,7 +124,7 @@ local function parse_tag_line(line)
 end
 
 -- Add parsed tag to cache tables
-local function add_to_caches(name, filename, kind, parent, by_parent, names, findex)
+local function add_to_caches(name, filename, kind, parent, by_parent, names, findex, pindex)
   names[name] = kind
   if parent then
     if not by_parent[parent] then by_parent[parent] = {} end
@@ -133,12 +138,17 @@ local function add_to_caches(name, filename, kind, parent, by_parent, names, fin
     if not findex[filename] then findex[filename] = {} end
     findex[filename][name] = true
   end
+  if pindex and #name >= 2 then
+    local key = name:sub(1, 2):lower()
+    if not pindex[key] then pindex[key] = {} end
+    pindex[key][#pindex[key] + 1] = name
+  end
 end
 
 -- Async chunked cache building using libuv.
 -- Reads file in 64KB chunks, parses tags, yields between chunks so the
 -- editor stays responsive even for the 105MB system tags file.
--- Calls on_done(by_parent, names, findex) when complete, or on_done(nil) on error.
+-- Calls on_done(by_parent, names, findex, pindex) when complete, or on_done(nil) on error.
 local function build_cache_async(filepath, on_done)
   vim.uv.fs_open(filepath, 'r', 438, function(err, fd)
     if err or not fd then
@@ -156,6 +166,7 @@ local function build_cache_async(filepath, on_done)
       local by_parent = {}
       local names = {}
       local findex = {}
+      local pindex = {}
       local leftover = ''
       local offset = 0
       local file_size = stat.size
@@ -163,11 +174,11 @@ local function build_cache_async(filepath, on_done)
       local function finish()
         if #leftover > 0 then
           local n, fn, k, p = parse_tag_line(leftover)
-          if n then add_to_caches(n, fn, k, p, by_parent, names, findex) end
+          if n then add_to_caches(n, fn, k, p, by_parent, names, findex, pindex) end
         end
         vim.uv.fs_close(fd, function() end)
         if on_done then
-          vim.schedule(function() on_done(by_parent, names, findex) end)
+          vim.schedule(function() on_done(by_parent, names, findex, pindex) end)
         end
       end
 
@@ -186,7 +197,7 @@ local function build_cache_async(filepath, on_done)
             leftover = block:sub(last_nl + 1)
             for line in complete:gmatch('[^\n]+') do
               local n, fn, k, p = parse_tag_line(line)
-              if n then add_to_caches(n, fn, k, p, by_parent, names, findex) end
+              if n then add_to_caches(n, fn, k, p, by_parent, names, findex, pindex) end
             end
           else
             leftover = block
@@ -220,11 +231,12 @@ local function build_member_cache_async(root, force)
     local stat = vim.uv.fs_stat(tp)
     if stat then cache_mtime[tp] = stat.mtime.sec end
   end
-  build_cache_async(tp, function(by_parent, names, findex)
+  build_cache_async(tp, function(by_parent, names, findex, pindex)
     if not by_parent then return end
     member_cache[root] = by_parent
     tag_name_cache[root] = names
     file_entries[root] = findex
+    tag_prefix_index[root] = pindex
     cache_version = cache_version + 1
   end)
 end
@@ -236,10 +248,11 @@ local function build_system_member_cache_async(force)
     local stat = vim.uv.fs_stat(SYSTEM_TAGS_PATH)
     if stat then cache_mtime[SYSTEM_TAGS_PATH] = stat.mtime.sec end
   end
-  build_cache_async(SYSTEM_TAGS_PATH, function(by_parent, names)
+  build_cache_async(SYSTEM_TAGS_PATH, function(by_parent, names, _, pindex)
     if not by_parent then return end
     system_member_cache = by_parent
     system_tag_name_cache = names
+    system_tag_prefix_index = pindex
     system_cache_version = system_cache_version + 1
   end)
 end
@@ -259,6 +272,7 @@ local function update_cache_for_file(root, filepath)
     if old_names then
       local mc = member_cache[root]
       local tnc = tag_name_cache[root]
+      local pindex = tag_prefix_index[root]
       if tnc then
         for name in pairs(old_names) do tnc[name] = nil end
       end
@@ -270,6 +284,23 @@ local function update_cache_for_file(root, filepath)
             end
           end
           if #members == 0 then mc[parent] = nil end
+        end
+      end
+      -- Remove from prefix index
+      if pindex then
+        for name in pairs(old_names) do
+          if #name >= 2 then
+            local key = name:sub(1, 2):lower()
+            local bucket = pindex[key]
+            if bucket then
+              for i = #bucket, 1, -1 do
+                if bucket[i] == name then
+                  table.remove(bucket, i)
+                  break
+                end
+              end
+            end
+          end
         end
       end
       fent[filepath] = nil
@@ -292,15 +323,17 @@ local function update_cache_for_file(root, filepath)
         local mc = member_cache[root] or {}
         local tnc = tag_name_cache[root] or {}
         local fi = file_entries[root] or {}
+        local pi = tag_prefix_index[root] or {}
         for _, line in ipairs(data) do
           if line ~= '' then
             local n, fn, k, p = parse_tag_line(line)
-            if n then add_to_caches(n, fn, k, p, mc, tnc, fi) end
+            if n then add_to_caches(n, fn, k, p, mc, tnc, fi, pi) end
           end
         end
         member_cache[root] = mc
         tag_name_cache[root] = tnc
         file_entries[root] = fi
+        tag_prefix_index[root] = pi
         cache_version = cache_version + 1
       end)
     end,
@@ -534,6 +567,7 @@ function M.setup()
     callback = function(args)
       local root = get_project_root()
       if not root then return end
+      buf_root[args.buf] = root
 
       local tp = tags_path(root)
 
@@ -711,5 +745,43 @@ function M.get_system_member_cache() return system_member_cache end
 function M.get_system_tag_name_cache() return system_tag_name_cache end
 function M.get_cache_version() return cache_version end
 function M.get_system_cache_version() return system_cache_version end
+
+--- Fast prefix lookup using 2-char hash index.
+--- Returns up to max_items {name, kind} pairs matching the given lowercase prefix.
+--- Uses buf_root cache to avoid vim.fn calls during insert mode.
+function M.get_prefix_matches(prefix, max_items)
+  local results = {}
+  local key = prefix:sub(1, 2)
+  local seen = {}
+
+  -- Project tags first (use buf_root to avoid vim.fn during completion)
+  local root = buf_root[vim.api.nvim_get_current_buf()]
+  if root then
+    local pindex = tag_prefix_index[root]
+    local tnc = tag_name_cache[root]
+    if pindex and pindex[key] and tnc then
+      for _, name in ipairs(pindex[key]) do
+        if not seen[name] and name:lower():sub(1, #prefix) == prefix then
+          seen[name] = true
+          results[#results + 1] = { name = name, kind = tnc[name] }
+          if #results >= max_items then return results end
+        end
+      end
+    end
+  end
+
+  -- System tags
+  if system_tag_prefix_index and system_tag_prefix_index[key] and system_tag_name_cache then
+    for _, name in ipairs(system_tag_prefix_index[key]) do
+      if not seen[name] and name:lower():sub(1, #prefix) == prefix then
+        seen[name] = true
+        results[#results + 1] = { name = name, kind = system_tag_name_cache[name] }
+        if #results >= max_items then return results end
+      end
+    end
+  end
+
+  return results
+end
 
 return M
