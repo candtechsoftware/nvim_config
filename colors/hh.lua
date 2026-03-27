@@ -11,10 +11,10 @@ local colors = {
   base = "#cb9401",          -- defcolor_base: Status bar text / golden accent
   pop1 = "#70971e",          -- defcolor_pop1: Color of prompts
   pop2 = "#cb9401",          -- defcolor_pop2: Annotations
-  back = "#0c0c0c",          -- defcolor_back: Text area background
-  margin = "#0c0c0c",        -- defcolor_margin: Frame around inactive panel
+  back = "#181818",          -- defcolor_back: Text area background
+  margin = "#181818",        -- defcolor_margin: Frame around inactive panel
   margin_hover = "#00ff00",  -- defcolor_margin_hover
-  margin_active = "#0c0c0c", -- defcolor_margin_active
+  margin_active = "#181818", -- defcolor_margin_active
 
   -- List/hover colors
   list_item_hover = "#171e20",  -- defcolor_list_item_hover
@@ -28,7 +28,7 @@ local colors = {
   cursor_command = "#70971e",  -- Olive for command mode
   cursor_inactive = "#404040", -- fleury_color_cursor_inactive
 
-  at_cursor = "#0c0c0c",       -- defcolor_at_cursor
+  at_cursor = "#181818",       -- defcolor_at_cursor
   highlight_line = "#1f1f27",  -- defcolor_highlight_cursor_line
   highlight = "#315268",       -- defcolor_highlight: Search highlight background
   at_highlight = "#c4b82b",    -- defcolor_at_highlight: Search highlight text
@@ -53,7 +53,7 @@ local colors = {
   undo = "#80005d",          -- defcolor_undo
 
   -- Line numbers
-  line_numbers_bg = "#101010",   -- defcolor_line_numbers_back
+  line_numbers_bg = "#181818",   -- defcolor_line_numbers_back
   line_numbers_text = "#404040", -- defcolor_line_numbers_text
 
   -- Indexer/semantic colors (fleury_color_index_*)
@@ -98,16 +98,16 @@ local colors = {
   yg_keyword = "#478980",
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- Moderate tints visible against #0c0c0c background
+  -- Moderate tints visible against #181818 background
   back_cycle = {
-    "#161419",  -- Level 1: purple/magenta tint
-    "#141816",  -- Level 2: green tint
-    "#141618",  -- Level 3: blue tint
-    "#181614",  -- Level 4: amber/orange tint
-    "#181418",  -- Level 5: pink tint
-    "#141818",  -- Level 6: cyan tint
-    "#161614",  -- Level 7: olive tint
-    "#161419",  -- Level 8: violet tint
+    "#201e23",  -- Level 1: purple/magenta tint
+    "#1e221f",  -- Level 2: green tint
+    "#1e2022",  -- Level 3: blue tint
+    "#22201e",  -- Level 4: amber/orange tint
+    "#221e22",  -- Level 5: pink tint
+    "#1e2222",  -- Level 6: cyan tint
+    "#20201e",  -- Level 7: olive tint
+    "#201e23",  -- Level 8: violet tint
   },
 }
 

@@ -24,6 +24,9 @@ vim.keymap.set("n", "<C-j>", "<cmd>cprev<CR>zz") -- Move to the previous quickfi
 vim.keymap.set("n", "<leader>k", "<cmd>lnext<CR>zz") -- Move to the next location list item
 vim.keymap.set("n", "<leader>j", "<cmd>lprev<CR>zz") -- Move to the previous location list item
 
+-- Splits
+vim.keymap.set("n", "<C-,>", "<C-w>w", { desc = "Toggle splits" })
+
 -- Tabs
 vim.keymap.set("n", "<leader>t", "<cmd>tabnew<CR>zz")
 vim.keymap.set("n", "<leader><Tab>", "<cmd>tabnext<CR>zz")
