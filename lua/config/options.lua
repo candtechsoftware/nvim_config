@@ -13,7 +13,7 @@ vim.opt.fillchars:append({ eob = " " })
 -- Set statusline with mode indicator
 vim.o.laststatus = 2  -- Always show status line
 
-vim.o.statusline = ' %f %l:%c'
+vim.o.statusline = ' %f %l:%c %{%v:lua.vim.ui.progress_status()%}'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for

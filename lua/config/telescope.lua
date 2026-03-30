@@ -25,7 +25,7 @@ local function get_visual_selection()
 end
 
 local function get_project_root()
-    return require("utils.project_root").find({ fallback_to_initial_cwd = true })
+    return require("utils.project_root").find()
 end
 
 function M.setup()

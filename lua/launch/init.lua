@@ -1,9 +1,5 @@
 local M = {}
 
-if not _G.launch_initial_cwd then
-  _G.launch_initial_cwd = vim.fn.getcwd()
-end
-
 local function get_os()
   local uname = vim.uv.os_uname().sysname:lower()
   if uname == "darwin" then return "mac"
@@ -12,53 +8,12 @@ local function get_os()
   end
 end
 
-local function parse_errors(lines, root)
-  local qf_entries = {}
-
-  for _, line in ipairs(lines) do
-    -- Jai format: /path/file.jai:192,30: Error: message
-    local file, lnum, col, msg = line:match("%s*(/[^:]+):(%d+),(%d+):%s*Error:%s*(.+)")
-    if file and lnum then
-      table.insert(qf_entries, {
-        filename = vim.fn.fnamemodify(file, ":p"),
-        lnum = tonumber(lnum),
-        col = tonumber(col),
-        text = msg,
-        type = "E",
-      })
-    else
-      -- C/Clang format: file:line:col: error: message (absolute path)
-      file, lnum, col, msg = line:match("%s*(/[^:]+):(%d+):(%d+):%s*error:%s*(.+)")
-      if file and lnum then
-        table.insert(qf_entries, {
-          filename = vim.fn.fnamemodify(file, ":p"),
-          lnum = tonumber(lnum),
-          col = tonumber(col),
-          text = msg,
-          type = "E",
-        })
-      else
-        -- C/Clang format with relative path
-        file, lnum, col, msg = line:match("%s*([%.%w_/-]+%.[%w]+):(%d+):(%d+):%s*error:%s*(.+)")
-        if file and lnum then
-          local abs_path = vim.fn.resolve(root .. "/" .. file)
-          table.insert(qf_entries, {
-            filename = abs_path,
-            lnum = tonumber(lnum),
-            col = tonumber(col),
-            text = msg,
-            type = "E",
-          })
-        end
-      end
-    end
-  end
-
-  return qf_entries
-end
+local build_diag_ns = vim.api.nvim_create_namespace('launch_build')
+local active_keymaps = {}
+local current_launch_root = nil
 
 local function find_project_root()
-  return require("utils.project_root").find({ fallback_to_initial_cwd = true })
+  return require("utils.project_root").find()
 end
 
 local function load_launch_json(root)
@@ -71,23 +26,21 @@ local function load_launch_json(root)
   return nil
 end
 
-function M.reset_cache()
-  _G.launch_initial_cwd = vim.fn.getcwd()
-  vim.notify("Launch root cache cleared", vim.log.levels.INFO)
-end
-
-function M.show_root()
-  local root = find_project_root()
-  vim.notify("Current launch root: " .. root, vim.log.levels.INFO)
-end
-
-function M.setup()
-  local root = find_project_root()
-  local config = load_launch_json(root)
-
-  if not config or not config.key_map then
-    return
+local function clear_keymaps()
+  for _, key in ipairs(active_keymaps) do
+    pcall(vim.keymap.del, "n", key)
   end
+  active_keymaps = {}
+end
+
+local function apply_launch(root)
+  if root == current_launch_root then return end
+
+  clear_keymaps()
+  current_launch_root = root
+
+  local config = load_launch_json(root)
+  if not config or not config.key_map then return end
 
   local os_name = get_os()
   local key_map = config.key_map
@@ -98,6 +51,7 @@ function M.setup()
   end
 
   for key, cmd in pairs(key_map) do
+    table.insert(active_keymaps, key)
     vim.keymap.set("n", key, function()
       local current_root = find_project_root()
       local output_lines = {}
@@ -116,22 +70,53 @@ function M.setup()
         end,
         on_exit = function(_, exit_code)
           vim.schedule(function()
-            local qf_entries = parse_errors(output_lines, current_root)
-            if #qf_entries > 0 then
-              vim.fn.setqflist(qf_entries, "r")
-              vim.fn.setqflist({}, "a", { title = "Build Errors: " .. cmd })
-              vim.cmd("copen")
-              vim.notify("Build FAILED - " .. #qf_entries .. " error(s)", vim.log.levels.ERROR)
-            elseif exit_code ~= 0 then
-              vim.fn.setqflist({}, "r")
-              for _, line in ipairs(output_lines) do
-                if line ~= "" then
-                  vim.fn.setqflist({ { text = line } }, "a")
-                end
+            -- Clear previous build diagnostics
+            vim.diagnostic.reset(build_diag_ns)
+
+            -- Ensure errorformat is current for this project
+            require('utils.make_detect').apply()
+
+            if exit_code ~= 0 then
+              -- Use Neovim's errorformat to parse all output lines
+              vim.fn.setqflist({}, "r", {
+                lines = output_lines,
+                efm = vim.o.errorformat,
+                title = "Build Errors: " .. cmd,
+              })
+
+              local qf = vim.fn.getqflist()
+              local error_count = 0
+              for _, item in ipairs(qf) do
+                if item.valid == 1 then error_count = error_count + 1 end
               end
-              vim.fn.setqflist({}, "a", { title = "Build Output: " .. cmd })
-              vim.cmd("copen")
-              vim.notify("Build FAILED (exit code " .. exit_code .. ")", vim.log.levels.ERROR)
+
+              if error_count > 0 then
+                -- Convert quickfix to inline diagnostics with multiline merging
+                local diags = vim.diagnostic.fromqflist(qf, { merge_lines = true })
+                local by_buf = {}
+                for _, d in ipairs(diags) do
+                  if d.bufnr and d.bufnr > 0 then
+                    if not by_buf[d.bufnr] then by_buf[d.bufnr] = {} end
+                    table.insert(by_buf[d.bufnr], d)
+                  end
+                end
+                for bufnr, buf_diags in pairs(by_buf) do
+                  vim.diagnostic.set(build_diag_ns, bufnr, buf_diags)
+                end
+
+                vim.cmd("copen")
+                vim.notify("Build FAILED - " .. error_count .. " error(s)", vim.log.levels.ERROR)
+              else
+                -- Non-zero exit but no parsed errors: dump raw output
+                vim.fn.setqflist({}, "r", { title = "Build Output: " .. cmd })
+                for _, line in ipairs(output_lines) do
+                  if line ~= "" then
+                    vim.fn.setqflist({ { text = line } }, "a")
+                  end
+                end
+                vim.cmd("copen")
+                vim.notify("Build FAILED (exit code " .. exit_code .. ")", vim.log.levels.ERROR)
+              end
             else
               vim.fn.setqflist({}, "r")
               vim.fn.setqflist({}, "a", { title = "Build: SUCCESS" })
@@ -141,14 +126,36 @@ function M.setup()
           end)
         end,
       })
-    end, { noremap = true, silent = true, desc = "launch.json command" })
+    end, { noremap = true, silent = true, desc = "launch.json: " .. cmd })
   end
+end
+
+function M.reset_cache()
+  current_launch_root = nil
+  vim.notify("Launch root cache cleared", vim.log.levels.INFO)
+end
+
+function M.show_root()
+  local root = find_project_root()
+  vim.notify("Current launch root: " .. root, vim.log.levels.INFO)
+end
+
+function M.setup()
+  apply_launch(find_project_root())
+
+  -- Re-evaluate keymaps when project context changes
+  vim.api.nvim_create_autocmd({ 'BufEnter', 'DirChanged' }, {
+    group = vim.api.nvim_create_augroup('launch_auto', { clear = true }),
+    callback = function()
+      apply_launch(find_project_root())
+    end,
+  })
 
   vim.api.nvim_create_user_command('LaunchReset', M.reset_cache, { desc = 'Reset launch root cache' })
   vim.api.nvim_create_user_command('LaunchInfo', M.show_root, { desc = 'Show current launch root' })
   vim.api.nvim_create_user_command('LaunchReload', function()
     M.reset_cache()
-    M.setup()
+    apply_launch(find_project_root())
   end, { desc = 'Reload launch configuration' })
 end
 
