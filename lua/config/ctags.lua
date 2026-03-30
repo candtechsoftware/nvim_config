@@ -16,10 +16,11 @@ local function get_project_root()
   if root_cache[buf_dir] then return root_cache[buf_dir] end
 
   -- Try git first (from buffer's directory, not nvim's CWD)
-  local result = vim.fn.systemlist('git -C ' .. vim.fn.shellescape(buf_dir) .. ' rev-parse --show-toplevel')
-  if vim.v.shell_error == 0 and #result > 0 then
-    root_cache[buf_dir] = result[1]
-    return result[1]
+  local out = vim.system({ 'git', '-C', buf_dir, 'rev-parse', '--show-toplevel' }):wait()
+  if out.code == 0 and out.stdout and out.stdout ~= '' then
+    local root = vim.trim(out.stdout)
+    root_cache[buf_dir] = root
+    return root
   end
 
   -- Walk up from buffer directory looking for project markers
@@ -499,11 +500,21 @@ function M.jump()
     end
   end
 
+  -- Navigate directly to a tag entry by file + line/pattern
+  local function goto_tag(tag)
+    local filename = vim.fn.fnamemodify(tag.filename, ':p')
+    vim.cmd('edit ' .. vim.fn.fnameescape(filename))
+    if tag.line then
+      pcall(vim.api.nvim_win_set_cursor, 0, { tonumber(tag.line), 0 })
+    elseif tag.cmd then
+      local pattern = tag.cmd:match('^/(.+)/$') or tag.cmd:match('^%?(.+)%?$')
+      if pattern then pcall(vim.fn.search, pattern, 'w') end
+    end
+  end
+
   -- Single match: jump directly
   if #tags == 1 then
-    vim.bo.tagfunc = ''
-    pcall(vim.cmd, 'tag ' .. vim.fn.fnameescape(word))
-    vim.bo.tagfunc = saved
+    goto_tag(tags[1])
     return
   end
 
@@ -519,9 +530,7 @@ function M.jump()
     prompt = 'Tag: ' .. word,
   }, function(_, idx)
     if not idx then return end
-    vim.bo.tagfunc = ''
-    pcall(vim.cmd, idx .. 'tag ' .. vim.fn.fnameescape(word))
-    vim.bo.tagfunc = saved
+    goto_tag(tags[idx])
   end)
 end
 

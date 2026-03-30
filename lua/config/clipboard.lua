@@ -1,8 +1,6 @@
 -- Clipboard manager with system clipboard sync and history
 -- Polls system clipboard, maintains history, and provides keybindings
 
-local uv = vim.uv or vim.loop
-
 local M = {}
 
 local ClipboardWatcher = {
@@ -82,8 +80,8 @@ end
 local function setup_commands()
   vim.api.nvim_create_user_command('ClipboardHistory', function()
     local buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-    vim.api.nvim_buf_set_option(buf, 'filetype', 'clipboard_history')
+    vim.bo[buf].bufhidden = 'wipe'
+    vim.bo[buf].filetype = 'clipboard_history'
 
     local lines = {}
     for i, entry in ipairs(ClipboardWatcher.history) do

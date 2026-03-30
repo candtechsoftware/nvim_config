@@ -46,14 +46,14 @@ local function scan_notes_async(callback)
     local extensions = { ".md", ".txt", ".markdown" }
 
     local function scan_directory(dir, cb)
-        vim.loop.fs_scandir(dir, function(err, handle)
+        vim.uv.fs_scandir(dir, function(err, handle)
             if err or not handle then
                 cb()
                 return
             end
 
             local function iter()
-                local name, type = vim.loop.fs_scandir_next(handle)
+                local name, type = vim.uv.fs_scandir_next(handle)
                 if not name then
                     cb()
                     return
@@ -301,7 +301,12 @@ function M.setup(opts)
         _G.notes_cached_dir = nil
     end, { desc = "Reset notes directory cache" })
 
-    -- Notes plugin loaded silently
+    -- Keymaps
+    vim.keymap.set("n", "<leader>ns", M.search_notes, { desc = "Search notes content" })
+    vim.keymap.set("n", "<leader>nf", M.find_notes, { desc = "Find notes by filename" })
+    vim.keymap.set("n", "<leader>nn", M.new_note, { desc = "Create new note" })
+    vim.keymap.set("n", "<leader>n", M.open_notes_dir, { desc = "Open notes directory" })
+    vim.keymap.set("n", "<leader>ng", M.git_status, { desc = "Notes git status" })
 end
 
 return M

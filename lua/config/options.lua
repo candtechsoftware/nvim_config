@@ -1,4 +1,4 @@
--- Neovim options (migrated from set.lua)
+-- Neovim options
 
 -- Cursor configuration - disable all blinking
 vim.opt.guicursor = "a:block-blinkon0"
@@ -45,7 +45,6 @@ vim.opt.colorcolumn = "" -- Disable the color column
 vim.opt.updatetime = 250 -- Update interval for CursorHold and CursorHoldI
 
 -- Performance optimizations
-vim.opt.lazyredraw = false -- Keep false for smooth scrolling/cursor
 vim.opt.synmaxcol = 300 -- Syntax highlight up to 300 columns
 vim.opt.redrawtime = 1500 -- Time in ms for redrawing screen
 vim.opt.timeoutlen = 400 -- Faster key sequence completion

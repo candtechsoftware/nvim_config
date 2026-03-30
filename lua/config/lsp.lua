@@ -1,5 +1,6 @@
--- Modern Neovim 0.11+ LSP configuration
--- Uses vim.lsp.config + vim.lsp.enable() API with lsp/*.lua config files
+-- Neovim 0.12+ LSP configuration
+-- Uses vim.lsp.config + vim.lsp.enable() with lsp/*.lua config files
+-- Default mappings (grn, grr, gra, gO, K, C-s) are set automatically
 
 local M = {}
 
@@ -118,18 +119,37 @@ local function set_keymaps(bufnr)
       end
     end
 
-    -- Try ctags first for C/C++ (synchronous)
+    -- Try ctags first for C/C++ (synchronous, project tags only)
     if c_filetypes[vim.bo.filetype] then
       local saved_tagfunc = vim.bo.tagfunc
       vim.bo.tagfunc = ''
       local tags = vim.fn.taglist('^' .. word .. '$')
       vim.bo.tagfunc = saved_tagfunc
 
+      -- Filter to project tags (same logic as gd)
+      local root = require('config.ctags').get_project_root()
+      if root then
+        local project_tags = {}
+        for _, tag in ipairs(tags) do
+          local abs = vim.fn.fnamemodify(tag.filename, ':p')
+          if abs:sub(1, #root) == root then
+            table.insert(project_tags, tag)
+          end
+        end
+        if #project_tags > 0 then tags = project_tags end
+      end
+
       if #tags > 0 then
+        local tag = tags[1]
+        local filename = vim.fn.fnamemodify(tag.filename, ':p')
         vim.api.nvim_set_current_win(target_win)
-        vim.bo.tagfunc = ''
-        pcall(vim.cmd, 'tag ' .. vim.fn.fnameescape(word))
-        vim.bo.tagfunc = saved_tagfunc
+        vim.cmd('edit ' .. vim.fn.fnameescape(filename))
+        if tag.line then
+          pcall(vim.api.nvim_win_set_cursor, target_win, { tonumber(tag.line), 0 })
+        elseif tag.cmd then
+          local pattern = tag.cmd:match('^/(.+)/$') or tag.cmd:match('^%?(.+)%?$')
+          if pattern then pcall(vim.fn.search, pattern, 'w') end
+        end
         vim.api.nvim_set_current_win(cur_win)
         return
       end
@@ -170,13 +190,8 @@ local function set_keymaps(bufnr)
 
   -- Diagnostics
   vim.keymap.set('n', '<leader>vd', vim.diagnostic.open_float, opts)
-  vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, opts)
-  vim.keymap.set('n', ']d', vim.diagnostic.goto_next, opts)
 
-  -- Actions
-  vim.keymap.set('n', '<leader>vca', vim.lsp.buf.code_action, opts)
-  vim.keymap.set('n', '<leader>vrr', vim.lsp.buf.references, opts)
-  vim.keymap.set('n', '<leader>vrn', vim.lsp.buf.rename, opts)
+  -- Actions (grn/grr/gra are 0.12 defaults for rename/references/code_action)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
   -- Formatting (manual) - use jai-format for Jai, LSP for others
@@ -249,23 +264,9 @@ local function setup_diagnostics()
   })
 end
 
----Configure LSP handlers (hover)
-local function setup_handlers()
-  -- Hover handler - configure appearance
-  vim.lsp.handlers['textDocument/hover'] = function(err, result, ctx, config)
-    config = config or {}
-    config.focusable = false
-    config.border = 'rounded'
-    config.max_width = 80
-    config.max_height = 20
-    return vim.lsp.handlers.hover(err, result, ctx, config)
-  end
-end
-
 ---Main setup function
 function M.setup()
   setup_diagnostics()
-  setup_handlers()
 
   -- Configure defaults for ALL LSP servers
   vim.lsp.config('*', {
@@ -292,31 +293,11 @@ function M.setup()
         vim.diagnostic.enable(false, { bufnr = bufnr })
       end
 
-      -- Set keymaps
+      -- Set keymaps (omnifunc/tagfunc are auto-set by 0.12)
       set_keymaps(bufnr)
-
-      -- Set omnifunc for <C-x><C-o>
-      vim.bo[bufnr].omnifunc = 'v:lua.vim.lsp.omnifunc'
-
-      -- Set tagfunc for CTRL-] navigation
-      vim.bo[bufnr].tagfunc = 'v:lua.vim.lsp.tagfunc'
 
     end,
   })
 end
-
----Stop LSP for a buffer
----@param bufnr integer|nil
-function M.stop_lsp(bufnr)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local clients = vim.lsp.get_clients({ bufnr = bufnr })
-  for _, client in ipairs(clients) do
-    vim.lsp.buf_detach_client(bufnr, client.id)
-  end
-end
-
-vim.api.nvim_create_user_command('LspStop', function()
-  M.stop_lsp()
-end, { desc = 'Stop LSP for current buffer' })
 
 return M

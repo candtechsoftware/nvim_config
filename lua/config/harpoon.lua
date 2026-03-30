@@ -1,4 +1,4 @@
--- Harpoon configuration (migrated from lazy/harpoon.lua)
+-- Harpoon configuration
 
 local M = {}
 

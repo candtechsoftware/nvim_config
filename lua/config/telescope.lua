@@ -1,12 +1,35 @@
--- Telescope configuration (migrated from lazy/telescope.lua)
-
-local project_root = require("utils.project_root")
+-- Telescope configuration
 
 local M = {}
 
+local function get_visual_selection()
+    local _, ls, cs = unpack(vim.fn.getpos("v"))
+    local _, le, ce = unpack(vim.fn.getpos("."))
+
+    if ls > le or (ls == le and cs > ce) then
+        ls, le = le, ls
+        cs, ce = ce, cs
+    end
+
+    local lines = vim.fn.getline(ls, le)
+    if #lines == 0 then return "" end
+
+    if #lines == 1 then
+        lines[1] = string.sub(lines[1], cs, ce)
+    else
+        lines[1] = string.sub(lines[1], cs)
+        lines[#lines] = string.sub(lines[#lines], 1, ce)
+    end
+
+    return table.concat(lines, "\n")
+end
+
+local function get_project_root()
+    return require("utils.project_root").find({ fallback_to_initial_cwd = true })
+end
+
 function M.setup()
     local telescope = require("telescope")
-    local builtin = require("telescope.builtin")
     local actions = require("telescope.actions")
 
     telescope.setup({
@@ -15,7 +38,6 @@ function M.setup()
             prompt_prefix = "> ",
             selection_caret = "> ",
             borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
-            -- Performance: use ripgrep with optimized flags
             vimgrep_arguments = {
                 "rg",
                 "--color=never",
@@ -27,11 +49,9 @@ function M.setup()
                 "--hidden",
                 "--glob=!.git/",
             },
-            -- Performance: disable treesitter in previewer (faster for C files)
             preview = {
                 treesitter = false,
             },
-            -- Performance: cache pickers for faster reopening
             cache_picker = {
                 num_pickers = 10,
                 limit_entries = 1000,
@@ -74,78 +94,24 @@ function M.setup()
             find_files = {
                 hidden = true,
             },
-            live_grep = {},
-            grep_string = {},
         },
         extensions = {
             fzf = {
                 fuzzy = true,
-                override_generic_sorter = true,  -- Enable for better performance
-                override_file_sorter = true,     -- Enable for better performance
+                override_generic_sorter = true,
+                override_file_sorter = true,
                 case_mode = "smart_case",
             },
         },
     })
 
-    -- Load fzf extension for significant performance improvement
     if vim.fn.has("win32") ~= 1 then
         pcall(telescope.load_extension, "fzf")
     end
-end
 
-function M.setup_keymaps()
+    -- Keymaps
     local builtin = require("telescope.builtin")
 
-    -- Helper function to get visual selection (preserving from original config)
-    vim.getVisualSelection = function()
-        local _, ls, cs = unpack(vim.fn.getpos("v"))
-        local _, le, ce = unpack(vim.fn.getpos("."))
-
-        -- Swap if selection is backwards
-        if ls > le or (ls == le and cs > ce) then
-            ls, le = le, ls
-            cs, ce = ce, cs
-        end
-
-        local lines = vim.fn.getline(ls, le)
-        if #lines == 0 then return "" end
-
-        if #lines == 1 then
-            lines[1] = string.sub(lines[1], cs, ce)
-        else
-            lines[1] = string.sub(lines[1], cs)
-            lines[#lines] = string.sub(lines[#lines], 1, ce)
-        end
-
-        return table.concat(lines, "\n")
-    end
-
-    -- Cached project root detection
-    local project_cache = {}
-    local function get_project_root()
-        local current_dir = vim.fn.getcwd()
-
-        if project_cache[current_dir] then
-            return project_cache[current_dir]
-        end
-
-        local git_root = vim.fn.systemlist({ 'git', '-C', current_dir, 'rev-parse', '--show-toplevel' })
-        local root
-        if vim.v.shell_error == 0 and git_root[1] and git_root[1] ~= '' then
-            root = git_root[1]
-        else
-            local current_file = vim.api.nvim_buf_get_name(0)
-            root = project_root.find({
-                startpath = current_file,
-                fallback_to_initial_cwd = true,
-            })
-        end
-
-        project_cache[current_dir] = root
-        return root
-    end
-
-    -- Keymaps with improved search
     vim.keymap.set("n", "<leader>pws", function()
         local root = get_project_root()
         builtin.grep_string({
@@ -167,10 +133,9 @@ function M.setup_keymaps()
         })
     end, { desc = "Grep WORD under cursor" })
 
-    -- Add visual mode grep
     vim.keymap.set("v", "<leader>ps", function()
         local root = get_project_root()
-        local text = vim.getVisualSelection()
+        local text = get_visual_selection()
         builtin.grep_string({
             search = text,
             cwd = root,
@@ -193,7 +158,6 @@ function M.setup_keymaps()
             cwd = root,
             prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
             on_input_filter_cb = function(prompt)
-                -- Match pattern: "search text **glob" (e.g. "my search **util.jai" or "my search **.ts")
                 local search, glob = prompt:match("^(.-)%s+%*%*(.+)$")
                 if search and glob ~= "" then
                     return { prompt = search, updated_finder = require("telescope.finders").new_job(function(new_prompt)
@@ -206,7 +170,6 @@ function M.setup_keymaps()
         })
     end, { desc = "Live grep (project root, use **file to filter)" })
 
-    -- Add a keybinding for current directory search
     vim.keymap.set("n", "<leader>.", function()
         local cwd = vim.fn.getcwd()
         builtin.live_grep({
@@ -218,26 +181,20 @@ function M.setup_keymaps()
 
     vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
 
-    -- Symbol search (use LSP for symbols)
     vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols, { desc = "Document symbols" })
     vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols, { desc = "Workspace symbols" })
 
-    -- Additional useful git commands
     vim.keymap.set("n", "<leader>gc", builtin.git_commits, { desc = "Git commits" })
     vim.keymap.set("n", "<leader>gb", builtin.git_branches, { desc = "Git branches" })
     vim.keymap.set("n", "<leader>gs", builtin.git_status, { desc = "Git status" })
 
-    -- Jai module search keymaps (preserving your custom functionality)
+    -- Jai module search
     local jai_modules_path = "/Users/alexmatthewcandelario/gits/jai/modules"
 
-    -- Search for symbols (functions/structs) in Jai modules
     vim.keymap.set("n", "<leader>js", function()
-        -- Create a simple menu for symbol type selection
         vim.ui.select(
             { "All Symbols", "Functions (::)", "Structs", "Enums", "Constants" },
-            {
-                prompt = "Select symbol type to search:",
-            },
+            { prompt = "Select symbol type to search:" },
             function(choice)
                 if not choice then return end
 
@@ -250,9 +207,6 @@ function M.setup_keymaps()
                     search_pattern = "enum\\s+\\w+"
                 elseif choice == "Constants" then
                     search_pattern = "^\\s*\\w+\\s*::\\s*:"
-                else
-                    -- For "All Symbols", start with empty search and let user type
-                    search_pattern = ""
                 end
 
                 builtin.live_grep({
@@ -264,7 +218,6 @@ function M.setup_keymaps()
         )
     end, { desc = "Search Jai module symbols" })
 
-    -- Grep search in Jai modules
     vim.keymap.set("n", "<leader>jg", function()
         builtin.live_grep({
             cwd = jai_modules_path,
@@ -272,8 +225,6 @@ function M.setup_keymaps()
         })
     end, { desc = "Grep search in Jai modules" })
 
-    -- Grep with glob filter (use --- to separate search from glob)
-    -- Example: "my search text --- *.jai" or "function --- *.ts"
     vim.keymap.set("n", "<leader>fg", function()
         local root = get_project_root()
         vim.ui.input({ prompt = "Search --- *.ext: " }, function(input)
@@ -293,55 +244,6 @@ function M.setup_keymaps()
             })
         end)
     end, { desc = "Grep with file type filter (search --- *.ext)" })
-end
-
-function M.setup_commands()
-    -- Helper commands for workspace debugging
-    vim.api.nvim_create_user_command('WorkspaceInfo', function()
-        local function get_project_root()
-            local start_dir
-            local current_file = vim.fn.expand('%:p')
-
-            if current_file ~= '' then
-                start_dir = vim.fn.fnamemodify(current_file, ':h')
-            else
-                start_dir = vim.fn.getcwd()
-            end
-
-            local markers = { '.git', 'build.jai', 'first.jai', 'package.json', 'Cargo.toml', 'go.mod', 'CMakeLists.txt', 'Makefile', '.project', '.root' }
-            local home = vim.fn.expand('~')
-            local current = start_dir
-
-            while current ~= home and current ~= '/' do
-                for _, marker in ipairs(markers) do
-                    local marker_path = current .. '/' .. marker
-                    if vim.fn.isdirectory(marker_path) == 1 or vim.fn.filereadable(marker_path) == 1 then
-                        return current
-                    end
-                end
-
-                local parent = vim.fn.fnamemodify(current, ':h')
-                if parent == current then break end
-                current = parent
-            end
-
-            return start_dir
-        end
-
-        local root = get_project_root()
-        local cwd = vim.fn.getcwd()
-        local buf_path = vim.fn.expand('%:p:h')
-    end, { desc = 'Show current workspace root' })
-
-    vim.api.nvim_create_user_command('WorkspaceReset', function()
-        vim.g.initial_cwd = nil
-    end, { desc = 'Reset workspace root cache' })
-
-    -- Command to reload Telescope configuration
-    vim.api.nvim_create_user_command('TelescopeReload', function()
-        require('plenary.reload').reload_module('telescope')
-        require('telescope').setup()
-    end, { desc = 'Reload Telescope configuration' })
 end
 
 return M

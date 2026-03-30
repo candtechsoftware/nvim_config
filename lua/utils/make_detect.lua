@@ -1,5 +1,4 @@
--- File: lua/candtech/make_detect.lua
--- Usage: require("candtech.make_detect").setup()
+-- Build system auto-detection for makeprg/errorformat
 
 local M = {}
 
