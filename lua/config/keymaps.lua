@@ -33,10 +33,28 @@ vim.keymap.set("n", "<leader>tc", "<cmd>tabclose<CR>zz")
 -- Search and replace
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]]) -- Search and replace the word under the cursor
 
+-- Undotree
+vim.keymap.set("n", "<leader>u", function()
+    vim.cmd.packadd("nvim.undotree")
+    vim.cmd.Undotree()
+end, { desc = "Toggle undotree" })
+
 -- Source file
 vim.keymap.set("n", "<leader><leader>", function()
     vim.cmd("so")
 end) -- Source the file
+
+-- Inlay hints
+vim.keymap.set("n", "<leader>ih", function()
+    vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+end, { desc = "Toggle inlay hints" })
+
+-- Completion
+vim.keymap.set("i", "<C-n>", function()
+  if vim.fn.pumvisible() == 1 then return "<C-n>" end
+  return "<C-x><C-o>"
+end, { expr = true, desc = "Trigger LSP completion / cycle popup" })
+vim.keymap.set("i", "<C-]>", "<C-x><C-]>", { desc = "Trigger tag completion" })
 
 -- Comment navigation
 vim.keymap.set("n", "]c", function()

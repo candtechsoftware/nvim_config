@@ -99,23 +99,10 @@ Leader: `<Space>`
 | `<leader>hp` / `<leader>hn` | n | Prev/next file |
 | `<C-e>` | n | Toggle menu |
 
-## Completion (blink.lua)
-
-| Key | Mode | Action |
-|-----|------|--------|
-| `<Tab>` / `<S-Tab>` | i | Next/prev completion |
-| `<CR>` | i | Accept |
-| `<C-e>` | i | Cancel |
-| `<C-h>` | i | Toggle signature help |
-
 ## Clipboard (clipboard.lua)
 
 | Key | Mode | Action |
 |-----|------|--------|
-| `<leader>cy` | n,v | Yank to clipboard |
-| `<leader>cY` | n | Yank line to clipboard |
-| `<leader>cp` | n,v | Paste from clipboard |
-| `<leader>cP` | n | Paste from clipboard (before) |
 | `<leader>ca` / `<leader>cA` | n,v | Paste from register 'a' |
 | `<leader>ch` | n | Clipboard history |
 | `<leader>cc` | n | Clear history |

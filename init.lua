@@ -25,8 +25,6 @@ vim.api.nvim_create_autocmd('PackChanged', {
         local path = ev.data.path
         if name == 'telescope-fzf-native.nvim' then
             vim.system({ 'make' }, { cwd = path }):wait()
-        elseif name == 'blink.cmp' then
-            vim.system({ 'cargo', 'build', '--release' }, { cwd = path }):wait()
         end
     end,
 })
@@ -40,7 +38,6 @@ vim.pack.add({
     'https://github.com/rluba/jai.vim',
     'https://github.com/nvim-treesitter/nvim-treesitter',
     'https://github.com/MeanderingProgrammer/render-markdown.nvim',
-    'https://github.com/Saghen/blink.cmp',
 })
 
 -- Core
@@ -50,7 +47,6 @@ require("config.keymaps")
 -- LSP + completion
 require("config.lsp").setup()
 require("config.ctags").setup()
-require("config.blink").setup()
 
 -- Treesitter
 require("config.treesitter").setup()

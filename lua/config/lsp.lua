@@ -71,7 +71,7 @@ end
 local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
-  local c_filetypes = { c = true, cpp = true, objc = true, objcpp = true }
+  local c_filetypes = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
 
   -- Navigation
   vim.keymap.set('n', 'gd', function()
@@ -289,9 +289,29 @@ function M.setup()
       local bufnr = args.buf
 
       -- Disable diagnostics for clangd (unity builds produce false positives)
+      -- Semantic tokens stay enabled so types/functions/macros get colored like in 4coder
       if client.name == 'clangd' then
         vim.diagnostic.enable(false, { bufnr = bufnr })
       end
+
+      -- LSP folding
+      vim.wo[args.data.winid or 0].foldmethod = 'expr'
+      vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
+      vim.wo[args.data.winid or 0].foldlevel = 99
+
+      -- Enable native LSP completion with auto-trigger on typing
+      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = true })
+
+      -- Keyword-as-you-type: trigger completion on word characters (official API)
+      vim.api.nvim_create_autocmd('InsertCharPre', {
+        buffer = bufnr,
+        group = vim.api.nvim_create_augroup('lsp_keyword_trigger_' .. bufnr, { clear = true }),
+        callback = function()
+          if vim.v.char:match('[%w_]') and vim.fn.pumvisible() == 0 then
+            vim.schedule(vim.lsp.completion.get)
+          end
+        end,
+      })
 
       -- Set keymaps (omnifunc/tagfunc are auto-set by 0.12)
       set_keymaps(bufnr)

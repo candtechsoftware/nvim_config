@@ -10,7 +10,7 @@ return {
     '--pch-storage=memory',
     '-j=4',
   },
-  filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda' },
+  filetypes = { 'c', 'cpp', 'objc', 'objcpp', 'cuda', 'hlsl' },
   root_markers = { 'compile_flags.txt', 'compile_commands.json', '.clangd', '.git' },
   settings = {
     clangd = {

@@ -1,9 +1,5 @@
 {
   "plugins": {
-    "blink.cmp": {
-      "rev": "8a2060dff4e68ac17f1c92aed526c76fb0c1ac2f",
-      "src": "https://github.com/Saghen/blink.cmp"
-    },
     "harpoon": {
       "rev": "87b1a3506211538f460786c23f98ec63ad9af4e5",
       "src": "https://github.com/ThePrimeagen/harpoon",

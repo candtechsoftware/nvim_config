@@ -58,7 +58,7 @@ local file_entries = {}
 local tag_prefix_index = {}
 -- Mtime tracking: { filepath -> mtime_sec }
 local cache_mtime = {}
--- Cache version counters (bumped on cache update, used by blink source)
+-- Cache version counters (bumped on cache update)
 local cache_version = 0
 local system_cache_version = 0
 -- Per-buffer root cache (avoids vim.fn calls during completion)
@@ -313,6 +313,7 @@ local function update_cache_for_file(root, filepath)
   vim.fn.jobstart({
     'ctags', '-f', '-',
     '--languages=C,C++,ObjectiveC',
+    '--langmap=C++:+.hlsl.hlsli.fx.fxh.psh.cginc.compute.shader',
     '--fields=+nKz',
     '--extras=+q',
     filepath,
@@ -432,6 +433,7 @@ local function generate_tags(root, outpath)
   vim.fn.jobstart({
     'ctags', '-R',
     '--languages=C,C++,ObjectiveC',
+    '--langmap=C++:+.hlsl.hlsli.fx.fxh.psh.cginc.compute.shader',
     '--fields=+nKz',
     '--extras=+q',
     '-f', outpath,
@@ -457,7 +459,7 @@ local function update_tags_for_file(root, outpath, filepath)
     'sh', '-c', string.format(
       'grep -v "\t%s\t" %s > %s.new 2>/dev/null; ' ..
       'mv %s.new %s; ' ..
-      'ctags -a --languages=C,C++,ObjectiveC --fields=+nKz --extras=+q -f %s %s',
+      'ctags -a --languages=C,C++,ObjectiveC --langmap=C++:+.hlsl.hlsli.fx.fxh.psh.cginc.compute.shader --fields=+nKz --extras=+q -f %s %s',
       relpath, outpath, outpath,
       outpath, outpath,
       outpath, filepath
@@ -572,7 +574,10 @@ function M.setup()
   -- On BufEnter: add tags path, generate if missing, set up completion
   vim.api.nvim_create_autocmd('BufEnter', {
     group = group,
-    pattern = { '*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.cxx', '*.m', '*.mm' },
+    pattern = {
+      '*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.cxx', '*.m', '*.mm',
+      '*.hlsl', '*.hlsli', '*.fx', '*.fxh', '*.psh', '*.cginc', '*.compute', '*.shader',
+    },
     callback = function(args)
       local root = get_project_root()
       if not root then return end
@@ -620,7 +625,10 @@ function M.setup()
 
   vim.api.nvim_create_autocmd('BufWritePost', {
     group = group,
-    pattern = { '*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.cxx', '*.m', '*.mm' },
+    pattern = {
+      '*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.cxx', '*.m', '*.mm',
+      '*.hlsl', '*.hlsli', '*.fx', '*.fxh', '*.psh', '*.cginc', '*.compute', '*.shader',
+    },
     callback = function()
       save_timer:stop()
       save_timer:start(500, 0, vim.schedule_wrap(function()

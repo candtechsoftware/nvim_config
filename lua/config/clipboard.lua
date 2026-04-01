@@ -124,15 +124,6 @@ end
 
 -- Setup keybindings
 local function setup_keymaps()
-  -- Yank to system clipboard
-  vim.keymap.set({"n", "v"}, "<leader>cy", [["+y]], { desc = "Yank to system clipboard" })
-  vim.keymap.set("n", "<leader>cY", [["+Y]], { desc = "Yank line to system clipboard" })
-
-  -- Paste from system clipboard
-  vim.keymap.set("n", "<leader>cp", [["+p]], { desc = "Paste from system clipboard (after)" })
-  vim.keymap.set("n", "<leader>cP", [["+P]], { desc = "Paste from system clipboard (before)" })
-  vim.keymap.set("v", "<leader>cp", [["+p]], { desc = "Paste from system clipboard" })
-
   -- Paste from vim register "a (mirrored system clipboard)
   vim.keymap.set("n", "<leader>ca", [["ap]], { desc = "Paste from register 'a' (after)" })
   vim.keymap.set("n", "<leader>cA", [["aP]], { desc = "Paste from register 'a' (before)" })

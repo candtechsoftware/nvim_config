@@ -1,79 +1,79 @@
 local colors = {
-    -- Core UI colors (from 4coder Fleury theme)
-    bar                   = "#000000",        -- defcolor_bar
-    base                  = "#fcaa05",        -- defcolor_base: amber-gold
-    pop1                  = "#de8150",        -- defcolor_pop1
-    pop2                  = "#FF0000",        -- defcolor_pop2
-    back                  = "#020202",        -- defcolor_back: rich-black
-    margin                = "#222425",        -- defcolor_margin: dark-slate
-    margin_hover          = "#63523d",        -- defcolor_margin_hover: coffee-brown
-    margin_active         = "#63523d",        -- defcolor_margin_active: coffee-brown
-    list_item             = "#222425",        -- defcolor_list_item
-    list_item_hover       = "#362e25",        -- defcolor_list_item_hover
-    list_item_active      = "#63523d",        -- defcolor_list_item_active
-    cursor                = "#00EE00",        -- defcolor_cursor[0]: bright green
-    cursor_alt1           = "#e0741b",        -- defcolor_cursor[1]
-    cursor_alt2           = "#1be094",        -- defcolor_cursor[2]
-    cursor_alt3           = "#ba60c4",        -- defcolor_cursor[3]
-    at_cursor             = "#0C0C0C",        -- defcolor_at_cursor
-    highlight_cursor_line = "#1E1E1E",        -- defcolor_highlight_cursor_line
-    highlight             = "#303040",        -- defcolor_highlight: gunmetal-blue
-    at_highlight          = "#FF44DD",        -- defcolor_at_highlight
-    mark                  = "#494949",        -- defcolor_mark
+    -- Core UI colors (from fleury-theme.el)
+    bar                   = "#000000",        -- pure-black
+    base                  = "#fcaa05",        -- amber-gold
+    pop1                  = "#de8150",        -- pop1
+    pop2                  = "#FF0000",        -- pop2
+    back                  = "#020202",        -- rich-black
+    margin                = "#222425",        -- dark-slate
+    margin_hover          = "#63523d",        -- coffee-brown
+    margin_active         = "#63523d",        -- coffee-brown
+    list_item             = "#222425",        -- dark-slate
+    list_item_hover       = "#362e25",        -- list hover
+    list_item_active      = "#63523d",        -- coffee-brown
+    cursor                = "#00EE00",        -- bright green
+    cursor_alt1           = "#e0741b",        -- cursor alt
+    cursor_alt2           = "#1be094",        -- cursor alt
+    cursor_alt3           = "#ba60c4",        -- cursor alt
+    at_cursor             = "#0C0C0C",        -- at cursor
+    highlight_cursor_line = "#1E1E1E",        -- charcoal-gray-lite
+    highlight             = "#303040",        -- gunmetal-blue
+    at_highlight          = "#FF44DD",        -- at highlight
+    mark                  = "#494949",        -- mark
 
-    -- Text colors (from 4coder Fleury theme)
-    text_default          = "#b99468",        -- defcolor_text_default: light-bronze
-    comment               = "#666666",        -- defcolor_comment: dim-gray
-    comment_pop           = "#2ab34f",        -- defcolor_comment_pop[0]: green
-    comment_pop_alt       = "#db2828",        -- defcolor_comment_pop[1]: red
-    keyword               = "#f0c674",        -- defcolor_keyword: goldenrod
-    str_constant          = "#ffa900",        -- defcolor_str_constant: bright-orange
-    char_constant         = "#ffa900",        -- defcolor_char_constant
-    int_constant          = "#ffa900",        -- defcolor_int_constant
-    float_constant        = "#ffa900",        -- defcolor_float_constant
-    bool_constant         = "#ffa900",        -- defcolor_bool_constant
-    preproc               = "#dc7575",        -- defcolor_preproc: dusty-rose
-    include               = "#ffa900",        -- defcolor_include: bright-orange
-    special_character     = "#FF0000",        -- defcolor_special_character
-    ghost_character       = "#4E5E46",        -- defcolor_ghost_character
-    highlight_junk        = "#3A0000",        -- defcolor_highlight_junk
-    highlight_white       = "#003A3A",        -- defcolor_highlight_white
-    paste                 = "#DDEE00",        -- defcolor_paste
-    undo                  = "#00DDEE",        -- defcolor_undo
-    line_numbers_back     = "#101010",        -- defcolor_line_numbers_back
-    line_numbers_text     = "#404040",        -- defcolor_line_numbers_text
+    -- Text colors (from fleury-theme.el)
+    text_default          = "#b99468",        -- light-bronze
+    comment               = "#666666",        -- dim-gray
+    comment_pop           = "#2ab34f",        -- comment pop green
+    comment_pop_alt       = "#db2828",        -- comment pop red
+    keyword               = "#f0c674",        -- goldenrod
+    str_constant          = "#ffa900",        -- bright-orange
+    char_constant         = "#ffa900",        -- bright-orange
+    int_constant          = "#ffa900",        -- bright-orange
+    float_constant        = "#ffa900",        -- bright-orange
+    bool_constant         = "#ffa900",        -- bright-orange
+    preproc               = "#dc7575",        -- dusty-rose
+    include               = "#ffa900",        -- bright-orange
+    special_character     = "#FF0000",        -- bright-red
+    ghost_character       = "#4E5E46",        -- ghost
+    highlight_junk        = "#3A0000",        -- junk
+    highlight_white       = "#003A3A",        -- white highlight
+    paste                 = "#DDEE00",        -- paste
+    undo                  = "#00DDEE",        -- undo
+    line_numbers_back     = "#101010",        -- line numbers bg
+    line_numbers_text     = "#404040",        -- medium-gray
 
     -- Fleury theme specific colors
-    syntax_crap           = "#5c4d3c",        -- fleury_color_syntax_crap
-    operators             = "#bd2d2d",        -- fleury_color_operators
-    inactive_pane_overlay = "#44000000",      -- fleury_color_inactive_pane_overlay
-    inactive_pane_background = "#000000",     -- fleury_color_inactive_pane_background
-    file_progress_bar     = "#634323",        -- fleury_color_file_progress_bar
-    brace_highlight       = "#8ffff2",        -- fleury_color_brace_highlight: aqua-ice
-    brace_line            = "#9ba290",        -- fleury_color_brace_line: dusty-sage
-    brace_annotation      = "#9ba290",        -- fleury_color_brace_annotation
-    index_product_type    = "#edb211",        -- fleury_color_index_product_type: sunflower-yellow
-    index_sum_type        = "#a7eb13",        -- fleury_color_index_sum_type
-    index_function        = "#de451f",        -- fleury_color_index_function: burnt-orange
-    index_macro           = "#2895c7",        -- fleury_color_index_macro: sky-blue
-    index_constant        = "#6eb535",        -- fleury_color_index_constant: green
-    index_comment_tag     = "#ffae00",        -- fleury_color_index_comment_tag
-    index_decl            = "#c9598a",        -- fleury_color_index_decl
-    cursor_macro          = "#de2368",        -- fleury_color_cursor_macro
-    cursor_power_mode     = "#efaf2f",        -- fleury_color_cursor_power_mode
-    cursor_inactive       = "#880000",        -- fleury_color_cursor_inactive
-    plot_cycle1           = "#03d3fc",        -- fleury_color_plot_cycle[0]
-    plot_cycle2           = "#22b80b",        -- fleury_color_plot_cycle[1]
-    plot_cycle3           = "#f0bb0c",        -- fleury_color_plot_cycle[2]
-    plot_cycle4           = "#f0500c",        -- fleury_color_plot_cycle[3]
-    token_highlight       = "#f2d357",        -- fleury_color_token_highlight
-    token_minor_highlight = "#d19045",        -- fleury_color_token_minor_highlight
-    error_annotation      = "#ff0000",        -- fleury_color_error_annotation
-    lego_grab             = "#efaf6f",        -- fleury_color_lego_grab
-    lego_splat            = "#efaaef",        -- fleury_color_lego_splat
-    comment_user_name     = "#ffdd23",        -- fleury_color_comment_user_name
+    syntax_crap           = "#5c4d3c",        -- fleury syntax crap
+    operators             = "#bd2d2d",        -- fleury operators
+    inactive_pane_overlay = "#44000000",      -- inactive pane overlay
+    inactive_pane_background = "#000000",     -- inactive pane bg
+    file_progress_bar     = "#634323",        -- file progress bar
+    brace_highlight       = "#8ffff2",        -- aqua-ice
+    brace_line            = "#9ba290",        -- dusty-sage
+    brace_annotation      = "#9ba290",        -- dusty-sage
+    index_product_type    = "#edb211",        -- sunflower-yellow
+    index_sum_type        = "#a7eb13",        -- sum type
+    index_function        = "#de451f",        -- burnt-orange
+    index_macro           = "#2895c7",        -- sky-blue
+    index_constant        = "#6eb535",        -- fresh-green
+    index_comment_tag     = "#ffae00",        -- comment tag
+    index_decl            = "#c9598a",        -- decl
+    cursor_macro          = "#de2368",        -- cursor macro
+    cursor_power_mode     = "#efaf2f",        -- cursor power mode
+    cursor_inactive       = "#880000",        -- cursor inactive
+    plot_cycle1           = "#03d3fc",        -- plot cycle
+    plot_cycle2           = "#22b80b",        -- plot cycle
+    plot_cycle3           = "#f0bb0c",        -- plot cycle
+    plot_cycle4           = "#f0500c",        -- plot cycle
+    token_highlight       = "#f2d357",        -- token highlight
+    token_minor_highlight = "#d19045",        -- token minor highlight
+    error_annotation      = "#ff0000",        -- error annotation
+    lego_grab             = "#efaf6f",        -- lego grab
+    lego_splat            = "#efaaef",        -- lego splat
+    comment_user_name     = "#ffdd23",        -- comment user name
 
-    -- Legacy mappings for compatibility
+    -- Legacy mappings
     yellow     = "#f0c674",        -- goldenrod
     orange     = "#de451f",        -- burnt-orange
     red        = "#ff0000",        -- bright-red
@@ -87,7 +87,6 @@ local colors = {
     warning    = "#ffa900",        -- bright-orange
 
     -- Scope background cycle colors (defcolor_back_cycle)
-    -- Mostly same as back, with red tint progression at higher levels
     back_cycle = {
         "#020202",  -- Level 1: same as back
         "#020202",  -- Level 2: same
@@ -228,9 +227,9 @@ set(0, "@function.macro", { fg = colors.index_macro })
 -- Variables
 set(0, "@variable",       { link = "Identifier" })
 set(0, "@variable.builtin", { fg = colors.index_constant })
-set(0, "@variable.parameter", { fg = colors.text_default, italic = true })
+set(0, "@variable.parameter", { fg = colors.text_default })
 set(0, "@variable.jai",  { link = "Identifier" })
-set(0, "@parameter",      { fg = colors.text_default, italic = true })
+set(0, "@parameter",      { fg = colors.text_default })
 
 -- Types
 set(0, "@type",           { link = "Type" })
@@ -256,6 +255,8 @@ set(0, "@field",          { link = "Identifier" })
 set(0, "@property",       { fg = colors.text_default })
 
 -- Punctuation
+set(0, "@punctuation.bracket",  { fg = colors.syntax_crap })
+set(0, "@punctuation.delimiter", { fg = colors.syntax_crap })
 set(0, "@punctuation.special", { fg = colors.operators })
 
 -- Constructors
@@ -278,31 +279,52 @@ set(0, "jaiConstant",         { fg = colors.blue })
 set(0, "@keyword.type.c",     { fg = colors.keyword })
 set(0, "@type.builtin.c",     { fg = colors.keyword })
 
--- C macro highlights
-set(0, "@lsp.type.macro.c",   { fg = colors.blue })
-
--- C function highlights (LSP semantic tokens)
+-- C LSP semantic tokens
+set(0, "@lsp.type.macro.c",   { fg = colors.index_macro })
 set(0, "@lsp.type.function.c", { link = "Function" })
+set(0, "@lsp.type.type.c",    { link = "Type" })
+set(0, "@lsp.type.struct.c",  { link = "Type" })
+set(0, "@lsp.type.enum.c",    { link = "Type" })
 set(0, "@lsp.mod.globalScope.c", {})
 set(0, "@lsp.typemod.function.globalScope.c", { link = "Function" })
 set(0, "@lsp.mod.fileScope.c", {})
 set(0, "@lsp.typemod.function.fileScope.c", { link = "Function" })
 
--- C enum member highlights (LSP semantic tokens)
-set(0, "@lsp.type.enumMember.c", { fg = colors.blue })
+-- Enum member highlights (LSP semantic tokens)
+set(0, "@lsp.type.enumMember", { fg = colors.index_constant })
+set(0, "@lsp.typemod.enumMember", { fg = colors.index_constant })
+set(0, "@lsp.typemod.enumMember.declaration", { fg = colors.index_constant })
+set(0, "@lsp.typemod.enumMember.readonly", { fg = colors.index_constant })
+set(0, "@lsp.type.enumMember.c", { fg = colors.index_constant })
 set(0, "@lsp.mod.readonly.c", {})
-set(0, "@lsp.typemod.enumMember.fileScope.c", { fg = colors.blue })
-set(0, "@lsp.typemod.enumMember.readonly.c", { fg = colors.blue })
+set(0, "@lsp.typemod.enumMember.fileScope.c", { fg = colors.index_constant })
+set(0, "@lsp.typemod.enumMember.readonly.c", { fg = colors.index_constant })
 
--- C++ Treesitter highlights
+-- C++ syntax highlighting overrides
+set(0, "@keyword.type.cpp",     { fg = colors.keyword })
+set(0, "@type.builtin.cpp",     { fg = colors.keyword })
+
+-- C++ Treesitter highlights (variable-use → sky-blue, matching fleury font-lock-variable-use-face)
 set(0, "@variable.cpp", { fg = colors.blue })
-set(0, "@function.call.cpp", { fg = colors.blue })
-set(0, "@constructor.cpp", { fg = colors.blue })
+set(0, "@function.call.cpp", { fg = colors.index_function })
+set(0, "@constructor.cpp", { link = "Type" })
 
--- C++ Semantic Tokens
-set(0, "@lsp.type.macro.cpp", { fg = colors.blue })
-set(0, "@lsp.mod.globalScope.cpp", { fg = colors.blue })
-set(0, "@lsp.typemod.macro.globalScope.cpp", { fg = colors.blue })
+-- C++ LSP semantic tokens
+set(0, "@lsp.type.macro.cpp", { fg = colors.index_macro })
+set(0, "@lsp.type.function.cpp", { link = "Function" })
+set(0, "@lsp.type.method.cpp",  { fg = colors.index_function })
+set(0, "@lsp.type.type.cpp",    { link = "Type" })
+set(0, "@lsp.type.class.cpp",   { link = "Type" })
+set(0, "@lsp.type.struct.cpp",  { link = "Type" })
+set(0, "@lsp.type.enum.cpp",    { link = "Type" })
+set(0, "@lsp.type.namespace.cpp", { fg = colors.include })
+set(0, "@lsp.type.typeParameter.cpp", { link = "Type" })
+set(0, "@lsp.type.variable.cpp", { fg = colors.blue })
+set(0, "@lsp.type.parameter.cpp", { fg = colors.text_default })
+set(0, "@lsp.type.property.cpp", { fg = colors.text_default })
+set(0, "@lsp.type.enumMember.cpp", { fg = colors.index_constant })
+set(0, "@lsp.mod.globalScope.cpp", {})
+set(0, "@lsp.typemod.macro.globalScope.cpp", { fg = colors.index_macro })
 
 -- Scope highlight groups for nested scope backgrounds (like 4coder back_cycle)
 for i, bg in ipairs(colors.back_cycle) do

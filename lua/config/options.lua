@@ -13,7 +13,7 @@ vim.opt.fillchars:append({ eob = " " })
 -- Set statusline with mode indicator
 vim.o.laststatus = 2  -- Always show status line
 
-vim.o.statusline = ' %f %l:%c %{%v:lua.vim.ui.progress_status()%}'
+vim.o.statusline = ' %f %l:%c %{%v:lua.vim.diagnostic.status()%} %{%v:lua.vim.ui.progress_status()%}'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for
@@ -43,6 +43,7 @@ vim.opt.smoothscroll = true
 vim.opt.signcolumn = "auto" -- Only show sign column when needed
 vim.opt.colorcolumn = "" -- Disable the color column
 vim.opt.updatetime = 250 -- Update interval for CursorHold and CursorHoldI
+vim.opt.shortmess:append('c') -- Suppress completion messages (prevents command line focus steal)
 
 -- Performance optimizations
 vim.opt.synmaxcol = 300 -- Syntax highlight up to 300 columns
@@ -52,12 +53,23 @@ vim.opt.ttimeoutlen = 10 -- Near-instant escape key response
 
 vim.g.tex_conceal = "mgs"
 
--- Disable italics for various highlight groups
-vim.api.nvim_set_hl(0, "Comment", { italic = false })
-vim.api.nvim_set_hl(0, "Keyword", { italic = false })
-vim.api.nvim_set_hl(0, "Type", { italic = false })
-vim.api.nvim_set_hl(0, "Function", { italic = false })
-vim.api.nvim_set_hl(0, "Identifier", { italic = false })
+-- Globally disable all italics
+local function strip_italics()
+    local hls = vim.api.nvim_get_hl(0, {})
+    for name, hl in pairs(hls) do
+        if hl.italic then
+            hl.italic = false
+            vim.api.nvim_set_hl(0, name, hl)
+        end
+    end
+end
+strip_italics()
+vim.api.nvim_create_autocmd("ColorScheme", {
+    callback = function() vim.schedule(strip_italics) end,
+})
+
+vim.o.winborder = 'rounded'
+vim.o.completeopt = 'menu,menuone,noselect,fuzzy'
 
 vim.opt.splitright = true
 
