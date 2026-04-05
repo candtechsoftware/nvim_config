@@ -1,28 +1,8 @@
 local M = {}
 
 function M.setup()
-    -- Use nvim-treesitter only for parser installation
-    local ok, ts_configs = pcall(require, 'nvim-treesitter.configs')
-    if ok then
-        ts_configs.setup({
-            ensure_installed = {
-                "c", "cpp", "lua", "rust", "go",
-                "javascript", "typescript", "tsx",
-                "json", "yaml", "toml", "bash", "vim", "vimdoc", "query",
-                "glsl", "hlsl"
-            },
-            sync_install = false,
-            auto_install = true,
-            -- Disable nvim-treesitter's highlight module; use built-in vim.treesitter.start()
-            highlight = { enable = false },
-            indent = {
-                enable = true,
-                disable = { "python", "c", "cpp", "lua", "rust", "go", "jai" },
-            },
-            incremental_selection = { enable = false },
-            textobjects = { enable = false },
-        })
-    end
+    -- Parser management (native, no nvim-treesitter plugin)
+    require("config.ts_parsers").setup()
 
     -- Neovim 0.12 built-in treesitter highlighting
     vim.api.nvim_create_autocmd("FileType", {

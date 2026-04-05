@@ -78,16 +78,16 @@ local colors = {
     -- Cursor line
     cursor_line_highlight = "#1a1a1a",
 
-    -- Scope background cycle colors - neutral grays, slightly lighter per level
+    -- Scope background cycle colors - neutral grays, closer to black
     back_cycle = {
-        "#121212", -- Level 1
-        "#151515", -- Level 2
-        "#181818", -- Level 3
-        "#1b1b1b", -- Level 4
-        "#1e1e1e", -- Level 5
-        "#212121", -- Level 6
-        "#242424", -- Level 7
-        "#272727", -- Level 8
+        "#101010", -- Level 1
+        "#111111", -- Level 2
+        "#131313", -- Level 3
+        "#141414", -- Level 4
+        "#161616", -- Level 5
+        "#171717", -- Level 6
+        "#191919", -- Level 7
+        "#1a1a1a", -- Level 8
     },
 
     -- Diff

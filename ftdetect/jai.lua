@@ -1,4 +1,6 @@
--- Jai filetype options (filetype detection handled by jai.vim plugin)
+-- Jai filetype detection + options (native, no plugin)
+vim.filetype.add({ extension = { jai = "jai" } })
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "jai",
   callback = function()
