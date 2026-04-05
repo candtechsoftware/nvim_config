@@ -299,16 +299,68 @@ function M.setup()
       vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
       vim.wo[args.data.winid or 0].foldlevel = 99
 
+      -- For C files: strip '.' and '>' from clangd triggers so ctags handles
+      -- struct member completion (node->, node.) without LSP racing
+      if client.name == 'clangd' and (vim.bo[bufnr].filetype == 'c' or vim.bo[bufnr].filetype == 'objc') then
+        local caps = client.server_capabilities
+        if caps.completionProvider and caps.completionProvider.triggerCharacters then
+          local triggers = caps.completionProvider.triggerCharacters
+          for i = #triggers, 1, -1 do
+            if triggers[i] == '.' or triggers[i] == '>' then
+              table.remove(triggers, i)
+            end
+          end
+        end
+      end
+
       -- Enable native LSP completion with auto-trigger on typing
       vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = true })
 
-      -- Keyword-as-you-type: trigger completion on word characters (official API)
+      -- Insert-mode triggers: keyword completion + signature help
+      local c_ft = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
-        group = vim.api.nvim_create_augroup('lsp_keyword_trigger_' .. bufnr, { clear = true }),
+        group = vim.api.nvim_create_augroup('lsp_insert_trigger_' .. bufnr, { clear = true }),
         callback = function()
-          if vim.v.char:match('[%w_]') and vim.fn.pumvisible() == 0 then
-            vim.schedule(vim.lsp.completion.get)
+          local char = vim.v.char
+
+          -- Signature help on ( and ,
+          if char == '(' or char == ',' then
+            vim.schedule(function()
+              -- C files: use ctags signature help (clangd lacks compile database)
+              if c_ft[vim.bo[bufnr].filetype] then
+                require('config.ctags').show_signature_help()
+              else
+                vim.lsp.buf.signature_help({ silent = true })
+              end
+            end)
+            return
+          end
+
+          -- Keyword completion on word characters
+          if char:match('[%w_]') and vim.fn.pumvisible() == 0 then
+            vim.schedule(function()
+              -- C files: use ctags prefix matching (clangd lacks compile database)
+              if c_ft[vim.bo[bufnr].filetype] then
+                local col = vim.api.nvim_win_get_cursor(0)[2]
+                local line = vim.api.nvim_get_current_line()
+                local prefix = line:sub(1, col + 1):match('([%w_]+)$')
+                if prefix and #prefix >= 2 then
+                  local ctags = require('config.ctags')
+                  local items = ctags.get_prefix_matches(prefix:lower(), 20)
+                  if #items > 0 then
+                    local matches = {}
+                    for _, t in ipairs(items) do
+                      matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
+                    end
+                    vim.fn.complete(col + 2 - #prefix, matches)
+                    return
+                  end
+                end
+              end
+              -- Non-C files or ctags had no matches: use LSP
+              vim.lsp.completion.get()
+            end)
           end
         end,
       })

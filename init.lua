@@ -48,6 +48,7 @@ require("config.ctags").setup()
 
 -- Treesitter
 require("config.treesitter").setup()
+require("config.c_keywords").setup()
 
 -- Telescope + Harpoon
 require("config.telescope").setup()
@@ -65,4 +66,4 @@ require("config.comment_tags").setup()
 require("render-markdown").setup()
 
 -- Colorscheme
-vim.cmd.colorscheme("jbn")
+vim.cmd.colorscheme("hh")

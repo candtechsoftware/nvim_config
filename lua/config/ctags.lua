@@ -64,6 +64,10 @@ local system_cache_version = 0
 -- Per-buffer root cache (avoids vim.fn calls during completion)
 local buf_root = {} -- { bufnr -> root }
 
+-- Signature cache: { project_root -> { func_name -> { label, params } } }
+local signature_cache = {}
+local system_signature_cache = nil
+
 -- System tags infrastructure
 local SYSTEM_TAGS_PATH = '/tmp/nvim-ctags/system-tags'
 local system_includes_cache = nil
@@ -78,7 +82,7 @@ local function get_system_includes()
   local dirs = {}
   local seen = {}
 
-  for _, lang in ipairs({ 'c', 'c++' }) do
+  for _, lang in ipairs({ 'c' }) do
     local cmd = string.format('echo | cc -E -v -x %s - 2>&1', lang)
     local output = vim.fn.system(cmd)
     if vim.v.shell_error ~= 0 then goto continue end
@@ -108,7 +112,8 @@ local function get_system_includes()
   return dirs
 end
 
--- Parse a single ctags line, returns (name, filename, kind, parent) or nil
+-- Parse a single ctags line, returns (name, filename, kind, parent, signature) or nil
+-- signature is only set for function/prototype kinds: { label, params_str, return_type }
 local function parse_tag_line(line)
   if line:byte(1) == 33 then return nil end -- skip !_ metadata lines
   local name, filename = line:match('^([^\t]+)\t([^\t]+)')
@@ -121,12 +126,35 @@ local function parse_tag_line(line)
       or line:match('\tunion:([^\t\n]+)')
       or line:match('\tclass:([^\t\n]+)')
   end
-  return name, filename, kind, parent
+  -- Extract function signature from pattern field for function/prototype kinds
+  local sig = nil
+  if kind == 'function' or kind == 'f' or kind == 'prototype' or kind == 'p' then
+    -- Pattern is between /^ and $/ e.g. /^func_name(params)$/
+    local pattern = line:match('\t/^(.-)%$/')
+    if pattern then
+      local params_str = pattern:match('%b()')
+      if params_str then
+        -- Strip outer parens
+        params_str = params_str:sub(2, -2)
+        local ret = line:match('\ttyperef:typename:([^\t\n]+)')
+        -- Clean up return type: strip arc_internal/arc_inline/yg_internal/yg_inline prefixes
+        if ret then
+          ret = ret:gsub('^[%w_]*internal%s+', ''):gsub('^[%w_]*inline%s+', '')
+        end
+        local label = (ret and ret .. ' ' or '') .. name .. '(' .. params_str .. ')'
+        sig = { label = label, params_str = params_str, return_type = ret }
+      end
+    end
+  end
+  return name, filename, kind, parent, sig
 end
 
 -- Add parsed tag to cache tables
-local function add_to_caches(name, filename, kind, parent, by_parent, names, findex, pindex)
+local function add_to_caches(name, filename, kind, parent, sig, by_parent, names, findex, pindex, sigs)
   names[name] = kind
+  if sig and sigs then
+    sigs[name] = sig
+  end
   if parent then
     if not by_parent[parent] then by_parent[parent] = {} end
     table.insert(by_parent[parent], {
@@ -149,7 +177,7 @@ end
 -- Async chunked cache building using libuv.
 -- Reads file in 64KB chunks, parses tags, yields between chunks so the
 -- editor stays responsive even for the 105MB system tags file.
--- Calls on_done(by_parent, names, findex, pindex) when complete, or on_done(nil) on error.
+-- Calls on_done(by_parent, names, findex, pindex, sigs) when complete, or on_done(nil) on error.
 local function build_cache_async(filepath, on_done)
   vim.uv.fs_open(filepath, 'r', 438, function(err, fd)
     if err or not fd then
@@ -168,18 +196,19 @@ local function build_cache_async(filepath, on_done)
       local names = {}
       local findex = {}
       local pindex = {}
+      local sigs = {}
       local leftover = ''
       local offset = 0
       local file_size = stat.size
 
       local function finish()
         if #leftover > 0 then
-          local n, fn, k, p = parse_tag_line(leftover)
-          if n then add_to_caches(n, fn, k, p, by_parent, names, findex, pindex) end
+          local n, fn, k, p, s = parse_tag_line(leftover)
+          if n then add_to_caches(n, fn, k, p, s, by_parent, names, findex, pindex, sigs) end
         end
         vim.uv.fs_close(fd, function() end)
         if on_done then
-          vim.schedule(function() on_done(by_parent, names, findex, pindex) end)
+          vim.schedule(function() on_done(by_parent, names, findex, pindex, sigs) end)
         end
       end
 
@@ -197,8 +226,8 @@ local function build_cache_async(filepath, on_done)
             local complete = block:sub(1, last_nl - 1)
             leftover = block:sub(last_nl + 1)
             for line in complete:gmatch('[^\n]+') do
-              local n, fn, k, p = parse_tag_line(line)
-              if n then add_to_caches(n, fn, k, p, by_parent, names, findex, pindex) end
+              local n, fn, k, p, s = parse_tag_line(line)
+              if n then add_to_caches(n, fn, k, p, s, by_parent, names, findex, pindex, sigs) end
             end
           else
             leftover = block
@@ -232,12 +261,13 @@ local function build_member_cache_async(root, force)
     local stat = vim.uv.fs_stat(tp)
     if stat then cache_mtime[tp] = stat.mtime.sec end
   end
-  build_cache_async(tp, function(by_parent, names, findex, pindex)
+  build_cache_async(tp, function(by_parent, names, findex, pindex, sigs)
     if not by_parent then return end
     member_cache[root] = by_parent
     tag_name_cache[root] = names
     file_entries[root] = findex
     tag_prefix_index[root] = pindex
+    signature_cache[root] = sigs
     cache_version = cache_version + 1
   end)
 end
@@ -249,9 +279,10 @@ local function build_system_member_cache_async(force)
     local stat = vim.uv.fs_stat(SYSTEM_TAGS_PATH)
     if stat then cache_mtime[SYSTEM_TAGS_PATH] = stat.mtime.sec end
   end
-  build_cache_async(SYSTEM_TAGS_PATH, function(by_parent, names, _, pindex)
+  build_cache_async(SYSTEM_TAGS_PATH, function(by_parent, names, _, pindex, sigs)
     if not by_parent then return end
     system_member_cache = by_parent
+    system_signature_cache = sigs
     system_tag_name_cache = names
     system_tag_prefix_index = pindex
     system_cache_version = system_cache_version + 1
@@ -326,16 +357,18 @@ local function update_cache_for_file(root, filepath)
         local tnc = tag_name_cache[root] or {}
         local fi = file_entries[root] or {}
         local pi = tag_prefix_index[root] or {}
+        local sc = signature_cache[root] or {}
         for _, line in ipairs(data) do
           if line ~= '' then
-            local n, fn, k, p = parse_tag_line(line)
-            if n then add_to_caches(n, fn, k, p, mc, tnc, fi, pi) end
+            local n, fn, k, p, s = parse_tag_line(line)
+            if n then add_to_caches(n, fn, k, p, s, mc, tnc, fi, pi, sc) end
           end
         end
         member_cache[root] = mc
         tag_name_cache[root] = tnc
         file_entries[root] = fi
         tag_prefix_index[root] = pi
+        signature_cache[root] = sc
         cache_version = cache_version + 1
       end)
     end,
@@ -568,6 +601,197 @@ local function infer_type_at_cursor(bufnr)
   return nil
 end
 
+--- Trigger struct member completion from ctags member_cache.
+--- Call after '.' or '->' is inserted; uses infer_type_at_cursor to resolve
+--- the type, then shows matching members via vim.fn.complete().
+function M.complete_members(bufnr)
+  local typename = infer_type_at_cursor(bufnr)
+  if not typename then return false end
+
+  local root = buf_root[bufnr]
+  local items = {}
+
+  -- Project members first
+  if root and member_cache[root] and member_cache[root][typename] then
+    for _, m in ipairs(member_cache[root][typename]) do
+      items[#items + 1] = m
+    end
+  end
+
+  -- System members
+  if system_member_cache and system_member_cache[typename] then
+    local seen = {}
+    for _, m in ipairs(items) do seen[m.word] = true end
+    for _, m in ipairs(system_member_cache[typename]) do
+      if not seen[m.word] then
+        items[#items + 1] = m
+      end
+    end
+  end
+
+  if #items == 0 then return false end
+
+  -- Start column: right after the '.' or '->'
+  local col = vim.api.nvim_win_get_cursor(0)[2] + 1 -- 1-indexed, after char insertion
+  vim.fn.complete(col, items)
+  return true
+end
+
+-- Signature help tracking
+local sig_help_ns = vim.api.nvim_create_namespace('ctags_sig_help')
+local sig_help_win = nil
+
+--- Close any open ctags signature help window.
+local function close_sig_help()
+  if sig_help_win and vim.api.nvim_win_is_valid(sig_help_win) then
+    vim.api.nvim_win_close(sig_help_win, true)
+  end
+  sig_help_win = nil
+end
+
+--- Look up a function signature from caches or taglist fallback.
+local function find_signature(func_name, bufnr)
+  local root = buf_root[bufnr]
+  if root and signature_cache[root] and signature_cache[root][func_name] then
+    return signature_cache[root][func_name]
+  end
+  if system_signature_cache and system_signature_cache[func_name] then
+    return system_signature_cache[func_name]
+  end
+  -- Fallback: vim.fn.taglist (works even if async cache isn't ready yet)
+  local ok, tags = pcall(vim.fn.taglist, '^' .. func_name .. '$')
+  if not ok or not tags then return nil end
+  for _, tag in ipairs(tags) do
+    if tag.kind == 'f' or tag.kind == 'p' or tag.kind == 'function' or tag.kind == 'prototype' then
+      local params_str = tag.cmd:match('%b()')
+      if params_str then
+        params_str = params_str:sub(2, -2)
+        local ret = tag.typeref and tag.typeref:match('typename:(.+)') or nil
+        if ret then
+          ret = ret:gsub('^[%w_]*internal%s+', ''):gsub('^[%w_]*inline%s+', '')
+        end
+        return {
+          label = (ret and ret .. ' ' or '') .. func_name .. '(' .. params_str .. ')',
+          params_str = params_str,
+        }
+      end
+    end
+  end
+  return nil
+end
+
+--- Show function signature help from ctags data.
+--- Renders identically to LSP signature help: code fence + active parameter highlight.
+function M.show_signature_help()
+  close_sig_help()
+
+  local ok, err = pcall(function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local line = vim.api.nvim_get_current_line()
+    local before = line:sub(1, col + 1)
+
+    -- Find matching '(' scanning backwards (handles nested parens)
+    local depth = 0
+    local paren_pos = nil
+    for i = #before, 1, -1 do
+      local c = before:byte(i)
+      if c == 41 then depth = depth + 1
+      elseif c == 40 then
+        if depth == 0 then paren_pos = i; break end
+        depth = depth - 1
+      end
+    end
+    if not paren_pos then return end
+
+    local func_name = before:sub(1, paren_pos - 1):match('([%w_]+)%s*$')
+    if not func_name then return end
+
+    -- Count commas for active parameter index
+    local inside = before:sub(paren_pos + 1)
+    local active_param = 0
+    local pd = 0
+    for i = 1, #inside do
+      local c = inside:byte(i)
+      if c == 40 then pd = pd + 1
+      elseif c == 41 then pd = pd - 1
+      elseif c == 44 and pd == 0 then active_param = active_param + 1 end
+    end
+
+    local sig = find_signature(func_name, bufnr)
+    if not sig then return end
+
+    -- Split params for active parameter highlighting
+    local param_labels = {}
+    if sig.params_str and sig.params_str ~= '' then
+      local pd2 = 0
+      local start = 1
+      for i = 1, #sig.params_str do
+        local c = sig.params_str:byte(i)
+        if c == 40 then pd2 = pd2 + 1
+        elseif c == 41 then pd2 = pd2 - 1
+        elseif c == 44 and pd2 == 0 then
+          param_labels[#param_labels + 1] = vim.trim(sig.params_str:sub(start, i - 1))
+          start = i + 1
+        end
+      end
+      param_labels[#param_labels + 1] = vim.trim(sig.params_str:sub(start))
+    end
+
+    -- Display: single line with the signature, highlighted as C
+    local label = sig.label
+    local display = { label }
+
+    -- Create float buffer
+    local fbuf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(fbuf, 0, -1, false, display)
+    vim.bo[fbuf].modifiable = false
+    vim.bo[fbuf].bufhidden = 'wipe'
+    vim.bo[fbuf].filetype = 'c'
+
+    -- Calculate window dimensions
+    local width = math.min(#label + 2, math.floor(vim.o.columns * 0.8))
+    sig_help_win = vim.api.nvim_open_win(fbuf, false, {
+      relative = 'cursor',
+      row = -1,
+      col = 0,
+      width = width,
+      height = 1,
+      style = 'minimal',
+      border = vim.o.winborder ~= '' and vim.o.winborder or 'rounded',
+      focusable = false,
+      zindex = 50,
+    })
+
+    -- Highlight active parameter on the code line (line index 1 in the buffer)
+    if active_param < #param_labels then
+      local param_text = param_labels[active_param + 1]
+      -- Find param position in label, skipping to the right occurrence
+      local search_from = label:find('(', 1, true) or 1
+      for _ = 1, active_param do
+        local nc = label:find(',', search_from + 1, true)
+        if nc then search_from = nc end
+      end
+      local ps = label:find(param_text, search_from, true)
+      if ps then
+        vim.api.nvim_buf_add_highlight(fbuf, sig_help_ns, 'LspSignatureActiveParameter', 0, ps - 1, ps - 1 + #param_text)
+      end
+    end
+
+    -- Auto-close on next cursor move or insert leave
+    local group = vim.api.nvim_create_augroup('ctags_sig_close', { clear = true })
+    vim.api.nvim_create_autocmd({ 'CursorMovedI', 'InsertLeave', 'BufLeave' }, {
+      group = group,
+      once = true,
+      callback = close_sig_help,
+    })
+  end)
+
+  if not ok then
+    vim.notify('sig_help error: ' .. tostring(err), vim.log.levels.DEBUG)
+  end
+end
+
 function M.setup()
   local group = vim.api.nvim_create_augroup('ctags_fallback', { clear = true })
 
@@ -641,6 +865,30 @@ function M.setup()
           update_tags_for_file(root, tp, vim.api.nvim_buf_get_name(0))
         end
       end))
+    end,
+  })
+
+  -- Struct member completion on '.' and '->'
+  vim.api.nvim_create_autocmd('InsertCharPre', {
+    group = group,
+    pattern = {
+      '*.c', '*.h', '*.m',
+    },
+    callback = function(args)
+      local char = vim.v.char
+      if char == '.' then
+        vim.schedule(function()
+          M.complete_members(args.buf)
+        end)
+      elseif char == '>' then
+        local col = vim.api.nvim_win_get_cursor(0)[2]
+        local line = vim.api.nvim_get_current_line()
+        if col > 0 and line:sub(col, col) == '-' then
+          vim.schedule(function()
+            M.complete_members(args.buf)
+          end)
+        end
+      end
     end,
   })
 

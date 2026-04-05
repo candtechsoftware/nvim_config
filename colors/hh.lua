@@ -7,18 +7,18 @@ local M = {}
 -- Color palette (matched to 4coder Fleury theme)
 local colors = {
   -- Core background/foreground
-  bar_bg = "#1f1f27",        -- defcolor_bar: Status bar background
+  bar_bg = "#0c0c10",        -- defcolor_bar: Status bar background
   base = "#cb9401",          -- defcolor_base: Status bar text / golden accent
   pop1 = "#70971e",          -- defcolor_pop1: Color of prompts
   pop2 = "#cb9401",          -- defcolor_pop2: Annotations
-  back = "#181818",          -- defcolor_back: Text area background
-  margin = "#181818",        -- defcolor_margin: Frame around inactive panel
+  back = "#030303",          -- defcolor_back: Text area background
+  margin = "#030303",        -- defcolor_margin: Frame around inactive panel
   margin_hover = "#00ff00",  -- defcolor_margin_hover
-  margin_active = "#181818", -- defcolor_margin_active
+  margin_active = "#030303", -- defcolor_margin_active
 
   -- List/hover colors
-  list_item_hover = "#171e20",  -- defcolor_list_item_hover
-  list_item_active = "#2d3640", -- defcolor_list_item_active
+  list_item_hover = "#0a0d0e",  -- defcolor_list_item_hover
+  list_item_active = "#161a1f", -- defcolor_list_item_active
 
   -- Cursor colors for different modes
   cursor_normal = "#00ee00",   -- defcolor_cursor[0]: Green for normal mode
@@ -28,8 +28,8 @@ local colors = {
   cursor_command = "#70971e",  -- Olive for command mode
   cursor_inactive = "#404040", -- fleury_color_cursor_inactive
 
-  at_cursor = "#181818",       -- defcolor_at_cursor
-  highlight_line = "#1f1f27",  -- defcolor_highlight_cursor_line
+  at_cursor = "#030303",       -- defcolor_at_cursor
+  highlight_line = "#0c0c10",  -- defcolor_highlight_cursor_line
   highlight = "#315268",       -- defcolor_highlight: Search highlight background
   at_highlight = "#c4b82b",    -- defcolor_at_highlight: Search highlight text
   mark = "#494949",            -- defcolor_mark
@@ -53,7 +53,7 @@ local colors = {
   undo = "#80005d",          -- defcolor_undo
 
   -- Line numbers
-  line_numbers_bg = "#181818",   -- defcolor_line_numbers_back
+  line_numbers_bg = "#060606",   -- defcolor_line_numbers_back
   line_numbers_text = "#404040", -- defcolor_line_numbers_text
 
   -- Indexer/semantic colors (fleury_color_index_*)
@@ -74,14 +74,14 @@ local colors = {
 
   -- Pane colors
   inactive_pane_overlay = "#000000", -- fleury_color_inactive_pane_overlay (transparent in original)
-  inactive_pane_bg = "#0c0c0c",      -- fleury_color_inactive_pane_background
-  file_progress_bar = "#232323",     -- fleury_color_file_progress_bar
+  inactive_pane_bg = "#030303",      -- fleury_color_inactive_pane_background
+  file_progress_bar = "#0c0c0c",     -- fleury_color_file_progress_bar
 
   -- Brace matching
   brace_highlight = "#b09573",   -- fleury_color_brace_highlight: Active brace
   brace_line = "#9ba290",        -- fleury_color_brace_line: Brace connection lines
   brace_annotation = "#9ba290",  -- fleury_color_brace_annotation
-  token_highlight = "#2f2f37",   -- fleury_color_token_highlight
+  token_highlight = "#141418",   -- fleury_color_token_highlight
 
   -- Cycle colors for text variations
   text_cycle1 = "#c0a583",       -- defcolor_text_cycle[0]
@@ -98,16 +98,16 @@ local colors = {
   yg_keyword = "#478980",
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- Moderate tints visible against #181818 background
+  -- Subtle tints visible against near-black background
   back_cycle = {
-    "#201e23",  -- Level 1: purple/magenta tint
-    "#1e221f",  -- Level 2: green tint
-    "#1e2022",  -- Level 3: blue tint
-    "#22201e",  -- Level 4: amber/orange tint
-    "#221e22",  -- Level 5: pink tint
-    "#1e2222",  -- Level 6: cyan tint
-    "#20201e",  -- Level 7: olive tint
-    "#201e23",  -- Level 8: violet tint
+    "#0f0e11",  -- Level 1: purple/magenta tint
+    "#0e100f",  -- Level 2: green tint
+    "#0e0f10",  -- Level 3: blue tint
+    "#100f0e",  -- Level 4: amber/orange tint
+    "#100e10",  -- Level 5: pink tint
+    "#0e1010",  -- Level 6: cyan tint
+    "#0f0f0e",  -- Level 7: olive tint
+    "#0f0e11",  -- Level 8: violet tint
   },
 }
 
@@ -203,10 +203,10 @@ function M.setup()
   hl(0, "FoldColumn", { fg = colors.comment, bg = colors.line_numbers_bg })
 
   -- Diff mode
-  hl(0, "DiffAdd", { bg = "#0c1a0c" })
-  hl(0, "DiffChange", { bg = "#1a1a0c" })
-  hl(0, "DiffDelete", { fg = colors.error, bg = "#1a0c0c" })
-  hl(0, "DiffText", { bg = "#2a2a14", bold = true })
+  hl(0, "DiffAdd", { bg = "#040c04" })
+  hl(0, "DiffChange", { bg = "#0c0c04" })
+  hl(0, "DiffDelete", { fg = colors.error, bg = "#0c0404" })
+  hl(0, "DiffText", { bg = "#14140a", bold = true })
 
   -- Spell checking
   hl(0, "SpellBad", { sp = colors.error, undercurl = true })
@@ -326,6 +326,7 @@ function M.setup()
   hl(0, "@keyword.operator", { fg = colors.operators })
   hl(0, "@keyword.import", { fg = colors.preproc })
   hl(0, "@keyword.type", { fg = colors.keyword })
+  hl(0, "@keyword.type.c", { fg = colors.keyword })
   hl(0, "@keyword.modifier", { fg = colors.keyword })
   hl(0, "@keyword.repeat", { fg = colors.keyword })
   hl(0, "@keyword.return", { fg = colors.keyword })
@@ -432,9 +433,9 @@ function M.setup()
   hl(0, "DiagnosticHint", { fg = colors.comment })
   hl(0, "DiagnosticOk", { fg = colors.cursor_normal })
 
-  hl(0, "DiagnosticVirtualTextError", { fg = colors.error, bg = "#180c0c" })
-  hl(0, "DiagnosticVirtualTextWarn", { fg = colors.cursor_insert, bg = "#18120c" })
-  hl(0, "DiagnosticVirtualTextInfo", { fg = colors.pop1, bg = "#0c180c" })
+  hl(0, "DiagnosticVirtualTextError", { fg = colors.error, bg = "#0c0404" })
+  hl(0, "DiagnosticVirtualTextWarn", { fg = colors.cursor_insert, bg = "#0c0804" })
+  hl(0, "DiagnosticVirtualTextInfo", { fg = colors.pop1, bg = "#040c04" })
   hl(0, "DiagnosticVirtualTextHint", { fg = colors.comment })
 
   hl(0, "DiagnosticUnderlineError", { sp = colors.error, undercurl = true })
@@ -682,16 +683,20 @@ function M.highlight_scopes(bufnr, winid, force)
 
   -- Find scopes containing cursor
   local containing_scopes = find_containing_scopes(cache.all_scopes, cursor_row)
-  local fingerprint = scope_fingerprint(containing_scopes)
+  -- Include visible range in fingerprint so scrolling triggers redraw
+  local vt = vim.fn.line('w0', winid)
+  local fingerprint = scope_fingerprint(containing_scopes) .. ";" .. vt
 
-  -- Skip redraw if scopes haven't changed (cursor moved within same scope)
+  -- Skip redraw if scopes and visible range haven't changed
   if not force and fingerprint == cache.last_fingerprint then
     return
   end
 
   cache.last_fingerprint = fingerprint
 
-  -- Clear and reapply highlights
+  -- Clear all extmarks, but only recreate for visible range (perf)
+  local win_top = vim.fn.line('w0', winid) - 1  -- 0-indexed
+  local win_bot = vim.fn.line('w$', winid) - 1
   vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1)
 
   -- Apply highlights - innermost scope gets first color, outer scopes get subsequent colors
@@ -699,7 +704,9 @@ function M.highlight_scopes(bufnr, winid, force)
     local cycle_idx = ((depth - 1) % #colors.back_cycle) + 1
     local hl_group = "HHScope" .. cycle_idx
 
-    for line = scope.start_row, scope.end_row do
+    local from = math.max(scope.start_row, win_top)
+    local to = math.min(scope.end_row, win_bot)
+    for line = from, to do
       vim.api.nvim_buf_set_extmark(bufnr, scope_ns, line, 0, {
         line_hl_group = hl_group,
         priority = 100 - depth,  -- Inner scopes have higher priority
@@ -867,15 +874,12 @@ M.setup()
 local yg_match_ids = {}
 
 -- Setup yg_* keyword and type highlighting for C/C++ files (uses matchadd for priority over treesitter)
+-- Consolidated into ~5 combined patterns (was ~30 individual matchadd calls)
 local function setup_yg_keywords()
   local winid = vim.api.nvim_get_current_win()
 
-  -- Clear only our previous matches for this window
-  if yg_match_ids[winid] then
-    for _, id in ipairs(yg_match_ids[winid]) do
-      pcall(vim.fn.matchdelete, id, winid)
-    end
-  end
+  -- Already set up for this window
+  if yg_match_ids[winid] then return end
   yg_match_ids[winid] = {}
 
   local function add_match(group, pattern)
@@ -883,60 +887,42 @@ local function setup_yg_keywords()
     table.insert(yg_match_ids[winid], id)
   end
 
-  -- Yggdrasil macros (teal)
-  add_match("YgKeyword", "\\<yg_internal\\>")
-  add_match("YgKeyword", "\\<yg_inline\\>")
-  add_match("YgKeyword", "\\<yg_global\\>")
-  add_match("YgKeyword", "\\<yg_local_persist\\>")
+  -- All yg/arc macros in one pattern (teal)
+  add_match("YgKeyword", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\|global\\|local_persist\\)\\>")
 
-  -- Arc macros (teal, same as yg)
-  add_match("YgKeyword", "\\<arc_internal\\>")
-  add_match("YgKeyword", "\\<arc_inline\\>")
-  add_match("YgKeyword", "\\<arc_global\\>")
-  add_match("YgKeyword", "\\<arc_local_persist\\>")
+  -- All yg base types in one pattern (gold)
+  add_match("YgType", "\\<\\([usb]\\(8\\|16\\|32\\|64\\)\\|f\\(32\\|64\\)\\|void\\|Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\|Mat[34]\\(F32\\)\\?\\|Quaternion\\(F32\\)\\?\\|Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\|Arena\\|Scratch\\|String8\\|R_Handle\\|Entity\\(Handle\\|Store\\|Pool\\|Kind\\|Flags\\)\\?\\|Direction8\\)\\>")
 
-  -- Yggdrasil base types (gold)
-  add_match("YgType", "\\<[usb]\\(8\\|16\\|32\\|64\\)\\>")  -- u8, s16, b32, etc.
-  add_match("YgType", "\\<f\\(32\\|64\\)\\>")              -- f32, f64
-  add_match("YgType", "\\<void\\>")                        -- void
-  add_match("YgType", "\\<Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\>")  -- Vec2, Vec3F32, etc.
-  add_match("YgType", "\\<Mat[34]\\(F32\\)\\?\\>")           -- Mat3, Mat4F32
-  add_match("YgType", "\\<Quaternion\\(F32\\)\\?\\>")      -- Quaternion, QuaternionF32
-  add_match("YgType", "\\<Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\>")  -- Rng1F32, Rng2S32, etc.
-  add_match("YgType", "\\<Arena\\>")
-  add_match("YgType", "\\<Scratch\\>")
-  add_match("YgType", "\\<String8\\>")
-  add_match("YgType", "\\<R_Handle\\>")
-  add_match("YgType", "\\<EntityHandle\\>")
-  add_match("YgType", "\\<EntityStore\\>")
-  add_match("YgType", "\\<EntityPool\\>")
-  add_match("YgType", "\\<EntityKind\\>")
-  add_match("YgType", "\\<EntityFlags\\>")
-  add_match("YgType", "\\<Entity\\>")
-  add_match("YgType", "\\<Direction8\\>")
+  -- Return type after yg/arc prefix macros (gold)
+  add_match("YgType", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\)\\s\\+\\zs\\w\\+\\ze")
 
-  -- Return type after yg_internal/yg_inline (gold, like static would show the return type)
-  add_match("YgType", "\\<yg_internal\\s\\+\\zs\\w\\+\\ze")
-  add_match("YgType", "\\<yg_inline\\s\\+\\zs\\w\\+\\ze")
-  add_match("YgType", "\\<arc_internal\\s\\+\\zs\\w\\+\\ze")
-  add_match("YgType", "\\<arc_inline\\s\\+\\zs\\w\\+\\ze")
-
-  -- Function declarations after ark_*/yg_* macros (rust-red)
-  -- Pattern: PREFIX TYPE FUNCNAME( or PREFIX TYPE *FUNCNAME(
+  -- Function declarations after yg/arc macros: PREFIX TYPE FUNCNAME( or PREFIX TYPE *FUNCNAME(
   add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
   add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
+
 end
 
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
-vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter" }, {
-  group = yg_group,
-  pattern = { "*.c", "*.h", "*.cpp", "*.hpp", "*.m", "*.mm" },
-  callback = setup_yg_keywords,
-})
 vim.api.nvim_create_autocmd("FileType", {
   group = yg_group,
   pattern = { "c", "cpp", "objc", "objcpp" },
   callback = setup_yg_keywords,
+})
+vim.api.nvim_create_autocmd("WinEnter", {
+  group = yg_group,
+  callback = function()
+    local ft = vim.bo.filetype
+    if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" then
+      setup_yg_keywords()
+    end
+  end,
+})
+vim.api.nvim_create_autocmd("WinClosed", {
+  group = yg_group,
+  callback = function(ev)
+    local wid = tonumber(ev.match)
+    if wid then yg_match_ids[wid] = nil end
+  end,
 })
 
 -- Apply to current buffer if it's C/C++/ObjC
