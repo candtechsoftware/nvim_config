@@ -538,7 +538,7 @@ function M.jump()
   -- Navigate directly to a tag entry by file + line/pattern
   local function goto_tag(tag)
     local filename = vim.fn.fnamemodify(tag.filename, ':p')
-    vim.cmd('edit ' .. vim.fn.fnameescape(filename))
+    vim.cmd('drop ' .. vim.fn.fnameescape(filename))
     if tag.line then
       pcall(vim.api.nvim_win_set_cursor, 0, { tonumber(tag.line), 0 })
     elseif tag.cmd then
