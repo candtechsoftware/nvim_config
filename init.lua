@@ -65,5 +65,8 @@ require("config.comment_tags").setup()
 -- Plugins
 require("render-markdown").setup()
 
+-- UI2: new commandline + message UI (Neovim 0.12)
+require('vim._core.ui2').enable({})
+
 -- Colorscheme
 vim.cmd.colorscheme("hh")

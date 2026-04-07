@@ -3,6 +3,7 @@
 ; Treat arc_*/ark_*/yg_* macros as macros (sky-blue, like 4coder index_macro)
 ((identifier) @function.macro
   (#any-of? @function.macro
+    "internal" "inline" "global" "local_persist"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -10,6 +11,7 @@
 
 ((type_identifier) @function.macro
   (#any-of? @function.macro
+    "internal" "inline" "global" "local_persist"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -34,6 +36,17 @@
   declarator: (pointer_declarator
     declarator: (function_declarator
       declarator: (identifier) @function)))
+
+; Fix return types swallowed by ERROR nodes after custom storage-class macros
+; e.g., "internal u8x16 func()" → treesitter parses "internal" as type, real
+; return type lands in ERROR node as a plain identifier
+(function_definition
+  (ERROR
+    (identifier) @type))
+
+(declaration
+  (ERROR
+    (identifier) @type))
 
 ; Fix void being parsed as variable - force it to be a type
 ((identifier) @type.builtin

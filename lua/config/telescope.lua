@@ -161,8 +161,8 @@ function M.setup()
                 local search, glob = prompt:match("^(.-)%s+%*%*(.+)$")
                 if search and glob ~= "" then
                     return { prompt = search, updated_finder = require("telescope.finders").new_job(function(new_prompt)
-                        return vim.tbl_flatten({ "rg", "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case", "--glob", "**" .. glob, "--", new_prompt }
-                        )
+                        return vim.iter({ "rg", "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case", "--glob", "**" .. glob, "--", new_prompt }):flatten():totable()
+
                     end, require("telescope.make_entry").gen_from_vimgrep({ cwd = root }), nil, root) }
                 end
                 return { prompt = prompt }
