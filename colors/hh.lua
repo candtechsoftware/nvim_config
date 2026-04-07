@@ -837,7 +837,9 @@ function M.setup_scope_highlight()
     pattern = { "c", "cpp", "objc", "objcpp", "jai", "lua", "typescript", "typescriptreact", "javascript", "javascriptreact" },
     callback = function(ev)
       vim.schedule(function()
-        M.enable_scope_highlight(ev.buf)
+        if vim.api.nvim_buf_is_valid(ev.buf) then
+          M.enable_scope_highlight(ev.buf)
+        end
       end)
     end,
   })

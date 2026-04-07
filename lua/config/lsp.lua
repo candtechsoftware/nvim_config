@@ -215,7 +215,21 @@ local function set_keymaps(bufnr)
       end
       vim.fn.winrestview(view)
     else
-      vim.lsp.buf.format({ async = false })
+      local clients = vim.lsp.get_clients({ bufnr = 0 })
+      local has_formatter = false
+      for _, client in ipairs(clients) do
+        if client:supports_method('textDocument/formatting') then
+          has_formatter = true
+          break
+        end
+      end
+      if has_formatter then
+        vim.lsp.buf.format({ async = false })
+      else
+        local view = vim.fn.winsaveview()
+        vim.cmd('normal! gg=G')
+        vim.fn.winrestview(view)
+      end
     end
   end, opts)
 
@@ -353,7 +367,7 @@ function M.setup()
                     for _, t in ipairs(items) do
                       matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
                     end
-                    vim.fn.complete(col + 2 - #prefix, matches)
+                    vim.fn.complete(col + 1 - #prefix, matches)
                     return
                   end
                 end
