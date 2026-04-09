@@ -21,6 +21,7 @@ local parsers = {
     hlsl        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-hlsl" },
     odin        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-odin" },
     zig         = { url = "https://github.com/tree-sitter-grammars/tree-sitter-zig" },
+    jai         = { url = "https://github.com/constantitus/tree-sitter-jai" },
 }
 
 -- Languages to install on startup if missing

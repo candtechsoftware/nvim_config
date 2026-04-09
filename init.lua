@@ -36,6 +36,7 @@ vim.pack.add({
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
     { src = 'https://github.com/ThePrimeagen/harpoon', version = 'harpoon2' },
     'https://github.com/MeanderingProgrammer/render-markdown.nvim',
+    'https://github.com/rebelot/kanagawa.nvim'
 })
 
 -- Core

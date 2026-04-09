@@ -264,16 +264,68 @@ set(0, "@constructor",    { link = "Type" })
 
 -- Language-specific overrides
 set(0, "@keyword.lua",        { fg = colors.keyword })
-set(0, "@keyword.jai",        { fg = colors.keyword })
 set(0, "@keyword.type",       { fg = colors.keyword })
 set(0, "@storageclass",       { fg = colors.keyword })
-set(0, "@storageclass.jai",   { fg = colors.keyword })
 
--- Jai syntax highlighting overrides
-set(0, "jaiStruct",           { fg = colors.keyword })
-set(0, "jaiUnion",            { fg = colors.keyword })
-set(0, "jaiEnum",             { fg = colors.keyword })
-set(0, "jaiConstant",         { fg = colors.blue })
+-- Jai treesitter highlights
+set(0, "@keyword.jai",                  { fg = colors.keyword })
+set(0, "@keyword.return.jai",           { fg = colors.keyword, bold = true })
+set(0, "@keyword.conditional.jai",      { fg = colors.keyword })
+set(0, "@keyword.conditional.ternary.jai", { fg = colors.keyword })
+set(0, "@keyword.repeat.jai",           { fg = colors.keyword })
+set(0, "@keyword.import.jai",           { fg = colors.include })
+set(0, "@keyword.directive.jai",        { fg = colors.index_macro })
+set(0, "@keyword.modifier.jai",         { fg = colors.keyword, italic = true })
+set(0, "@storageclass.jai",             { fg = colors.keyword })
+set(0, "@function.jai",                 { fg = colors.index_function, bold = true })
+set(0, "@function.call.jai",            { fg = colors.index_function })
+set(0, "@function.macro.jai",           { fg = colors.index_macro })
+set(0, "@function.builtin.jai",         { fg = colors.index_function })
+set(0, "@variable.jai",                 { fg = colors.text_default })
+set(0, "@variable.builtin.jai",         { fg = colors.index_constant })
+set(0, "@variable.parameter.jai",       { fg = colors.text_default })
+set(0, "@type.jai",                     { fg = colors.index_product_type })
+set(0, "@type.builtin.jai",             { fg = colors.index_product_type })
+set(0, "@type.definition.jai",          { fg = colors.index_product_type, bold = true })
+set(0, "@constant.jai",                 { fg = colors.index_constant })
+set(0, "@constant.builtin.jai",         { fg = colors.index_constant })
+set(0, "@property.jai",                 { fg = colors.text_default })
+set(0, "@operator.jai",                 { fg = colors.operators })
+set(0, "@attribute.jai",                { fg = colors.index_comment_tag })
+set(0, "@module.jai",                   { fg = colors.include })
+set(0, "@punctuation.bracket.jai",      { fg = colors.syntax_crap })
+set(0, "@punctuation.delimiter.jai",    { fg = colors.syntax_crap })
+set(0, "@string.jai",                   { fg = colors.str_constant })
+set(0, "@string.escape.jai",            { fg = colors.special_character })
+set(0, "@character.jai",                { fg = colors.char_constant })
+set(0, "@number.jai",                   { fg = colors.int_constant })
+set(0, "@number.float.jai",             { fg = colors.float_constant })
+set(0, "@boolean.jai",                  { fg = colors.bool_constant })
+set(0, "@comment.jai",                  { fg = colors.comment })
+
+-- Jai vim syntax fallback highlights
+set(0, "jaiStruct",                     { fg = colors.keyword })
+set(0, "jaiUnion",                      { fg = colors.keyword })
+set(0, "jaiEnum",                       { fg = colors.keyword })
+set(0, "jaiFunction",                   { fg = colors.index_function, bold = true })
+set(0, "jaiClass",                      { fg = colors.index_product_type })
+set(0, "jaiDataType",                   { fg = colors.index_product_type })
+set(0, "jaiConstant",                   { fg = colors.index_constant })
+set(0, "jaiConstantDeclaration",        { fg = colors.index_constant })
+set(0, "jaiVariableDeclaration",        { fg = colors.text_default })
+set(0, "jaiForVariableDeclaration",     { fg = colors.text_default })
+set(0, "jaiDirective",                  { fg = colors.index_macro })
+set(0, "jaiTemplate",                   { fg = colors.cyan })
+set(0, "jaiAutobake",                   { fg = colors.cyan })
+set(0, "jaiTagNote",                    { fg = colors.index_comment_tag })
+set(0, "jaiCommentNote",                { fg = colors.comment_pop })
+set(0, "jaiIt",                         { fg = colors.index_constant })
+set(0, "jaiCast",                       { fg = colors.keyword })
+set(0, "jaiAutoCast",                   { fg = colors.keyword })
+set(0, "jaiOperator",                   { fg = colors.operators })
+set(0, "jaiNull",                       { fg = colors.index_constant })
+set(0, "jaiSOA",                        { fg = colors.keyword, italic = true })
+set(0, "jaiAOS",                        { fg = colors.keyword, italic = true })
 
 -- C syntax highlighting overrides
 set(0, "@keyword.type.c",     { fg = colors.keyword })
@@ -325,6 +377,10 @@ set(0, "@lsp.type.property.cpp", { fg = colors.text_default })
 set(0, "@lsp.type.enumMember.cpp", { fg = colors.index_constant })
 set(0, "@lsp.mod.globalScope.cpp", {})
 set(0, "@lsp.typemod.macro.globalScope.cpp", { fg = colors.index_macro })
+
+-- Yggdrasil/arc macro and type highlight groups
+set(0, "YgKeyword", { fg = colors.index_macro })
+set(0, "YgType", { fg = colors.index_product_type })
 
 -- Scope highlight groups for nested scope backgrounds (like 4coder back_cycle)
 for i, bg in ipairs(colors.back_cycle) do
@@ -613,6 +669,63 @@ function M.setup_scope_highlight()
             M.enable_scope_highlight(vim.api.nvim_get_current_buf())
         end)
     end
+end
+
+-- Yggdrasil/arc macro highlighting for C/C++ (matchadd for priority over treesitter)
+local yg_match_ids = {}
+
+local function setup_yg_keywords()
+    local winid = vim.api.nvim_get_current_win()
+    if yg_match_ids[winid] then return end
+    yg_match_ids[winid] = {}
+
+    local function add_match(group, pattern)
+        local id = vim.fn.matchadd(group, pattern, 100)
+        table.insert(yg_match_ids[winid], id)
+    end
+
+    -- All yg/arc macros in one pattern (sky-blue)
+    add_match("YgKeyword", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\|global\\|local_persist\\)\\>")
+
+    -- All yg base types in one pattern (sunflower-yellow)
+    add_match("YgType", "\\<\\([usb]\\(8\\|16\\|32\\|64\\)\\|f\\(32\\|64\\)\\|void\\|Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\|Mat[34]\\(F32\\)\\?\\|Quaternion\\(F32\\)\\?\\|Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\|Arena\\|Scratch\\|String8\\|R_Handle\\|Entity\\(Handle\\|Store\\|Pool\\|Kind\\|Flags\\)\\?\\|Direction8\\)\\>")
+
+    -- Return type after yg/arc prefix macros (sunflower-yellow)
+    add_match("YgType", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\)\\s\\+\\zs\\w\\+\\ze")
+
+    -- Function declarations after yg/arc macros
+    add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
+    add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
+end
+
+local yg_group = vim.api.nvim_create_augroup("CandYgKeywords", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+    group = yg_group,
+    pattern = { "c", "cpp", "objc", "objcpp" },
+    callback = setup_yg_keywords,
+})
+vim.api.nvim_create_autocmd("WinEnter", {
+    group = yg_group,
+    callback = function()
+        local ft = vim.bo.filetype
+        if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" then
+            setup_yg_keywords()
+        end
+    end,
+})
+vim.api.nvim_create_autocmd("WinClosed", {
+    group = yg_group,
+    callback = function(ev)
+        local wid = tonumber(ev.match)
+        if wid then yg_match_ids[wid] = nil end
+    end,
+})
+
+-- Apply to current buffer if it's C/C++/ObjC
+local ft = vim.bo.filetype
+local ext = vim.fn.expand("%:e")
+if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" or ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" or ext == "m" or ext == "mm" then
+    setup_yg_keywords()
 end
 
 -- Store module globally so it can be accessed after colorscheme load
