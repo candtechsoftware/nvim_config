@@ -8,7 +8,9 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.bo.shiftwidth = 4
     vim.bo.tabstop = 4
     vim.bo.expandtab = true
-    vim.bo.smartindent = true
+    vim.bo.cindent = true
+    vim.bo.smartindent = false
+    vim.bo.cinoptions = 't0,:0,l1,(0,Ws'
     vim.bo.errorformat = "%f:%l\\,%c:%m"
     vim.bo.define = "^\\s*\\w\\+\\s*:.*:.*\\s*[({]"
   end,

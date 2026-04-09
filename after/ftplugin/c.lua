@@ -24,7 +24,7 @@ local function c_indentexpr()
   local lnum = vim.v.lnum
   local saved = {}
 
-  local start = math.max(1, lnum - 50)
+  local start = 1
   for i = start, lnum do
     local line = vim.fn.getline(i)
     local ws, word, rest = line:match('^(%s*)(%w+)(.*)')
@@ -45,3 +45,4 @@ end
 
 _G._c_indentexpr = c_indentexpr
 vim.bo.indentexpr = 'v:lua._c_indentexpr()'
+vim.bo.smartindent = false
