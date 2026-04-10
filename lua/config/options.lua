@@ -37,6 +37,7 @@ vim.opt.hlsearch = false -- Don't highlight search results
 vim.opt.incsearch = true -- Incremental search
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
+vim.opt.inccommand = "nosplit"
 
 vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
 vim.opt.smoothscroll = true

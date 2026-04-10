@@ -180,7 +180,7 @@ function M.setup()
 
   -- Search and substitution
   hl(0, "Search", { fg = colors.at_highlight, bg = colors.highlight })
-  hl(0, "IncSearch", { fg = colors.at_cursor, bg = colors.base })
+  hl(0, "IncSearch", { fg = colors.back, bg = colors.cursor_normal })
   hl(0, "CurSearch", { fg = colors.at_cursor, bg = colors.cursor_normal })
   hl(0, "Substitute", { fg = colors.back, bg = colors.paste })
 

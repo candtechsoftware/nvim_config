@@ -18,7 +18,6 @@
   (#set! priority 200))
 
 ; Fix function declarations/definitions that start with custom macros
-; The macro causes an ERROR node but function_declarator structure is still correct
 (declaration
   declarator: (function_declarator
     declarator: (identifier) @function))
@@ -38,8 +37,6 @@
       declarator: (identifier) @function)))
 
 ; Fix return types swallowed by ERROR nodes after custom storage-class macros
-; e.g., "internal u8x16 func()" → treesitter parses "internal" as type, real
-; return type lands in ERROR node as a plain identifier
 (function_definition
   (ERROR
     (identifier) @type))

@@ -7,7 +7,7 @@ local parser_dir = vim.fn.stdpath("data") .. "/site/parser"
 
 -- Parser registry: url, optional location (for monorepos like typescript)
 local parsers = {
-    cpp         = { url = "https://github.com/tree-sitter/tree-sitter-cpp" },
+    cpp         = { url = "https://github.com/tree-sitter/tree-sitter-cpp", inherits = "c" },
     rust        = { url = "https://github.com/tree-sitter/tree-sitter-rust" },
     go          = { url = "https://github.com/tree-sitter/tree-sitter-go" },
     javascript  = { url = "https://github.com/tree-sitter/tree-sitter-javascript" },
@@ -115,6 +115,27 @@ function M.install(lang, opts)
 
     local output = parser_dir .. "/" .. lang .. ".so"
     local ok, err = compile_parser(src_dir, output, lang)
+
+    -- Copy queries if they exist
+    local queries_src = tmp_dir
+    if info.location then
+        queries_src = queries_src .. "/" .. info.location
+    end
+    queries_src = queries_src .. "/queries"
+    if vim.fn.isdirectory(queries_src) == 1 then
+        local queries_dst = vim.fn.stdpath("data") .. "/site/queries/" .. lang
+        vim.fn.mkdir(queries_dst, "p")
+        local files = vim.fn.glob(queries_src .. "/*.scm", false, true)
+        for _, f in ipairs(files) do
+            local name = vim.fn.fnamemodify(f, ":t")
+            local content = vim.fn.readfile(f)
+            -- Prepend ; inherits: directive for parsers that extend another language
+            if info.inherits and name == "highlights.scm" then
+                table.insert(content, 1, "; inherits: " .. info.inherits)
+            end
+            vim.fn.writefile(content, queries_dst .. "/" .. name)
+        end
+    end
 
     -- Cleanup
     vim.fn.delete(tmp_dir, "rf")

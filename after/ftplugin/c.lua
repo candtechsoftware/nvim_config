@@ -18,7 +18,7 @@ vim.bo.cinoptions = 't0,:0,l1,(0,Ws'
 -- Custom indentexpr: temporarily replace custom storage-class macros
 -- (internal, global, local_persist) with 'static' so cindent understands them.
 -- Combined with cinoptions=t0 for "return type on its own line" style.
-local macros = { internal = true, global = true, local_persist = true }
+local macros = { internal = true, global = true, local_persist = true, ["function"] = true }
 
 local function c_indentexpr()
   local lnum = vim.v.lnum

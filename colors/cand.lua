@@ -118,6 +118,10 @@ set(0, "CursorLine",       { bg = colors.highlight_cursor_line })
 set(0, "ColorColumn",      { bg = colors.margin })
 set(0, "VertSplit",        { fg = colors.margin })
 set(0, "MatchParen",       { fg = colors.base, bg = colors.margin_active, bold = true, underline = true })
+set(0, "Search",           { fg = colors.at_highlight, bg = colors.highlight })
+set(0, "IncSearch",        { fg = colors.at_cursor, bg = colors.cursor })
+set(0, "CurSearch",        { fg = colors.at_cursor, bg = colors.cursor })
+set(0, "Substitute",       { fg = colors.back, bg = colors.paste })
 
 -- Syntax
 set(0, "Comment",          { fg = colors.comment })
