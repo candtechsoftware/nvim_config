@@ -45,6 +45,23 @@
   (ERROR
     (identifier) @type))
 
+; Fix "function ReturnType" parsed as a declaration (return type on its own line)
+(declaration
+  type: (type_identifier) @_macro
+  declarator: (identifier) @type
+  (#any-of? @_macro
+    "internal" "inline" "global" "local_persist" "function" "static"
+    "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
+    "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
+    "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
+  (#set! priority 200))
+
+; Fix function name misidentified as type when return type is on previous line
+(function_definition
+  type: (type_identifier) @function
+  declarator: (parenthesized_declarator)
+  (#set! priority 200))
+
 ; Fix void being parsed as variable - force it to be a type
 ((identifier) @type.builtin
   (#any-of? @type.builtin "void"))

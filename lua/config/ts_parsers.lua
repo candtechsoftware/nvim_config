@@ -22,6 +22,7 @@ local parsers = {
     odin        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-odin" },
     zig         = { url = "https://github.com/tree-sitter-grammars/tree-sitter-zig" },
     jai         = { url = "https://github.com/constantitus/tree-sitter-jai" },
+    objc        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-objc", inherits = "c" },
 }
 
 -- Languages to install on startup if missing
@@ -29,7 +30,7 @@ M.ensure_installed = {
     "cpp", "rust", "go",
     "javascript", "typescript", "tsx",
     "json", "yaml", "toml", "bash",
-    "glsl", "hlsl",
+    "glsl", "hlsl", "objc",
 }
 
 local function parser_exists(lang)
