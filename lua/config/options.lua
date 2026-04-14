@@ -33,7 +33,7 @@ vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir" -- Save undo history
 vim.opt.undofile = true -- Save undo history
 
 -- Search
-vim.opt.hlsearch = false -- Don't highlight search results
+vim.opt.hlsearch = true -- Highlight search/substitute matches (visible during :s///gc)
 vim.opt.incsearch = true -- Incremental search
 vim.opt.ignorecase = true
 vim.opt.smartcase = true

@@ -10,6 +10,7 @@ vim.keymap.set("n", "<C-d>", "<C-d>zz") -- Move down half a page and center the 
 vim.keymap.set("n", "<C-u>", "<C-u>zz") -- Move up half a page and center the cursor
 vim.keymap.set("n", "n", "nzzzv") -- Keep the cursor centered when searching
 vim.keymap.set("n", "N", "Nzzzv") -- Keep the cursor centered when searching
+vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR><Esc>", { silent = true }) -- Clear search highlight
 
 vim.keymap.set("x", "<leader>p", [["_dP]]) -- Paste without yanking
 vim.keymap.set({"n", "v"}, "<leader>d", "\"_d") -- Delete without yanking

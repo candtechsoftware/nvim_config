@@ -139,6 +139,7 @@ set(0, "VisualNOS", { bg = colors.selection_inactive, fg = colors.code_default }
 set(0, "Search", { fg = colors.background0, bg = colors.search_result_active })
 set(0, "IncSearch", { fg = colors.char_under_cursor, bg = colors.cursor })
 set(0, "CurSearch", { fg = colors.char_under_cursor, bg = colors.cursor })
+set(0, "Substitute", { link = "IncSearch" })
 set(0, "MatchParen", { fg = colors.background0, bg = colors.bracket_highlight })
 set(0, "ColorColumn", { bg = colors.background2 })
 set(0, "Folded", { fg = colors.ui_dim, bg = colors.background2 })
