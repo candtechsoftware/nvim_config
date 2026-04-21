@@ -10,6 +10,14 @@ function M.setup()
             local ft = vim.bo[args.buf].filetype
             -- Skip filetypes that shouldn't use treesitter
             if ft == "zig" or ft == "" then return end
+            -- objc/objcpp use Vim's built-in syntax highlighting
+            if ft == "objc" or ft == "objcpp" then
+                pcall(vim.treesitter.stop, args.buf)
+                vim.api.nvim_buf_call(args.buf, function()
+                    vim.cmd("setlocal syntax=ON")
+                end)
+                return
+            end
             -- Start treesitter highlighting if a parser exists
             pcall(vim.treesitter.start, args.buf)
         end,

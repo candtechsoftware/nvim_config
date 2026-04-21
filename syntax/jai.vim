@@ -64,6 +64,7 @@ syntax keyword jaiInitializerOf initializer_of
 syntax keyword jaiAutoCast xx
 
 syntax match jaiFunction "\v<\h\w*>\ze\_s*:[:=]%(\_s*inline)?\_s*\(%(\.\{|\_[^\{;]){-}\)%(\.\{|\_[^{;])*\{"
+syntax match jaiFunctionCall "\v<\h\w*>\ze\s*\(" display
 "The lookahead prevents accidental matches with a function
 syntax match jaiConstantDeclaration "\v<\h\w*%(\\\s*\w+)*>\ze%(,\_s*<\h\w*%(\\\s*\w+)*>)*\_s*:\_[^{;:="]{-}:%(\.\{|\_[^{;:])*;" display
 "The lookahead prevents accidental matches with a constant declaration or a function
@@ -121,6 +122,7 @@ highlight def link jaiUnion Structure
 highlight def link jaiEnum Structure
 
 highlight def link jaiFunction Function
+highlight def link jaiFunctionCall Function
 highlight def link jaiVariableDeclaration Identifier
 highlight def link jaiForVariableDeclaration Identifier
 highlight def link jaiConstantDeclaration Constant

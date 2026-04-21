@@ -196,6 +196,10 @@ local function set_keymaps(bufnr)
 
   -- Formatting (manual) - use jai-format for Jai, LSP for others
   vim.keymap.set('n', '<leader>f', function()
+    local noformat_ft = { c = true, cpp = true, objc = true, objcpp = true }
+    if noformat_ft[vim.bo.filetype] then
+      return
+    end
     if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
       local view = vim.fn.winsaveview()
       local tmpfile = "/tmp/jai-format-buffer.jai"

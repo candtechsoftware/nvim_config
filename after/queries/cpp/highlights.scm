@@ -87,3 +87,18 @@
     "f32x4" "i32x4" "u32x4" "u8x16" "b32x4" "b8x16"
     "UAddr" "uaddr" "saddr")
   (#set! priority 200))
+
+; Enum member references in case values: `case EnumType::Value:`
+; Force the name after `::` to be a constant so mixed-case enum members
+; (Blur, Shadow, Geo3D) match all-caps ones (UI, ID) instead of being
+; misclassified as types by name-pattern heuristics.
+(case_statement
+  value: (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(case_statement
+  value: (qualified_identifier
+    name: (qualified_identifier
+      name: (identifier) @constant))
+  (#set! priority 200))
