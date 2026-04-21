@@ -50,11 +50,40 @@ vim.keymap.set("n", "<leader>ih", function()
     vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { desc = "Toggle inlay hints" })
 
--- Completion
-vim.keymap.set("i", "<C-n>", function()
+-- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
+-- No auto-triggers anywhere — Tab is the ONLY way to fire completion.
+local c_completion_ft = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
+vim.keymap.set("i", "<Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-n>" end
+  if c_completion_ft[vim.bo.filetype] then
+    vim.schedule(function()
+      local col = vim.api.nvim_win_get_cursor(0)[2]
+      local line = vim.api.nvim_get_current_line()
+      local before = line:sub(1, col)
+      local ctags = require("config.ctags")
+      if before:match("%->%s*[%w_]*$") or before:match("%.%s*[%w_]*$") then
+        ctags.complete_members(vim.api.nvim_get_current_buf())
+      else
+        ctags.complete_prefix()
+      end
+    end)
+    return ""
+  end
   return "<C-x><C-o>"
-end, { expr = true, desc = "Trigger LSP completion / cycle popup" })
+end, { expr = true, desc = "Tab: completion (ctags for C, LSP otherwise)" })
+vim.keymap.set("i", "<S-Tab>", function()
+  if vim.fn.pumvisible() == 1 then return "<C-p>" end
+  return "<S-Tab>"
+end, { expr = true, desc = "Shift-Tab: cycle prev in popup" })
+vim.keymap.set("i", "<CR>", function()
+  if vim.fn.pumvisible() == 1 then
+    if vim.fn.complete_info({ "selected" }).selected ~= -1 then
+      return "<C-y>"
+    end
+    return "<C-e><CR>"
+  end
+  return "<CR>"
+end, { expr = true, desc = "Enter: accept selection or insert newline" })
 vim.keymap.set("i", "<C-]>", "<C-x><C-]>", { desc = "Trigger tag completion" })
 
 -- Comment navigation

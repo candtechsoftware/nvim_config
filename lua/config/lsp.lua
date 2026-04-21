@@ -10,6 +10,7 @@ local servers = {
   'lua_ls',
   'gopls',
   'tsgo',
+  'eslint',
   'rust_analyzer',
   'zls',
   'ols',
@@ -98,7 +99,7 @@ local function set_keymaps(bufnr)
     vim.lsp.buf.definition()
   end, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
+  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump_vsplit, opts)
   vim.keymap.set('n', 'gv', function()
     local cur_win = vim.api.nvim_get_current_win()
     local word = vim.fn.expand('<cword>')
@@ -194,43 +195,20 @@ local function set_keymaps(bufnr)
   -- Actions (grn/grr/gra are 0.12 defaults for rename/references/code_action)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
-  -- Formatting (manual) - use jai-format for Jai, LSP for others
+  -- Formatting (manual): TS/JS via eslint LSP only.
+  -- Everything else (incl. unity-build C/C++, Lua, Rust, Jai) is a no-op.
   vim.keymap.set('n', '<leader>f', function()
-    if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
-      local view = vim.fn.winsaveview()
-      local tmpfile = "/tmp/jai-format-buffer.jai"
-      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-      vim.fn.writefile(lines, tmpfile)
-      local result = vim.fn.system("cd /tmp && jai-format -to_stdout -silent " .. tmpfile .. " 2>/dev/null")
-      local exit_code = vim.v.shell_error
-      vim.fn.delete(tmpfile)
-      if exit_code == 0 and result ~= "" then
-        local new_lines = vim.split(result, "\n", { plain = true })
-        if new_lines[#new_lines] == "" then
-          table.remove(new_lines)
-        end
-        vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
-      else
-        vim.notify("jai-format failed: " .. result, vim.log.levels.ERROR)
-      end
-      vim.fn.winrestview(view)
-    else
-      local clients = vim.lsp.get_clients({ bufnr = 0 })
-      local has_formatter = false
-      for _, client in ipairs(clients) do
-        if client:supports_method('textDocument/formatting') then
-          has_formatter = true
-          break
-        end
-      end
-      if has_formatter then
-        vim.lsp.buf.format({ async = false })
-      else
-        local view = vim.fn.winsaveview()
-        vim.cmd('normal! gg=G')
-        vim.fn.winrestview(view)
-      end
-    end
+    local js = {
+      typescript = true, typescriptreact = true,
+      javascript = true, javascriptreact = true,
+    }
+    if not js[vim.bo.filetype] then return end
+    local clients = vim.lsp.get_clients({ bufnr = 0, name = 'eslint' })
+    if #clients == 0 then return end
+    vim.lsp.buf.code_action({
+      context = { only = { 'source.fixAll.eslint' }, diagnostics = {} },
+      apply = true,
+    })
   end, opts)
 
   -- Diagnostics to quickfix/loclist
@@ -291,6 +269,18 @@ function M.setup()
   -- Enable all servers (vim.lsp.enable handles missing executables gracefully)
   vim.lsp.enable(servers)
 
+  -- Unity builds confuse clangd — it flags some function decls as variables.
+  -- Clear @lsp.type.variable.{c,cpp} so treesitter @function wins for misparses.
+  local function clear_clangd_variable_hl()
+    vim.api.nvim_set_hl(0, '@lsp.type.variable.c', {})
+    vim.api.nvim_set_hl(0, '@lsp.type.variable.cpp', {})
+  end
+  clear_clangd_variable_hl()
+  vim.api.nvim_create_autocmd('ColorScheme', {
+    group = vim.api.nvim_create_augroup('lsp_clangd_hl_fix', { clear = true }),
+    callback = clear_clangd_variable_hl,
+  })
+
   -- LspAttach: Set up keymaps and completion when LSP attaches
   vim.api.nvim_create_autocmd('LspAttach', {
     group = vim.api.nvim_create_augroup('lsp_attach_config', { clear = true }),
@@ -330,52 +320,24 @@ function M.setup()
         end
       end
 
-      -- Enable native LSP completion — disable autotrigger for C/C++ since ctags handles it
-      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = not is_c })
+      -- Enable native LSP completion. Autotrigger is OFF for every filetype:
+      -- completion is only ever invoked via <Tab> (see lua/config/keymaps.lua).
+      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
 
-      -- Insert-mode triggers: keyword completion + signature help
+      -- Insert-mode triggers: only the one-line cmdline signature echo. No
+      -- popup auto-fires here.
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
         group = vim.api.nvim_create_augroup('lsp_insert_trigger_' .. bufnr, { clear = true }),
         callback = function()
           local char = vim.v.char
-
-          -- Signature help on ( and ,
           if char == '(' or char == ',' then
             vim.schedule(function()
-              -- C/C++ files: use ctags signature help (clangd lacks compile database)
               if is_c then
                 require('config.ctags').show_signature_help()
               else
                 vim.lsp.buf.signature_help({ silent = true })
               end
-            end)
-            return
-          end
-
-          -- Keyword completion on word characters
-          if char:match('[%w_]') and vim.fn.pumvisible() == 0 then
-            vim.schedule(function()
-              -- C/C++ files: use ctags prefix matching (clangd lacks compile database)
-              if is_c then
-                local col = vim.api.nvim_win_get_cursor(0)[2]
-                local line = vim.api.nvim_get_current_line()
-                local prefix = line:sub(1, col + 1):match('([%w_]+)$')
-                if prefix and #prefix >= 2 then
-                  local ctags = require('config.ctags')
-                  local items = ctags.get_prefix_matches(prefix:lower(), 20)
-                  if #items > 0 then
-                    local matches = {}
-                    for _, t in ipairs(items) do
-                      matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
-                    end
-                    vim.fn.complete(col + 1 - #prefix, matches)
-                    return
-                  end
-                end
-              end
-              -- Non-C files or ctags had no matches: use LSP
-              vim.lsp.completion.get()
             end)
           end
         end,

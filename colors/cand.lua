@@ -15,11 +15,17 @@ local colors = {
     cursor_alt1           = "#e0741b",        -- cursor alt
     cursor_alt2           = "#1be094",        -- cursor alt
     cursor_alt3           = "#ba60c4",        -- cursor alt
-    at_cursor             = "#0C0C0C",        -- at cursor
-    highlight_cursor_line = "#1E1E1E",        -- charcoal-gray-lite
+    at_cursor             = "#000000",        -- pure-black (fleury isearch fg)
+    highlight_cursor_line = "#1e1e1e",        -- charcoal-gray-lite
     highlight             = "#303040",        -- gunmetal-blue
-    at_highlight          = "#FF44DD",        -- at highlight
+    at_highlight          = "#000000",        -- pure-black (fleury match fg)
     mark                  = "#494949",        -- mark
+    paren_match_bg        = "#2f2f38",        -- sky-blue-lite (fleury show-paren-match)
+    paren_mismatch_bg     = "#9ba290",        -- dusty-sage (fleury show-paren-mismatch)
+    tooltip_bg            = "#63523d",        -- coffee-brown (fleury tooltip)
+    mode_line_fg          = "#e7aa4d",        -- fleury mode-line-foreground-active
+    mode_line_bg          = "#1a120b",        -- fleury mode-line-background-active
+    mode_line_border      = "#161616",        -- fleury mode-line-border
 
     -- Text colors (from fleury-theme.el)
     text_default          = "#b99468",        -- light-bronze
@@ -27,17 +33,20 @@ local colors = {
     comment_pop           = "#2ab34f",        -- comment pop green
     comment_pop_alt       = "#db2828",        -- comment pop red
     keyword               = "#f0c674",        -- goldenrod
-    str_constant          = "#ffa900",        -- bright-orange
-    char_constant         = "#ffa900",        -- bright-orange
-    int_constant          = "#ffa900",        -- bright-orange
-    float_constant        = "#ffa900",        -- bright-orange
-    bool_constant         = "#ffa900",        -- bright-orange
+    str_constant          = "#ffaa00",        -- bright-orange
+    char_constant         = "#ffaa00",        -- bright-orange
+    int_constant          = "#ffaa00",        -- bright-orange
+    float_constant        = "#ffaa00",        -- bright-orange
+    bool_constant         = "#ffaa00",        -- bright-orange
     preproc               = "#dc7575",        -- dusty-rose
-    include               = "#ffa900",        -- bright-orange
-    special_character     = "#FF0000",        -- bright-red
+    include               = "#ffaa00",        -- bright-orange
+    special_character     = "#ff0000",        -- bright-red
     ghost_character       = "#4E5E46",        -- ghost
     highlight_junk        = "#3A0000",        -- junk
-    highlight_white       = "#003A3A",        -- white highlight
+    highlight_white       = "#003939",        -- lime-green (fleury region)
+    doc_face              = "#66bc11",        -- fresh-green (fleury font-lock-doc-face)
+    golden_yellow         = "#f0bb0c",        -- golden-yellow (fleury match/lazy-highlight)
+    vivid_vermilion       = "#f0500c",        -- vivid-vermilion (fleury isearch)
     paste                 = "#DDEE00",        -- paste
     undo                  = "#00DDEE",        -- undo
     line_numbers_back     = "#101010",        -- line numbers bg
@@ -79,12 +88,12 @@ local colors = {
     red        = "#ff0000",        -- bright-red
     magenta    = "#FF44DD",
     blue       = "#2895c7",        -- sky-blue
-    green      = "#6eb535",        -- fresh-green
+    green      = "#66bc11",        -- fresh-green
     cyan       = "#8ffff2",        -- aqua-ice
     violet     = "#ba60c4",
     white      = "#b99468",        -- light-bronze
     error      = "#ff0000",        -- bright-red
-    warning    = "#ffa900",        -- bright-orange
+    warning    = "#ffaa00",        -- bright-orange
 
     -- Scope background cycle colors (defcolor_back_cycle)
     back_cycle = {
@@ -117,10 +126,10 @@ set(0, "CursorLineNr",     { fg = colors.text_default, bg = colors.line_numbers_
 set(0, "CursorLine",       { bg = colors.highlight_cursor_line })
 set(0, "ColorColumn",      { bg = colors.margin })
 set(0, "VertSplit",        { fg = colors.margin })
-set(0, "MatchParen",       { fg = colors.base, bg = colors.margin_active, bold = true, underline = true })
-set(0, "Search",           { fg = colors.at_highlight, bg = colors.highlight })
-set(0, "IncSearch",        { fg = colors.at_cursor, bg = colors.cursor })
-set(0, "CurSearch",        { fg = colors.at_cursor, bg = colors.cursor })
+set(0, "MatchParen",       { bg = colors.paren_match_bg })
+set(0, "Search",           { fg = colors.at_highlight, bg = colors.golden_yellow })
+set(0, "IncSearch",        { fg = colors.at_cursor, bg = colors.vivid_vermilion })
+set(0, "CurSearch",        { fg = colors.at_cursor, bg = colors.vivid_vermilion })
 set(0, "Substitute",       { fg = colors.back, bg = colors.paste })
 
 -- Syntax
@@ -161,6 +170,8 @@ set(0, "rainbowcol6", { fg = colors.red })
 set(0, "NormalFloat",       { fg = colors.text_default, bg = colors.list_item })
 set(0, "FloatBorder",       { fg = colors.margin_hover, bg = colors.list_item })
 set(0, "FloatTitle",        { fg = colors.base, bg = colors.list_item })
+-- Tooltip (fleury tooltip face: coffee-brown bg, amber-gold fg)
+set(0, "Tooltip",           { fg = colors.base, bg = colors.tooltip_bg })
 set(0, "Pmenu",            { fg = colors.text_default, bg = colors.list_item })
 set(0, "PmenuSel",         { fg = colors.base, bg = colors.list_item_active })
 set(0, "PmenuSbar",        { bg = colors.list_item })
@@ -206,12 +217,14 @@ set(0, "LazyTaskOutput",    { fg = colors.text_default })
 set(0, "LazyUrl",           { fg = colors.cyan })
 set(0, "LazyValue",         { fg = colors.index_constant })
 
--- Lualine integration
-set(0, "StatusLine",        { fg = colors.back, bg = colors.text_default })
-set(0, "StatusLineNC",      { fg = colors.comment, bg = colors.margin })
+-- Lualine integration (fleury mode-line)
+set(0, "StatusLine",        { fg = colors.mode_line_fg, bg = colors.mode_line_bg })
+set(0, "StatusLineNC",      { fg = colors.mode_line_fg, bg = colors.back })
 
 -- Treesitter highlights
 set(0, "@comment",        { link = "Comment" })
+set(0, "@comment.documentation", { fg = colors.doc_face })
+set(0, "@string.documentation",  { fg = colors.doc_face })
 set(0, "@string",         { link = "String" })
 set(0, "@string.escape",  { fg = colors.special_character })
 set(0, "@character",      { fg = colors.char_constant })

@@ -3,7 +3,8 @@
 ; Treat arc_*/ark_*/yg_* macros as macros (sky-blue, like 4coder index_macro)
 ((identifier) @function.macro
   (#any-of? @function.macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -11,7 +12,8 @@
 
 ((type_identifier) @function.macro
   (#any-of? @function.macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -45,12 +47,46 @@
   (ERROR
     (identifier) @type))
 
+; Function name when it lands inside an ERROR node followed by a parameter list
+(ERROR
+  (identifier) @function
+  (parameter_list)
+  (#set! priority 200))
+
+; Function name when tree-sitter puts an ERROR sibling in the declaration
+(declaration
+  (ERROR)
+  declarator: (function_declarator
+    declarator: (identifier) @function)
+  (#set! priority 200))
+
+(declaration
+  (ERROR)
+  declarator: (pointer_declarator
+    declarator: (function_declarator
+      declarator: (identifier) @function))
+  (#set! priority 200))
+
+; Return type between a macro-as-type and a pointer-declarator
+(declaration
+  type: (type_identifier) @_macro
+  declarator: (pointer_declarator
+    (type_identifier) @type)
+  (#any-of? @_macro
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
+    "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
+    "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
+    "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
+  (#set! priority 200))
+
 ; Fix "function ReturnType" parsed as a declaration (return type on its own line)
 (declaration
   type: (type_identifier) @_macro
   declarator: (identifier) @type
   (#any-of? @_macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -86,4 +122,19 @@
     "f32" "f64"
     "f32x4" "i32x4" "u32x4" "u8x16" "b32x4" "b8x16"
     "UAddr" "uaddr" "saddr")
+  (#set! priority 200))
+
+; Enum member references in case values: `case EnumType::Value:`
+; Force the name after `::` to be a constant so mixed-case enum members
+; (Blur, Shadow, Geo3D) match all-caps ones (UI, ID) instead of being
+; misclassified as types by name-pattern heuristics.
+(case_statement
+  value: (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(case_statement
+  value: (qualified_identifier
+    name: (qualified_identifier
+      name: (identifier) @constant))
   (#set! priority 200))

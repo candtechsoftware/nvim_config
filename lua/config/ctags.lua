@@ -569,6 +569,64 @@ function M.jump()
   end)
 end
 
+--- Same as M.jump but opens the target in a new vertical split.
+function M.jump_vsplit()
+  local word = vim.fn.expand('<cword>')
+  local saved = vim.bo.tagfunc
+  vim.bo.tagfunc = ''
+  local tags = vim.fn.taglist('^' .. word .. '$')
+  vim.bo.tagfunc = saved
+
+  if #tags == 0 then
+    vim.notify('No tags found for: ' .. word, vim.log.levels.WARN)
+    return
+  end
+
+  local root = get_project_root()
+  if root then
+    local project_tags = {}
+    for _, tag in ipairs(tags) do
+      local abs = vim.fn.fnamemodify(tag.filename, ':p')
+      if abs:sub(1, #root) == root then
+        table.insert(project_tags, tag)
+      end
+    end
+    if #project_tags > 0 then
+      tags = project_tags
+    end
+  end
+
+  local function goto_tag(tag)
+    local filename = vim.fn.fnamemodify(tag.filename, ':p')
+    vim.cmd('vsplit ' .. vim.fn.fnameescape(filename))
+    if tag.line then
+      pcall(vim.api.nvim_win_set_cursor, 0, { tonumber(tag.line), 0 })
+    elseif tag.cmd then
+      local pattern = tag.cmd:match('^/(.+)/$') or tag.cmd:match('^%?(.+)%?$')
+      if pattern then pcall(vim.fn.search, pattern, 'w') end
+    end
+  end
+
+  if #tags == 1 then
+    goto_tag(tags[1])
+    return
+  end
+
+  local items = {}
+  for _, tag in ipairs(tags) do
+    local file = vim.fn.fnamemodify(tag.filename, ':~:.')
+    local kind = tag.kind or '?'
+    table.insert(items, string.format('[%s] %s', kind, file))
+  end
+
+  vim.ui.select(items, {
+    prompt = 'Tag (vsplit): ' .. word,
+  }, function(_, idx)
+    if not idx then return end
+    goto_tag(tags[idx])
+  end)
+end
+
 -- Try to infer the type of the variable before . or ->
 local function infer_type_at_cursor(bufnr)
   local col = vim.api.nvim_win_get_cursor(0)[2]
@@ -637,18 +695,6 @@ function M.complete_members(bufnr)
   return true
 end
 
--- Signature help tracking
-local sig_help_ns = vim.api.nvim_create_namespace('ctags_sig_help')
-local sig_help_win = nil
-
---- Close any open ctags signature help window.
-local function close_sig_help()
-  if sig_help_win and vim.api.nvim_win_is_valid(sig_help_win) then
-    vim.api.nvim_win_close(sig_help_win, true)
-  end
-  sig_help_win = nil
-end
-
 --- Look up a function signature from caches or taglist fallback.
 local function find_signature(func_name, bufnr)
   local root = buf_root[bufnr]
@@ -680,11 +726,8 @@ local function find_signature(func_name, bufnr)
   return nil
 end
 
---- Show function signature help from ctags data.
---- Renders identically to LSP signature help: code fence + active parameter highlight.
+--- Show function signature help from ctags data as a one-line cmdline echo.
 function M.show_signature_help()
-  close_sig_help()
-
   local ok, err = pcall(function()
     local bufnr = vim.api.nvim_get_current_buf()
     local col = vim.api.nvim_win_get_cursor(0)[2]
@@ -707,84 +750,10 @@ function M.show_signature_help()
     local func_name = before:sub(1, paren_pos - 1):match('([%w_]+)%s*$')
     if not func_name then return end
 
-    -- Count commas for active parameter index
-    local inside = before:sub(paren_pos + 1)
-    local active_param = 0
-    local pd = 0
-    for i = 1, #inside do
-      local c = inside:byte(i)
-      if c == 40 then pd = pd + 1
-      elseif c == 41 then pd = pd - 1
-      elseif c == 44 and pd == 0 then active_param = active_param + 1 end
-    end
-
     local sig = find_signature(func_name, bufnr)
     if not sig then return end
 
-    -- Split params for active parameter highlighting
-    local param_labels = {}
-    if sig.params_str and sig.params_str ~= '' then
-      local pd2 = 0
-      local start = 1
-      for i = 1, #sig.params_str do
-        local c = sig.params_str:byte(i)
-        if c == 40 then pd2 = pd2 + 1
-        elseif c == 41 then pd2 = pd2 - 1
-        elseif c == 44 and pd2 == 0 then
-          param_labels[#param_labels + 1] = vim.trim(sig.params_str:sub(start, i - 1))
-          start = i + 1
-        end
-      end
-      param_labels[#param_labels + 1] = vim.trim(sig.params_str:sub(start))
-    end
-
-    -- Display: single line with the signature, highlighted as C
-    local label = sig.label
-    local display = { label }
-
-    -- Create float buffer
-    local fbuf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(fbuf, 0, -1, false, display)
-    vim.bo[fbuf].modifiable = false
-    vim.bo[fbuf].bufhidden = 'wipe'
-    vim.bo[fbuf].filetype = 'c'
-
-    -- Calculate window dimensions
-    local width = math.min(#label + 2, math.floor(vim.o.columns * 0.8))
-    sig_help_win = vim.api.nvim_open_win(fbuf, false, {
-      relative = 'cursor',
-      row = -1,
-      col = 0,
-      width = width,
-      height = 1,
-      style = 'minimal',
-      border = vim.o.winborder ~= '' and vim.o.winborder or 'rounded',
-      focusable = false,
-      zindex = 50,
-    })
-
-    -- Highlight active parameter on the code line (line index 1 in the buffer)
-    if active_param < #param_labels then
-      local param_text = param_labels[active_param + 1]
-      -- Find param position in label, skipping to the right occurrence
-      local search_from = label:find('(', 1, true) or 1
-      for _ = 1, active_param do
-        local nc = label:find(',', search_from + 1, true)
-        if nc then search_from = nc end
-      end
-      local ps = label:find(param_text, search_from, true)
-      if ps then
-        vim.api.nvim_buf_add_highlight(fbuf, sig_help_ns, 'LspSignatureActiveParameter', 0, ps - 1, ps - 1 + #param_text)
-      end
-    end
-
-    -- Auto-close on next cursor move or insert leave
-    local group = vim.api.nvim_create_augroup('ctags_sig_close', { clear = true })
-    vim.api.nvim_create_autocmd({ 'CursorMovedI', 'InsertLeave', 'BufLeave' }, {
-      group = group,
-      once = true,
-      callback = close_sig_help,
-    })
+    vim.api.nvim_echo({ { sig.label, 'NormalFloat' } }, false, {})
   end)
 
   if not ok then
@@ -868,29 +837,8 @@ function M.setup()
     end,
   })
 
-  -- Struct member completion on '.' and '->'
-  vim.api.nvim_create_autocmd('InsertCharPre', {
-    group = group,
-    pattern = {
-      '*.c', '*.h', '*.m',
-    },
-    callback = function(args)
-      local char = vim.v.char
-      if char == '.' then
-        vim.schedule(function()
-          M.complete_members(args.buf)
-        end)
-      elseif char == '>' then
-        local col = vim.api.nvim_win_get_cursor(0)[2]
-        local line = vim.api.nvim_get_current_line()
-        if col > 0 and line:sub(col, col) == '-' then
-          vim.schedule(function()
-            M.complete_members(args.buf)
-          end)
-        end
-      end
-    end,
-  })
+  -- No InsertCharPre auto-triggers here. Completion is Tab-driven only —
+  -- prefix vs member dispatch lives in lua/config/keymaps.lua.
 
   -- Manual command
   vim.api.nvim_create_user_command('TagGen', function()
@@ -907,6 +855,30 @@ function M.setup()
   vim.api.nvim_create_user_command('TagGenSystem', function()
     generate_system_tags({ notify = true })
   end, { desc = 'Generate/regenerate system library ctags' })
+
+  vim.api.nvim_create_user_command('CtagsDebug', function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local root = buf_root[bufnr]
+    local tp = root and tags_path(root) or '<no root>'
+    local pidx = root and tag_prefix_index[root]
+    local tnc = root and tag_name_cache[root]
+    local pidx_keys = 0
+    if pidx then for _ in pairs(pidx) do pidx_keys = pidx_keys + 1 end end
+    local tnc_count = 0
+    if tnc then for _ in pairs(tnc) do tnc_count = tnc_count + 1 end end
+    local sys_idx = system_tag_prefix_index ~= nil
+    local lines = {
+      string.format('buf:        %d  ft: %s', bufnr, vim.bo[bufnr].filetype),
+      string.format('root:       %s', tostring(root)),
+      string.format('tags file:  %s  (readable=%s)', tp, tostring(root and vim.fn.filereadable(tp) == 1)),
+      string.format('prefix idx: %d buckets', pidx_keys),
+      string.format('name cache: %d names', tnc_count),
+      string.format('system idx: %s', tostring(sys_idx)),
+      string.format('clangd:     %d clients attached',
+        #vim.lsp.get_clients({ bufnr = bufnr, name = 'clangd' })),
+    }
+    vim.api.nvim_echo(vim.tbl_map(function(l) return { l .. '\n' } end, lines), true, {})
+  end, { desc = 'Print ctags state for current buffer' })
 end
 
 --- Open a Telescope picker with all project tags (workspace symbols via ctags).
@@ -1047,6 +1019,29 @@ function M.get_prefix_matches(prefix, max_items)
   end
 
   return results
+end
+
+--- Manually trigger ctags prefix completion at the cursor.
+--- Driven by both the InsertCharPre autotrigger and the <Tab> keymap.
+--- The prefix index is keyed on the first 2 chars, so we require >=2.
+function M.complete_prefix()
+  if vim.fn.mode() ~= 'i' then return false end
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  local line = vim.api.nvim_get_current_line()
+  local prefix = line:sub(1, col):match('([%w_]+)$')
+  if not prefix or #prefix < 2 then return false end
+  local items = M.get_prefix_matches(prefix:lower(), 50)
+  if #items == 0 then return false end
+  local matches = {}
+  for _, t in ipairs(items) do
+    matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
+  end
+  local ok, err = pcall(vim.fn.complete, col + 1 - #prefix, matches)
+  if not ok then
+    vim.notify('ctags complete_prefix: ' .. tostring(err), vim.log.levels.DEBUG)
+    return false
+  end
+  return true
 end
 
 return M

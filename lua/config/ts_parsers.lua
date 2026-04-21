@@ -11,8 +11,8 @@ local parsers = {
     rust        = { url = "https://github.com/tree-sitter/tree-sitter-rust" },
     go          = { url = "https://github.com/tree-sitter/tree-sitter-go" },
     javascript  = { url = "https://github.com/tree-sitter/tree-sitter-javascript" },
-    typescript  = { url = "https://github.com/tree-sitter/tree-sitter-typescript", location = "typescript" },
-    tsx         = { url = "https://github.com/tree-sitter/tree-sitter-typescript", location = "tsx" },
+    typescript  = { url = "https://github.com/tree-sitter/tree-sitter-typescript", location = "typescript", inherits = "javascript" },
+    tsx         = { url = "https://github.com/tree-sitter/tree-sitter-typescript", location = "tsx", inherits = "javascript" },
     json        = { url = "https://github.com/tree-sitter/tree-sitter-json" },
     yaml        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-yaml" },
     toml        = { url = "https://github.com/tree-sitter-grammars/tree-sitter-toml" },
@@ -117,12 +117,18 @@ function M.install(lang, opts)
     local output = parser_dir .. "/" .. lang .. ".so"
     local ok, err = compile_parser(src_dir, output, lang)
 
-    -- Copy queries if they exist
-    local queries_src = tmp_dir
+    -- Copy queries if they exist. Prefer per-location queries (e.g. monorepo
+    -- subdirs), fall back to the repo-root queries directory.
+    local queries_src
     if info.location then
-        queries_src = queries_src .. "/" .. info.location
+        local located = tmp_dir .. "/" .. info.location .. "/queries"
+        if vim.fn.isdirectory(located) == 1 then
+            queries_src = located
+        end
     end
-    queries_src = queries_src .. "/queries"
+    if not queries_src then
+        queries_src = tmp_dir .. "/queries"
+    end
     if vim.fn.isdirectory(queries_src) == 1 then
         local queries_dst = vim.fn.stdpath("data") .. "/site/queries/" .. lang
         vim.fn.mkdir(queries_dst, "p")
