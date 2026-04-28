@@ -902,6 +902,18 @@ local function setup_yg_keywords()
   add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
   add_match("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
 
+  -- Function names after bare storage-class macros: MACRO TYPE name( or MACRO TYPE *name(
+  add_match("Function", "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
+  add_match("Function", "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\w\\+\\s*\\*\\+\\s*\\zs\\w\\+\\ze\\s*(")
+
+  -- Return/declaration type (PascalCase) after bare storage-class macros
+  -- Uppercase-first to skip C keywords like `const`, `int`. Lowercase types
+  -- (u32/f32/etc.) are already covered by the YgType pattern above.
+  add_match("Type", "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\zs[A-Z]\\w*\\ze\\s*\\*\\?\\s*\\w")
+
+  -- thread_local + other storage-class macros as keywords (teal, match internal/function treatment)
+  add_match("YgKeyword", "\\<\\(thread_local\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\>")
+
 end
 
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
