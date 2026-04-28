@@ -295,6 +295,18 @@ function M.setup()
   -- Enable all servers (vim.lsp.enable handles missing executables gracefully)
   vim.lsp.enable(servers)
 
+  -- Unity builds confuse clangd — it flags some function decls as variables.
+  -- Clear @lsp.type.variable.{c,cpp} so treesitter @function wins for misparses.
+  local function clear_clangd_variable_hl()
+    vim.api.nvim_set_hl(0, '@lsp.type.variable.c', {})
+    vim.api.nvim_set_hl(0, '@lsp.type.variable.cpp', {})
+  end
+  clear_clangd_variable_hl()
+  vim.api.nvim_create_autocmd('ColorScheme', {
+    group = vim.api.nvim_create_augroup('lsp_clangd_hl_fix', { clear = true }),
+    callback = clear_clangd_variable_hl,
+  })
+
   -- LspAttach: Set up keymaps and completion when LSP attaches
   vim.api.nvim_create_autocmd('LspAttach', {
     group = vim.api.nvim_create_augroup('lsp_attach_config', { clear = true }),
