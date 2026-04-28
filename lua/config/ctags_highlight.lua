@@ -33,6 +33,9 @@ local PRIORITY = 50
 -- { winid -> { match_ids, last_project_version, last_system_version } }
 local win_state = {}
 
+-- System tags are excluded: feeding tens of thousands of names into
+-- matchadd alternations creates dozens of huge regexes per window and
+-- tanks redraw performance even on tiny projects. Project tags only.
 local function collect_type_names()
   local names = {}
 
@@ -42,13 +45,6 @@ local function collect_type_names()
       for name, kind in pairs(by_name) do
         if TYPE_KINDS[kind] then names[name] = true end
       end
-    end
-  end
-
-  local system_cache = ctags.get_system_tag_name_cache()
-  if system_cache then
-    for name, kind in pairs(system_cache) do
-      if TYPE_KINDS[kind] then names[name] = true end
     end
   end
 
@@ -103,16 +99,14 @@ function M.refresh(winid)
   if not is_c_family_buf(bufnr) then return end
 
   local pv = ctags.get_cache_version()
-  local sv = ctags.get_system_cache_version()
   local st = win_state[winid]
-  if st and st.last_project_version == pv and st.last_system_version == sv and #st.match_ids > 0 then
+  if st and st.last_project_version == pv and #st.match_ids > 0 then
     return
   end
 
   apply_matches(winid, collect_type_names())
   st = win_state[winid]
   st.last_project_version = pv
-  st.last_system_version = sv
 end
 
 function M.setup()
