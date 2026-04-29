@@ -60,7 +60,7 @@ local colors = {
   index_type = "#d8a51d",         -- fleury_color_index_product_type/sum_type: Types (gold)
   index_function = "#cc5735",     -- fleury_color_index_function: Functions (rust red)
   index_constant = "#478980",     -- fleury_color_index_constant: Constants (teal)
-  index_macro = "#478980",        -- fleury_color_index_macro: Macros (teal)
+  index_macro = "#4a8db5",        -- fleury_color_index_macro: Macros (blue)
   index_decl = "#c04047",         -- fleury_color_index_decl: Declarations (red)
   index_4coder_command = "#23de33", -- fleury_color_index_4coder_command
   index_comment_tag = "#00ff00", -- fleury_color_index_comment_tag
@@ -94,8 +94,8 @@ local colors = {
   -- Plot cycle colors
   plot_cycle = { "#03d3fc", "#22b80b", "#f0bb0c", "#f0500c" },
 
-  -- Custom yggdrasil macros (teal, same as index_macro from casey theme)
-  yg_keyword = "#478980",
+  -- Custom yggdrasil macros (blue, same as index_macro)
+  yg_keyword = "#4a8db5",
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
   -- Subtle tints visible against near-black background
@@ -875,6 +875,57 @@ M.setup()
 -- Track yg match IDs per window to avoid clearing other matches
 local yg_match_ids = {}
 
+-- 4coder-style project-wide #define indexer: scan source files once per project
+-- so any macro (push_struct, ArrayCount, KB, etc.) gets the macro color regardless
+-- of whether clangd has indexed it.
+local macro_index_cache = {}
+
+local function find_project_root()
+  local fname = vim.api.nvim_buf_get_name(0)
+  if fname == "" then return nil end
+  local dir = vim.fn.fnamemodify(fname, ":h")
+  while dir and dir ~= "/" and dir ~= "" do
+    if vim.fn.isdirectory(dir .. "/.git") == 1
+        or vim.fn.filereadable(dir .. "/compile_commands.json") == 1
+        or vim.fn.filereadable(dir .. "/.clangd") == 1 then
+      return dir
+    end
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then break end
+    dir = parent
+  end
+  return nil
+end
+
+local function scan_project_macros(root)
+  if macro_index_cache[root] then return macro_index_cache[root] end
+  local cmd
+  if vim.fn.executable("rg") == 1 then
+    cmd = { "rg", "--no-heading", "--no-line-number", "-N", "-I",
+      "-e", "^\\s*#\\s*define\\s+[A-Za-z_][A-Za-z0-9_]*",
+      "-g", "*.h", "-g", "*.c", "-g", "*.hpp", "-g", "*.cpp",
+      "-g", "*.cc", "-g", "*.hh", "-g", "*.m", "-g", "*.mm",
+      root }
+  else
+    cmd = { "grep", "-rhE",
+      "^[[:space:]]*#[[:space:]]*define[[:space:]]+[A-Za-z_][A-Za-z0-9_]*",
+      "--include=*.h", "--include=*.c", "--include=*.hpp",
+      "--include=*.cpp", "--include=*.cc", "--include=*.hh",
+      "--include=*.m", "--include=*.mm", root }
+  end
+  local result = vim.fn.systemlist(cmd)
+  local names, seen = {}, {}
+  for _, line in ipairs(result) do
+    local name = line:match("#%s*define%s+([A-Za-z_][A-Za-z0-9_]*)")
+    if name and not seen[name] then
+      seen[name] = true
+      table.insert(names, name)
+    end
+  end
+  macro_index_cache[root] = names
+  return names
+end
+
 -- Setup yg_* keyword and type highlighting for C/C++ files (uses matchadd for priority over treesitter)
 -- Consolidated into ~5 combined patterns (was ~30 individual matchadd calls)
 local function setup_yg_keywords()
@@ -884,8 +935,8 @@ local function setup_yg_keywords()
   if yg_match_ids[winid] then return end
   yg_match_ids[winid] = {}
 
-  local function add_match(group, pattern)
-    local id = vim.fn.matchadd(group, pattern, 100)
+  local function add_match(group, pattern, priority)
+    local id = vim.fn.matchadd(group, pattern, priority or 100)
     table.insert(yg_match_ids[winid], id)
   end
 
@@ -914,6 +965,26 @@ local function setup_yg_keywords()
   -- thread_local + other storage-class macros as keywords (teal, match internal/function treatment)
   add_match("YgKeyword", "\\<\\(thread_local\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\>")
 
+  -- 4coder-style: every #define in the project gets the macro color.
+  -- Priority 200 so it beats the Function patterns above (priority 100) — otherwise
+  -- a macro like push_struct would match both the function-name pattern (above) and
+  -- the macro-name pattern, with the function pattern winning by registration order.
+  -- Chunked alternation keeps each pattern under vim's regex limits.
+  local root = find_project_root()
+  if root then
+    local macros = scan_project_macros(root)
+    local chunk = 50
+    for i = 1, #macros, chunk do
+      local parts = {}
+      for j = i, math.min(i + chunk - 1, #macros) do
+        table.insert(parts, macros[j])
+      end
+      if #parts > 0 then
+        add_match("YgKeyword", "\\<\\(" .. table.concat(parts, "\\|") .. "\\)\\>", 200)
+      end
+    end
+  end
+
 end
 
 local yg_group = vim.api.nvim_create_augroup("YgKeywords", { clear = true })
@@ -939,12 +1010,51 @@ vim.api.nvim_create_autocmd("WinClosed", {
   end,
 })
 
--- Apply to current buffer if it's C/C++/ObjC
-local ft = vim.bo.filetype
-local ext = vim.fn.expand("%:e")
-if ft == "c" or ft == "cpp" or ft == "objc" or ft == "objcpp" or ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" or ext == "m" or ext == "mm" then
-  setup_yg_keywords()
+-- Apply to every open C/C++/ObjC window (handles colorscheme reload — without this,
+-- only the current window gets the new patterns and other windows keep stale matches).
+local function reapply_all_c_windows()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    local bft = vim.api.nvim_buf_get_option(buf, "filetype")
+    if bft == "c" or bft == "cpp" or bft == "objc" or bft == "objcpp" then
+      if yg_match_ids[win] then
+        for _, id in ipairs(yg_match_ids[win]) do
+          pcall(vim.fn.matchdelete, id, win)
+        end
+        yg_match_ids[win] = nil
+      end
+      vim.api.nvim_win_call(win, setup_yg_keywords)
+    end
+  end
 end
+reapply_all_c_windows()
+
+-- Debug: show what the macro indexer found for the current buffer's project
+vim.api.nvim_create_user_command("HHMacroDump", function()
+  local root = find_project_root()
+  if not root then
+    print("HH: no project root found (need .git, compile_commands.json, or .clangd)")
+    return
+  end
+  local macros = scan_project_macros(root)
+  print("HH: project root = " .. root)
+  print("HH: found " .. #macros .. " #define names")
+  print("HH: first 20 = " .. table.concat({ unpack(macros, 1, math.min(20, #macros)) }, ", "))
+end, {})
+
+-- Force a fresh scan + reapply (use after editing .h files or if cache is stale)
+vim.api.nvim_create_user_command("HHMacroRescan", function()
+  macro_index_cache = {}
+  local winid = vim.api.nvim_get_current_win()
+  if yg_match_ids[winid] then
+    for _, id in ipairs(yg_match_ids[winid]) do
+      pcall(vim.fn.matchdelete, id)
+    end
+    yg_match_ids[winid] = nil
+  end
+  setup_yg_keywords()
+  print("HH: rescanned macros")
+end, {})
 
 -- Store module globally so it can be accessed after colorscheme load
 vim.g.hh_theme = M
