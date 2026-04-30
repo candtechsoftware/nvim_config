@@ -51,18 +51,26 @@ vim.keymap.set("n", "<leader>ih", function()
 end, { desc = "Toggle inlay hints" })
 
 -- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
+-- No auto-triggers anywhere — Tab is the ONLY way to fire completion.
 local c_completion_ft = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
 vim.keymap.set("i", "<Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-n>" end
-  -- C/C++ buffers: drive the popup via ctags (clangd has no compile_commands
-  -- in unity-build projects). Schedule because <expr> mappings can't directly
-  -- call vim.fn.complete().
   if c_completion_ft[vim.bo.filetype] then
-    vim.schedule(function() require("config.ctags").complete_prefix() end)
+    vim.schedule(function()
+      local col = vim.api.nvim_win_get_cursor(0)[2]
+      local line = vim.api.nvim_get_current_line()
+      local before = line:sub(1, col)
+      local ctags = require("config.ctags")
+      if before:match("%->%s*[%w_]*$") or before:match("%.%s*[%w_]*$") then
+        ctags.complete_members(vim.api.nvim_get_current_buf())
+      else
+        ctags.complete_prefix()
+      end
+    end)
     return ""
   end
   return "<C-x><C-o>"
-end, { expr = true, desc = "Tab: open / cycle next in popup" })
+end, { expr = true, desc = "Tab: completion (ctags for C, LSP otherwise)" })
 vim.keymap.set("i", "<S-Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-p>" end
   return "<S-Tab>"

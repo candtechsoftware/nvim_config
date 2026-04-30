@@ -320,52 +320,24 @@ function M.setup()
         end
       end
 
-      -- Enable native LSP completion — disable autotrigger for C/C++ since ctags handles it
-      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = not is_c })
+      -- Enable native LSP completion. Autotrigger is OFF for every filetype:
+      -- completion is only ever invoked via <Tab> (see lua/config/keymaps.lua).
+      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
 
-      -- Insert-mode triggers: keyword completion + signature help
+      -- Insert-mode triggers: only the one-line cmdline signature echo. No
+      -- popup auto-fires here.
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
         group = vim.api.nvim_create_augroup('lsp_insert_trigger_' .. bufnr, { clear = true }),
         callback = function()
           local char = vim.v.char
-
-          -- Signature help on ( and ,
           if char == '(' or char == ',' then
             vim.schedule(function()
-              -- C/C++ files: use ctags signature help (clangd lacks compile database)
               if is_c then
                 require('config.ctags').show_signature_help()
               else
                 vim.lsp.buf.signature_help({ silent = true })
               end
-            end)
-            return
-          end
-
-          -- Keyword completion on word characters
-          if char:match('[%w_]') and vim.fn.pumvisible() == 0 then
-            vim.schedule(function()
-              -- C/C++ files: use ctags prefix matching (clangd lacks compile database)
-              if is_c then
-                local col = vim.api.nvim_win_get_cursor(0)[2]
-                local line = vim.api.nvim_get_current_line()
-                local prefix = line:sub(1, col + 1):match('([%w_]+)$')
-                if prefix and #prefix >= 2 then
-                  local ctags = require('config.ctags')
-                  local items = ctags.get_prefix_matches(prefix:lower(), 20)
-                  if #items > 0 then
-                    local matches = {}
-                    for _, t in ipairs(items) do
-                      matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
-                    end
-                    vim.fn.complete(col + 1 - #prefix, matches)
-                    return
-                  end
-                end
-              end
-              -- Non-C files or ctags had no matches: use LSP
-              vim.lsp.completion.get()
             end)
           end
         end,

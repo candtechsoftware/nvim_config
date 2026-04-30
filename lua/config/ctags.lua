@@ -837,29 +837,8 @@ function M.setup()
     end,
   })
 
-  -- Struct member completion on '.' and '->'
-  vim.api.nvim_create_autocmd('InsertCharPre', {
-    group = group,
-    pattern = {
-      '*.c', '*.h', '*.m',
-    },
-    callback = function(args)
-      local char = vim.v.char
-      if char == '.' then
-        vim.schedule(function()
-          M.complete_members(args.buf)
-        end)
-      elseif char == '>' then
-        local col = vim.api.nvim_win_get_cursor(0)[2]
-        local line = vim.api.nvim_get_current_line()
-        if col > 0 and line:sub(col, col) == '-' then
-          vim.schedule(function()
-            M.complete_members(args.buf)
-          end)
-        end
-      end
-    end,
-  })
+  -- No InsertCharPre auto-triggers here. Completion is Tab-driven only —
+  -- prefix vs member dispatch lives in lua/config/keymaps.lua.
 
   -- Manual command
   vim.api.nvim_create_user_command('TagGen', function()
@@ -876,6 +855,30 @@ function M.setup()
   vim.api.nvim_create_user_command('TagGenSystem', function()
     generate_system_tags({ notify = true })
   end, { desc = 'Generate/regenerate system library ctags' })
+
+  vim.api.nvim_create_user_command('CtagsDebug', function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local root = buf_root[bufnr]
+    local tp = root and tags_path(root) or '<no root>'
+    local pidx = root and tag_prefix_index[root]
+    local tnc = root and tag_name_cache[root]
+    local pidx_keys = 0
+    if pidx then for _ in pairs(pidx) do pidx_keys = pidx_keys + 1 end end
+    local tnc_count = 0
+    if tnc then for _ in pairs(tnc) do tnc_count = tnc_count + 1 end end
+    local sys_idx = system_tag_prefix_index ~= nil
+    local lines = {
+      string.format('buf:        %d  ft: %s', bufnr, vim.bo[bufnr].filetype),
+      string.format('root:       %s', tostring(root)),
+      string.format('tags file:  %s  (readable=%s)', tp, tostring(root and vim.fn.filereadable(tp) == 1)),
+      string.format('prefix idx: %d buckets', pidx_keys),
+      string.format('name cache: %d names', tnc_count),
+      string.format('system idx: %s', tostring(sys_idx)),
+      string.format('clangd:     %d clients attached',
+        #vim.lsp.get_clients({ bufnr = bufnr, name = 'clangd' })),
+    }
+    vim.api.nvim_echo(vim.tbl_map(function(l) return { l .. '\n' } end, lines), true, {})
+  end, { desc = 'Print ctags state for current buffer' })
 end
 
 --- Open a Telescope picker with all project tags (workspace symbols via ctags).
@@ -1019,20 +1022,25 @@ function M.get_prefix_matches(prefix, max_items)
 end
 
 --- Manually trigger ctags prefix completion at the cursor.
---- Mirrors the InsertCharPre branch in lua/config/lsp.lua so that <Tab>
---- can drive the same flow when the popup isn't already visible.
+--- Driven by both the InsertCharPre autotrigger and the <Tab> keymap.
+--- The prefix index is keyed on the first 2 chars, so we require >=2.
 function M.complete_prefix()
+  if vim.fn.mode() ~= 'i' then return false end
   local col = vim.api.nvim_win_get_cursor(0)[2]
   local line = vim.api.nvim_get_current_line()
   local prefix = line:sub(1, col):match('([%w_]+)$')
-  if not prefix or #prefix < 1 then return false end
+  if not prefix or #prefix < 2 then return false end
   local items = M.get_prefix_matches(prefix:lower(), 50)
   if #items == 0 then return false end
   local matches = {}
   for _, t in ipairs(items) do
     matches[#matches + 1] = { word = t.name, kind = t.kind or '' }
   end
-  vim.fn.complete(col + 1 - #prefix, matches)
+  local ok, err = pcall(vim.fn.complete, col + 1 - #prefix, matches)
+  if not ok then
+    vim.notify('ctags complete_prefix: ' .. tostring(err), vim.log.levels.DEBUG)
+    return false
+  end
   return true
 end
 
