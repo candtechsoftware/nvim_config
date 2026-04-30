@@ -10,6 +10,7 @@ local servers = {
   'lua_ls',
   'gopls',
   'tsgo',
+  'eslint',
   'rust_analyzer',
   'zls',
   'ols',
@@ -98,7 +99,7 @@ local function set_keymaps(bufnr)
     vim.lsp.buf.definition()
   end, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump, opts)
+  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump_vsplit, opts)
   vim.keymap.set('n', 'gv', function()
     local cur_win = vim.api.nvim_get_current_win()
     local word = vim.fn.expand('<cword>')
@@ -194,47 +195,20 @@ local function set_keymaps(bufnr)
   -- Actions (grn/grr/gra are 0.12 defaults for rename/references/code_action)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
-  -- Formatting (manual) - use jai-format for Jai, LSP for others
+  -- Formatting (manual): TS/JS via eslint LSP only.
+  -- Everything else (incl. unity-build C/C++, Lua, Rust, Jai) is a no-op.
   vim.keymap.set('n', '<leader>f', function()
-    local noformat_ft = { c = true, cpp = true, objc = true, objcpp = true }
-    if noformat_ft[vim.bo.filetype] then
-      return
-    end
-    if vim.bo.filetype == "jai" or vim.fn.expand("%:e") == "jai" then
-      local view = vim.fn.winsaveview()
-      local tmpfile = "/tmp/jai-format-buffer.jai"
-      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-      vim.fn.writefile(lines, tmpfile)
-      local result = vim.fn.system("cd /tmp && jai-format -to_stdout -silent " .. tmpfile .. " 2>/dev/null")
-      local exit_code = vim.v.shell_error
-      vim.fn.delete(tmpfile)
-      if exit_code == 0 and result ~= "" then
-        local new_lines = vim.split(result, "\n", { plain = true })
-        if new_lines[#new_lines] == "" then
-          table.remove(new_lines)
-        end
-        vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
-      else
-        vim.notify("jai-format failed: " .. result, vim.log.levels.ERROR)
-      end
-      vim.fn.winrestview(view)
-    else
-      local clients = vim.lsp.get_clients({ bufnr = 0 })
-      local has_formatter = false
-      for _, client in ipairs(clients) do
-        if client:supports_method('textDocument/formatting') then
-          has_formatter = true
-          break
-        end
-      end
-      if has_formatter then
-        vim.lsp.buf.format({ async = false })
-      else
-        local view = vim.fn.winsaveview()
-        vim.cmd('normal! gg=G')
-        vim.fn.winrestview(view)
-      end
-    end
+    local js = {
+      typescript = true, typescriptreact = true,
+      javascript = true, javascriptreact = true,
+    }
+    if not js[vim.bo.filetype] then return end
+    local clients = vim.lsp.get_clients({ bufnr = 0, name = 'eslint' })
+    if #clients == 0 then return end
+    vim.lsp.buf.code_action({
+      context = { only = { 'source.fixAll.eslint' }, diagnostics = {} },
+      apply = true,
+    })
   end, opts)
 
   -- Diagnostics to quickfix/loclist
