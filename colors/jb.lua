@@ -113,16 +113,16 @@ local colors = {
     orange = "#FD971FFF",
     -- Cursor line
     cursor_line_highlight = "#0b3335FF",
-    -- Scope background cycle colors - close to main bg #062329
+    -- Scope background cycle — palette-tinted lifts above #062329 (deep teal)
     back_cycle = {
-        "#082529", -- Level 1: barely lighter
-        "#0a272b", -- Level 2
-        "#0c292d", -- Level 3
-        "#0e2b2f", -- Level 4
-        "#102d31", -- Level 5
-        "#122f33", -- Level 6
-        "#143135", -- Level 7
-        "#163337",
+        "#0e202c", -- purple
+        "#082c20", -- green (jb's mid-green lean)
+        "#082030", -- blue
+        "#1c2818", -- amber/tan (signature warm tan)
+        "#1c2026", -- pink
+        "#08282d", -- cyan (deeper teal)
+        "#142a20", -- olive
+        "#0a1e30", -- violet
     },
     color_preview_title_bar = "#0b3335FF",
     code_addition = "#44b340FF",
@@ -459,6 +459,7 @@ set(0, "LexicalScopeModule", { link = "FocusRegionScopeModule" })
 -- Scope highlight groups for nested scope backgrounds
 for i, bg in ipairs(colors.back_cycle) do
     set(0, "JBScope" .. i, { bg = bg:sub(1, 7) })  -- Strip alpha
+    set(0, "HHScope" .. i, { bg = bg:sub(1, 7) })
 end
 
 -- Export colors

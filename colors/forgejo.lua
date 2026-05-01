@@ -49,6 +49,18 @@ local colors = {
     code_builtin  = "#fb7185",
     code_constant = "#fbbf24",
     code_punct    = "#a8b3c0",
+
+    -- Scope nesting cycle — palette-tinted lifts above #10161e (deep blue)
+    back_cycle = {
+        "#181624", -- purple
+        "#121e18", -- green
+        "#12182a", -- blue
+        "#221c14", -- amber (forgejo orange)
+        "#221624", -- pink
+        "#122024", -- cyan
+        "#1c1c14", -- olive
+        "#141424", -- violet
+    },
 }
 
 vim.cmd("highlight clear")
@@ -287,5 +299,10 @@ set(0, "IblScope",      { fg = c.primary })
 set(0, "IlluminatedWordText",  { bg = c.bg_region })
 set(0, "IlluminatedWordRead",  { bg = c.bg_region })
 set(0, "IlluminatedWordWrite", { bg = c.bg_region })
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(c.back_cycle) do
+    set(0, "HHScope" .. i, { bg = bg })
+end
 
 return colors

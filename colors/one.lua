@@ -30,16 +30,16 @@ local colors = {
   bar_bg        = "#1f1f27",     -- defcolor_bar
   base          = "#cb9401",     -- defcolor_base
 
-  -- Scope background cycle (subtle)
+  -- Scope nesting cycle — palette-tinted lifts above #0c0c0c
   back_cycle = {
-    "#0e0e0e",
-    "#101010",
-    "#121212",
-    "#141414",
-    "#161616",
-    "#181818",
-    "#1a1a1a",
-    "#1c1c1c",
+    "#120c14", -- purple
+    "#0c130d", -- olive-green (one's literal lean)
+    "#0c0e16", -- blue
+    "#161208", -- amber (one's signature gold)
+    "#170d12", -- pink/rust
+    "#0c1515", -- teal (one's macro)
+    "#13130c", -- olive
+    "#0d0d18", -- violet
   },
 }
 
@@ -383,6 +383,7 @@ function M.setup()
   -- Scope highlight groups
   for i, bg in ipairs(colors.back_cycle) do
     hl(0, "OneScope" .. i, { bg = bg })
+    hl(0, "HHScope" .. i, { bg = bg })
   end
 end
 

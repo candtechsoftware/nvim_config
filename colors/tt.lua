@@ -91,6 +91,16 @@ local function palette(background)
       gsign_untracked = '#a5a29b',
       gsign_add_staged = '#5ea059', gsign_change_staged = '#b28c43',
       gsign_del_staged = '#d17473', gsign_untracked_staged = '#858179',
+      back_cycle = {
+        '#f2ecf5', -- purple
+        '#ecf3ec', -- green
+        '#ecf0f8', -- blue
+        '#f7eee2', -- amber
+        '#f7ecf0', -- pink
+        '#ecf5f3', -- cyan
+        '#f1efe2', -- olive
+        '#eee8f6', -- violet
+      },
     }
   end
 
@@ -114,6 +124,16 @@ local function palette(background)
     gsign_untracked = '#7a7670',
     gsign_add_staged = '#5e7a5c', gsign_change_staged = '#88753f',
     gsign_del_staged = '#9a5f5f', gsign_untracked_staged = '#5a5955',
+    back_cycle = {
+      '#2c2530', -- purple
+      '#252e26', -- green
+      '#252830', -- blue
+      '#322a20', -- amber
+      '#322528', -- pink
+      '#253030', -- cyan
+      '#2c2c22', -- olive
+      '#272235', -- violet
+    },
   }
 end
 
@@ -402,3 +422,8 @@ vim.g.terminal_color_12 = p.bright_blue
 vim.g.terminal_color_13 = p.bright_purple
 vim.g.terminal_color_14 = p.bright_cyan
 vim.g.terminal_color_15 = p.fg0
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(p.back_cycle) do
+  set(0, 'HHScope' .. i, { bg = bg })
+end

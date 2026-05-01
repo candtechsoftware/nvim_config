@@ -42,20 +42,16 @@ local colors = {
     list_item_active   = "#3a2a18",
     ghost_character    = "#4e4638",
 
-    -- back_cycle: warm fleury tint ramping from rich-black toward dark bronze.
-    -- Innermost scope uses index 1 (no tint); outer wrappers deepen.
+    -- Scope nesting cycle — warm fleury hues over rich-black (#020202)
     back_cycle = {
-        "#020202",
-        "#060503",
-        "#0a0804",
-        "#0e0a05",
-        "#120d06",
-        "#170f07",
-        "#1b1208",
-        "#20150a",
-        "#25180b",
-        "#2a1b0c",
-        "#2f1e0d",
+        "#0e0a04", -- amber (signature gold)
+        "#0c0405", -- rose
+        "#040c08", -- mossy green
+        "#04060e", -- sky blue
+        "#0a040c", -- plum
+        "#0a0c04", -- olive
+        "#040d0d", -- aqua-ice
+        "#0e0606", -- vermilion
     },
 }
 
@@ -439,6 +435,7 @@ set(0, "GitSignsChangedelete", { fg = colors.bright_orange, bg = colors.rich_bla
 -- Scope highlight groups (derived from back_cycle)
 for i, bg in ipairs(colors.back_cycle) do
     set(0, "FleuryScope" .. i, { bg = bg })
+    set(0, "HHScope" .. i, { bg = bg })
 end
 
 -- ---------------------------------------------------------------------------

@@ -81,6 +81,18 @@ local colors = {
     -- Paste/undo animation
     paste_animation = "#ffbb00",
     undo_animation = "#80005d",
+
+    -- Scope nesting cycle (subtle palette-tinted lifts above #0C0C0C)
+    back_cycle = {
+        "#120c14", -- purple
+        "#0c130d", -- green
+        "#0c0e16", -- blue
+        "#161208", -- amber
+        "#170d12", -- pink
+        "#0c1515", -- cyan
+        "#13130c", -- olive
+        "#0d0d18", -- violet
+    },
 }
 
 colors.none = "NONE"
@@ -396,5 +408,10 @@ set(0, "LexicalScopeModule", { link = "FocusRegionScopeModule" })
 set(0, "BraceHighlight", { fg = colors.bracket_highlight })
 set(0, "BraceLine", { fg = colors.brace_line })
 set(0, "BraceAnnotation", { fg = colors.brace_annotation })
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(colors.back_cycle) do
+    set(0, "HHScope" .. i, { bg = bg })
+end
 
 return colors

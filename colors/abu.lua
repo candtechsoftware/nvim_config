@@ -33,6 +33,18 @@ local colors = {
     ivy2            = "#3e4842",
     ivy3            = "#48544d",
     ivy4            = "#536058",
+
+    -- Scope nesting cycle (subtle palette-tinted lifts above #191919)
+    back_cycle = {
+        "#1d171d", -- purple
+        "#181d18", -- green
+        "#181a1f", -- blue
+        "#1f1d18", -- amber
+        "#1f181d", -- pink
+        "#171f1f", -- cyan
+        "#1d1d18", -- olive
+        "#181820", -- violet
+    },
 }
 
 vim.cmd("highlight clear")
@@ -219,3 +231,8 @@ set(0, "DiagnosticUnderlineHint",  { sp = colors.string, undercurl = true })
 -- NetRW
 set(0, "netrwDir",                 { fg = colors.fg })
 set(0, "netrwExe",                 { fg = colors.keyword })
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(colors.back_cycle) do
+    set(0, "HHScope" .. i, { bg = bg })
+end

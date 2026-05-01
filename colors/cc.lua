@@ -95,16 +95,16 @@ local colors = {
   -- Yggdrasil
   yg_keyword = "#478980",
 
-  -- Scope background cycle - HH's dark base with varied tints
+  -- Scope background cycle — palette-tinted lifts above #0c0c0c
   back_cycle = {
-    "#161419",
-    "#141816",
-    "#141618",
-    "#181614",
-    "#181418",
-    "#141818",
-    "#161614",
-    "#161419",
+    "#120c14",  -- purple
+    "#0c130d",  -- green
+    "#0c0e16",  -- blue
+    "#161208",  -- amber
+    "#170d12",  -- pink
+    "#0c1515",  -- cyan
+    "#13130c",  -- olive
+    "#0d0d18",  -- violet
   },
 
   -- Rainbow delimiters
@@ -626,6 +626,7 @@ function M.setup()
   -- Scope highlight groups for nested scope backgrounds
   for i, bg in ipairs(colors.back_cycle) do
     hl(0, "CCScope" .. i, { bg = bg })
+    hl(0, "HHScope" .. i, { bg = bg })
   end
 end
 

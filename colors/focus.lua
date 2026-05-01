@@ -96,6 +96,18 @@ local colors = {
     code_deletion = "#E64D4DFF",
     region_addition = "#2260224C",
     region_deletion = "#7722224C",
+
+    -- Scope nesting cycle — palette-tinted lifts above #141824 (deep blue-grey)
+    back_cycle = {
+        "#1c1828", -- purple
+        "#16201c", -- mossy green
+        "#161a30", -- blue (focus's signature hue)
+        "#241e18", -- amber
+        "#241828", -- pink
+        "#162228", -- cyan
+        "#1e1e16", -- olive
+        "#181828", -- violet
+    },
 }
 
 -- Strip alpha channel from all colors (Neovim expects 6-char hex, not 8-char with alpha)
@@ -410,5 +422,10 @@ set(0, "ElextRegionHeredoc", { link = "FocusRegionHeredoc" })
 set(0, "LexicalScopeExport", { link = "FocusRegionScopeExport" })
 set(0, "LexicalScopeFile", { link = "FocusRegionScopeFile" })
 set(0, "LexicalScopeModule", { link = "FocusRegionScopeModule" })
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(colors.back_cycle) do
+    set(0, "HHScope" .. i, { bg = bg })
+end
 
 return colors

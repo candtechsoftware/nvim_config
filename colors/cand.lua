@@ -95,19 +95,17 @@ local colors = {
     error      = "#ff0000",        -- bright-red
     warning    = "#ffaa00",        -- bright-orange
 
-    -- Scope background cycle colors (defcolor_back_cycle)
+    -- Scope background cycle colors — subtle palette-tinted lifts above #020202
+    -- Hues lean toward cand's amber/rose/sky-blue accents
     back_cycle = {
-        "#020202",  -- Level 1: same as back
-        "#020202",  -- Level 2: same
-        "#020202",  -- Level 3: same
-        "#020202",  -- Level 4: same
-        "#020202",  -- Level 5: same
-        "#020202",  -- Level 6: same
-        "#020202",  -- Level 7: same
-        "#100202",  -- Level 8: slight red
-        "#300202",  -- Level 9: more red
-        "#500202",  -- Level 10: even more red
-        "#700202",  -- Level 11: deep red
+        "#0c040d",  -- purple
+        "#040c05",  -- green
+        "#04060e",  -- blue (sky-blue lean)
+        "#0e0a02",  -- amber (signature gold)
+        "#0e040a",  -- pink/rose
+        "#040d0e",  -- cyan (aqua-ice)
+        "#0a0a04",  -- olive
+        "#050310",  -- violet
     },
 }
 
@@ -402,6 +400,7 @@ set(0, "YgType", { fg = colors.index_product_type })
 -- Scope highlight groups for nested scope backgrounds (like 4coder back_cycle)
 for i, bg in ipairs(colors.back_cycle) do
     set(0, "CandScope" .. i, { bg = bg })
+    set(0, "HHScope" .. i, { bg = bg })
 end
 
 -- Create module table for scope highlighting

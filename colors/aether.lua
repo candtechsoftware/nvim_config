@@ -19,6 +19,18 @@ local colors = {
     base0D = "#e2be8a", -- Functions, keywords, blue
     base0E = "#f66151", -- Keywords, storage, magenta
     base0F = "#edb95a", -- Deprecated, brown/yellow
+
+    -- Scope nesting cycle (subtle palette-tinted lifts above #0f0f0f)
+    back_cycle = {
+        "#150f17", -- purple
+        "#0f1610", -- green
+        "#0f1119", -- blue
+        "#191510", -- amber
+        "#19101a", -- pink
+        "#0f1818", -- cyan
+        "#161611", -- olive
+        "#10101c", -- violet
+    },
 }
 
 colors.none = "NONE"
@@ -330,5 +342,10 @@ set(0, "LazyValue", { fg = colors.base09 })
 set(0, "netrwCursorLine", { bg = colors.base01 })
 set(0, "netrwDir", { fg = colors.base0D })
 set(0, "netrwExe", { fg = colors.base0B })
+
+-- Nested scope background cycle (consumed by hh.lua's scope highlighter)
+for i, bg in ipairs(colors.back_cycle) do
+    set(0, "HHScope" .. i, { bg = bg })
+end
 
 return colors

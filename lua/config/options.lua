@@ -39,7 +39,7 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.inccommand = "nosplit"
 
-vim.opt.scrolloff = 8 -- Keep 8 lines above and below the cursor
+vim.opt.scrolloff = 2 -- Keep 2 lines above and below the cursor
 vim.opt.smoothscroll = true
 vim.opt.signcolumn = "auto" -- Only show sign column when needed
 vim.opt.colorcolumn = "" -- Disable the color column

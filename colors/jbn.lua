@@ -78,16 +78,16 @@ local colors = {
     -- Cursor line
     cursor_line_highlight = "#1a1a1a",
 
-    -- Scope background cycle colors - neutral grays, closer to black
+    -- Scope nesting cycle — palette-tinted lifts above #0e0e0e
     back_cycle = {
-        "#101010", -- Level 1
-        "#111111", -- Level 2
-        "#131313", -- Level 3
-        "#141414", -- Level 4
-        "#161616", -- Level 5
-        "#171717", -- Level 6
-        "#191919", -- Level 7
-        "#1a1a1a", -- Level 8
+        "#140e16", -- purple
+        "#0e150f", -- green (jblow's pale green)
+        "#0e1018", -- blue
+        "#181410", -- amber/tan
+        "#180e14", -- pink (jblow's coral lean)
+        "#0e1717", -- cyan
+        "#15150e", -- olive
+        "#0f0f1a", -- violet
     },
 
     -- Diff
@@ -414,6 +414,7 @@ set(0, "rainbowcol6", { fg = "#F92672" })  -- red
 -- Scope highlight groups for nested scope backgrounds
 for i, bg in ipairs(colors.back_cycle) do
     set(0, "JBNScope" .. i, { bg = bg })
+    set(0, "HHScope" .. i, { bg = bg })
 end
 
 -- Export colors

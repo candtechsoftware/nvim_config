@@ -100,14 +100,14 @@ local colors = {
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
   -- Subtle tints visible against near-black background
   back_cycle = {
-    "#0f0e11",  -- Level 1: purple/magenta tint
-    "#0e100f",  -- Level 2: green tint
-    "#0e0f10",  -- Level 3: blue tint
-    "#100f0e",  -- Level 4: amber/orange tint
-    "#100e10",  -- Level 5: pink tint
-    "#0e1010",  -- Level 6: cyan tint
-    "#0f0f0e",  -- Level 7: olive tint
-    "#0f0e11",  -- Level 8: violet tint
+    "#0d0a0f",  -- Level 1: purple/magenta tint
+    "#0a0d0a",  -- Level 2: green tint
+    "#0a0b10",  -- Level 3: blue tint
+    "#0f0c08",  -- Level 4: amber/orange tint
+    "#0f0a0d",  -- Level 5: pink tint
+    "#080e0f",  -- Level 6: cyan tint
+    "#0d0d08",  -- Level 7: olive tint
+    "#0b0810",  -- Level 8: violet tint
   },
 }
 
