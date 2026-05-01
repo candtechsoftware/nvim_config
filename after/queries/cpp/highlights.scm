@@ -138,3 +138,51 @@
     name: (qualified_identifier
       name: (identifier) @constant))
   (#set! priority 200))
+
+; Enum member names in the enum definition body
+(enumerator
+  name: (identifier) @constant
+  (#set! priority 200))
+
+; Enum member references through `Type::Value` in common value contexts
+; (deliberately excludes call_expression's function field so static method
+; calls keep their @function.call coloring)
+(assignment_expression
+  right: (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(return_statement
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(argument_list
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(binary_expression
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(initializer_list
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(init_declarator
+  value: (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(conditional_expression
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))
+
+(field_initializer
+  (qualified_identifier
+    name: (identifier) @constant)
+  (#set! priority 200))

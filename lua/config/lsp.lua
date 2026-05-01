@@ -348,6 +348,42 @@ function M.setup()
 
     end,
   })
+
+  -- :LspInfo — short summary of LSP state for the current buffer.
+  -- nvim 0.12+ ships `:lsp enable|disable|restart|stop` and `:checkhealth
+  -- vim.lsp` but no one-shot status command. This fills the gap.
+  vim.api.nvim_create_user_command('LspInfo', function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local clients = vim.lsp.get_clients({ bufnr = bufnr })
+    local lines = {
+      ('Buffer %d  filetype=%s'):format(bufnr, vim.bo[bufnr].filetype),
+      ('%d attached client(s):'):format(#clients),
+    }
+    local attached = {}
+    for _, c in ipairs(clients) do
+      attached[c.name] = true
+      local stp = c.server_capabilities.semanticTokensProvider and 'yes' or 'no'
+      local root = c.config.root_dir or c.root_dir or '?'
+      table.insert(lines, ('  - %s (id=%d) root=%s  semantic_tokens=%s')
+        :format(c.name, c.id, root, stp))
+      table.insert(lines, ('    cmd=%s'):format(table.concat(c.config.cmd or {}, ' ')))
+    end
+    local not_attached = {}
+    for _, cfg in ipairs(vim.lsp.get_configs()) do
+      if not attached[cfg.name] and vim.lsp.is_enabled(cfg.name) then
+        table.insert(not_attached, cfg.name)
+      end
+    end
+    if #not_attached > 0 then
+      table.insert(lines, ('Enabled but not attached: %s'):format(table.concat(not_attached, ', ')))
+    end
+    vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+  end, { desc = 'Show LSP clients attached to current buffer' })
+
+  -- :LspLog — open the LSP log file in a new tab.
+  vim.api.nvim_create_user_command('LspLog', function()
+    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+  end, { desc = 'Open the LSP log file' })
 end
 
 return M

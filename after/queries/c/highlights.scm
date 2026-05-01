@@ -132,3 +132,8 @@
     "f32x4" "i32x4" "u32x4" "u8x16" "b32x4" "b8x16"
     "UAddr" "uaddr" "saddr")
   (#set! priority 200))
+
+; Enum member names in the enum definition body
+(enumerator
+  name: (identifier) @constant
+  (#set! priority 200))
