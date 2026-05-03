@@ -72,37 +72,11 @@ end
 local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
-  local c_filetypes = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
-
   -- Navigation
-  vim.keymap.set('n', 'gd', function()
-    -- Try ctags first for C/C++ (covers unity builds and project-local symbols)
-    if c_filetypes[vim.bo.filetype] then
-      local word = vim.fn.expand('<cword>')
-      local saved_tagfunc = vim.bo.tagfunc
-      vim.bo.tagfunc = ''
-      local tags = vim.fn.taglist('^' .. word .. '$')
-      vim.bo.tagfunc = saved_tagfunc
-      -- Only use ctags if at least one match is from the project
-      local root = require('config.ctags').get_project_root()
-      if root then
-        for _, tag in ipairs(tags) do
-          local abs = vim.fn.fnamemodify(tag.filename, ':p')
-          if abs:sub(1, #root) == root then
-            require('config.ctags').jump()
-            return
-          end
-        end
-      end
-    end
-    -- No ctags match — try LSP
-    vim.lsp.buf.definition()
-  end, opts)
+  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', '<leader>gi', require('config.ctags').jump_vsplit, opts)
   vim.keymap.set('n', 'gv', function()
     local cur_win = vim.api.nvim_get_current_win()
-    local word = vim.fn.expand('<cword>')
 
     -- Find or create the target split window
     local target_win
@@ -120,74 +94,19 @@ local function set_keymaps(bufnr)
       end
     end
 
-    -- Try ctags first for C/C++ (synchronous, project tags only)
-    if c_filetypes[vim.bo.filetype] then
-      local saved_tagfunc = vim.bo.tagfunc
-      vim.bo.tagfunc = ''
-      local tags = vim.fn.taglist('^' .. word .. '$')
-      vim.bo.tagfunc = saved_tagfunc
-
-      -- Filter to project tags (same logic as gd)
-      local root = require('config.ctags').get_project_root()
-      if root then
-        local project_tags = {}
-        for _, tag in ipairs(tags) do
-          local abs = vim.fn.fnamemodify(tag.filename, ':p')
-          if abs:sub(1, #root) == root then
-            table.insert(project_tags, tag)
-          end
-        end
-        if #project_tags > 0 then tags = project_tags end
-      end
-
-      if #tags > 0 then
-        local tag = tags[1]
-        local filename = vim.fn.fnamemodify(tag.filename, ':p')
+    vim.lsp.buf.definition({
+      on_list = function(options)
+        if not options.items or #options.items == 0 then return end
+        local item = options.items[1]
         vim.api.nvim_set_current_win(target_win)
-        vim.cmd('edit ' .. vim.fn.fnameescape(filename))
-        if tag.line then
-          pcall(vim.api.nvim_win_set_cursor, target_win, { tonumber(tag.line), 0 })
-        elseif tag.cmd then
-          local pattern = tag.cmd:match('^/(.+)/$') or tag.cmd:match('^%?(.+)%?$')
-          if pattern then pcall(vim.fn.search, pattern, 'w') end
-        end
+        vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
+        vim.api.nvim_win_set_cursor(target_win, { item.lnum, item.col - 1 })
         vim.api.nvim_set_current_win(cur_win)
-        return
       end
-    end
-    do
-      -- LSP (async) — use on_list to control where the result opens
-      vim.lsp.buf.definition({
-        on_list = function(options)
-          if not options.items or #options.items == 0 then return end
-          local item = options.items[1]
-          vim.api.nvim_set_current_win(target_win)
-          vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
-          vim.api.nvim_win_set_cursor(target_win, { item.lnum, item.col - 1 })
-          vim.api.nvim_set_current_win(cur_win)
-        end
-      })
-    end
+    })
   end, opts)
 
-  -- Workspace
-  vim.keymap.set('n', '<leader>vws', function()
-    local ok, results = pcall(function()
-      local params = { query = '' }
-      return vim.lsp.buf_request_sync(0, 'textDocument/symbol', params, 1000)
-        or vim.lsp.buf_request_sync(0, 'workspace/symbol', params, 1000)
-    end)
-    if ok and results then
-      for _, res in pairs(results) do
-        if res.result and type(res.result) == 'table' and not vim.tbl_isempty(res.result) then
-          vim.lsp.buf.workspace_symbol()
-          return
-        end
-      end
-    end
-    -- LSP returned nothing useful — fall back to ctags
-    require('config.ctags').workspace_symbols()
-  end, opts)
+  vim.keymap.set('n', '<leader>vws', vim.lsp.buf.workspace_symbol, opts)
 
   -- Diagnostics
   vim.keymap.set('n', '<leader>vd', vim.diagnostic.open_float, opts)
@@ -303,29 +222,11 @@ function M.setup()
       vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
       vim.wo[args.data.winid or 0].foldlevel = 99
 
-      local c_ft = { c = true, cpp = true, objc = true, objcpp = true, hlsl = true }
-      local is_c = c_ft[vim.bo[bufnr].filetype]
-
-      -- For C/C++ files: strip '.' and '>' from clangd triggers so ctags handles
-      -- struct member completion (node->, node.) without LSP racing
-      if client.name == 'clangd' and is_c then
-        local caps = client.server_capabilities
-        if caps.completionProvider and caps.completionProvider.triggerCharacters then
-          local triggers = caps.completionProvider.triggerCharacters
-          for i = #triggers, 1, -1 do
-            if triggers[i] == '.' or triggers[i] == '>' then
-              table.remove(triggers, i)
-            end
-          end
-        end
-      end
-
       -- Enable native LSP completion. Autotrigger is OFF for every filetype:
       -- completion is only ever invoked via <Tab> (see lua/config/keymaps.lua).
       vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
 
-      -- Insert-mode triggers: only the one-line cmdline signature echo. No
-      -- popup auto-fires here.
+      -- Signature help on '(' and ',' — one-line cmdline echo only, no popup.
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
         group = vim.api.nvim_create_augroup('lsp_insert_trigger_' .. bufnr, { clear = true }),
@@ -333,11 +234,7 @@ function M.setup()
           local char = vim.v.char
           if char == '(' or char == ',' then
             vim.schedule(function()
-              if is_c then
-                require('config.ctags').show_signature_help()
-              else
-                vim.lsp.buf.signature_help({ silent = true })
-              end
+              vim.lsp.buf.signature_help({ silent = true })
             end)
           end
         end,

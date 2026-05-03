@@ -96,13 +96,8 @@ local function detect_makeprg(buf_ft)
   end
 
   -- Per-language quick wins (based on filetype)
-  if buf_ft == "zig" then
-    return exists("build.zig") and "zig build" or "zig build"
-  end
-
-  if buf_ft == "rust" then
-    return exists("Cargo.toml") and "cargo build" or "cargo build"
-  end
+  if buf_ft == "zig" then return "zig build" end
+  if buf_ft == "rust" then return "cargo build" end
 
   if buf_ft == "javascript" or buf_ft == "typescript" or buf_ft == "typescriptreact" or buf_ft == "javascriptreact" then
     if exists("pnpm-lock.yaml") then return "pnpm run build" end

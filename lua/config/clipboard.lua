@@ -38,12 +38,9 @@ function ClipboardWatcher:sync()
   end
 end
 
--- Start the clipboard watcher timer
--- NOTE: Disabled timer polling - can cause cursor flickering
--- Now only syncs on FocusGained and explicit yank
-local clipboard_timer = nil
+-- Sync clipboard on FocusGained and explicit yank only.
+-- Timer polling was tried but caused cursor flicker.
 local function start_watcher()
-  -- Use FocusGained instead of polling to avoid cursor flicker
   vim.api.nvim_create_autocmd("FocusGained", {
     group = vim.api.nvim_create_augroup("ClipboardSync", { clear = true }),
     callback = function()
