@@ -222,9 +222,12 @@ function M.setup()
       vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
       vim.wo[args.data.winid or 0].foldlevel = 99
 
-      -- Enable native LSP completion. Autotrigger is OFF for every filetype:
-      -- completion is only ever invoked via <Tab> (see lua/config/keymaps.lua).
-      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
+      -- Native LSP completion. clangd: autotrigger on so `.`, `->`, `::`
+      -- fire member completion with triggerKind=TriggerCharacter (more
+      -- reliable than the Invoked path that <Tab> uses). Every other
+      -- server stays Tab-only via lua/config/keymaps.lua.
+      local autotrigger = client.name == 'clangd'
+      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = autotrigger })
 
       -- Signature help on '(' and ',' — one-line cmdline echo only, no popup.
       vim.api.nvim_create_autocmd('InsertCharPre', {
