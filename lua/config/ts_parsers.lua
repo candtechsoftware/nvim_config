@@ -38,7 +38,14 @@ local function parser_exists(lang)
     return ok
 end
 
-local function compile_parser(src_dir, output_path, lang)
+local function parser_names()
+    local names = {}
+    for name, _ in pairs(parsers) do names[#names + 1] = name end
+    table.sort(names)
+    return names
+end
+
+local function compile_parser(src_dir, output_path)
     -- Collect source files
     local c_files = {}
     local use_cpp = false
@@ -89,8 +96,10 @@ function M.install(lang, opts)
     end
 
     local tmp_dir = vim.fn.tempname()
-    local notify = opts.silent and function() end or function(msg, level)
-        vim.notify(msg, level)
+    local function notify(msg, level)
+        if not opts.silent then
+            vim.notify(msg, level)
+        end
     end
 
     notify("Installing " .. lang .. " parser...", vim.log.levels.INFO)
@@ -115,7 +124,7 @@ function M.install(lang, opts)
     vim.fn.mkdir(parser_dir, "p")
 
     local output = parser_dir .. "/" .. lang .. ".so"
-    local ok, err = compile_parser(src_dir, output, lang)
+    local ok, err = compile_parser(src_dir, output)
 
     -- Copy queries if they exist. Prefer per-location queries (e.g. monorepo
     -- subdirs), fall back to the repo-root queries directory.
@@ -214,14 +223,7 @@ function M.setup()
         M.install(lang)
     end, {
         nargs = 1,
-        complete = function(_, _, _)
-            local names = {}
-            for name, _ in pairs(parsers) do
-                table.insert(names, name)
-            end
-            table.sort(names)
-            return names
-        end,
+        complete = parser_names,
     })
 
     vim.api.nvim_create_user_command("TSUpdate", function(cmd_opts)
@@ -229,24 +231,12 @@ function M.setup()
         M.update(lang ~= "" and lang or nil)
     end, {
         nargs = "?",
-        complete = function(_, _, _)
-            local names = {}
-            for name, _ in pairs(parsers) do
-                table.insert(names, name)
-            end
-            table.sort(names)
-            return names
-        end,
+        complete = parser_names,
     })
 
     vim.api.nvim_create_user_command("TSList", function()
         local lines = {}
-        local all_langs = {}
-        for name, _ in pairs(parsers) do
-            table.insert(all_langs, name)
-        end
-        table.sort(all_langs)
-        for _, name in ipairs(all_langs) do
+        for _, name in ipairs(parser_names()) do
             local installed = parser_exists(name)
             local marker = installed and "[x]" or "[ ]"
             table.insert(lines, marker .. " " .. name)

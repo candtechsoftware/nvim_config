@@ -24,9 +24,7 @@ local function get_visual_selection()
     return table.concat(lines, "\n")
 end
 
-local function get_project_root()
-    return require("utils.project_root").find()
-end
+local find_project_root = require("utils.project_root").find
 
 function M.setup()
     local telescope = require("telescope")
@@ -113,7 +111,7 @@ function M.setup()
     local builtin = require("telescope.builtin")
 
     vim.keymap.set("n", "<leader>pws", function()
-        local root = get_project_root()
+        local root = find_project_root()
         builtin.grep_string({
             search = vim.fn.expand("<cword>"),
             cwd = root,
@@ -124,7 +122,7 @@ function M.setup()
     end, { desc = "Grep word under cursor (exact)" })
 
     vim.keymap.set("n", "<leader>pWs", function()
-        local root = get_project_root()
+        local root = find_project_root()
         builtin.grep_string({
             search = vim.fn.expand("<cWORD>"),
             cwd = root,
@@ -134,7 +132,7 @@ function M.setup()
     end, { desc = "Grep WORD under cursor" })
 
     vim.keymap.set("v", "<leader>ps", function()
-        local root = get_project_root()
+        local root = find_project_root()
         local text = get_visual_selection()
         builtin.grep_string({
             search = text,
@@ -145,7 +143,7 @@ function M.setup()
     end, { desc = "Grep selected text" })
 
     vim.keymap.set("n", "<leader>ff", function()
-        local root = get_project_root()
+        local root = find_project_root()
         builtin.find_files({
             cwd = root,
             prompt_title = "Files in " .. vim.fn.fnamemodify(root, ":t")
@@ -153,7 +151,7 @@ function M.setup()
     end, { desc = "Find files" })
 
     vim.keymap.set("n", "<leader>/", function()
-        local root = get_project_root()
+        local root = find_project_root()
         builtin.live_grep({
             cwd = root,
             prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
@@ -226,7 +224,7 @@ function M.setup()
     end, { desc = "Grep search in Jai modules" })
 
     vim.keymap.set("n", "<leader>fg", function()
-        local root = get_project_root()
+        local root = find_project_root()
         vim.ui.input({ prompt = "Search --- *.ext: " }, function(input)
             if not input or input == "" then return end
 
