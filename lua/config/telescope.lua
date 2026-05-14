@@ -47,7 +47,10 @@ function M.setup()
                 "--column",
                 "--smart-case",
                 "--hidden",
+                "--no-ignore-vcs",
+                "--no-require-git",
                 "--glob=!.git/",
+                "--glob=!node_modules/",
             },
             preview = {
                 treesitter = false,
@@ -73,10 +76,7 @@ function M.setup()
             file_ignore_patterns = {
                 "node_modules",
                 ".git/",
-                "dist/",
-                "build/",
                 ".next/",
-                "coverage/",
             },
             layout_strategy = "vertical",
             layout_config = {
@@ -93,6 +93,15 @@ function M.setup()
         pickers = {
             find_files = {
                 hidden = true,
+                find_command = {
+                    "rg",
+                    "--files",
+                    "--hidden",
+                    "--no-ignore-vcs",
+                    "--no-require-git",
+                    "--glob=!.git/",
+                    "--glob=!node_modules/",
+                },
             },
         },
         extensions = {
@@ -178,6 +187,25 @@ function M.setup()
             prompt_title = "Grep in " .. vim.fn.fnamemodify(cwd, ":t")
         })
     end, { desc = "Live grep (current dir)" })
+
+    vim.keymap.set("n", "<leader>pg", function()
+        local root = get_project_root()
+        builtin.live_grep({
+            cwd = root,
+            prompt_title = "Grep (strict, .gitignore) in " .. vim.fn.fnamemodify(root, ":t"),
+            vimgrep_arguments = {
+                "rg",
+                "--color=never",
+                "--no-heading",
+                "--with-filename",
+                "--line-number",
+                "--column",
+                "--smart-case",
+                "--hidden",
+                "--glob=!.git/",
+            },
+        })
+    end, { desc = "Live grep (strict, honors .gitignore)" })
 
     vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
 
