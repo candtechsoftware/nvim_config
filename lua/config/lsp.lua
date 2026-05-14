@@ -179,8 +179,47 @@ local function setup_diagnostics()
   })
 end
 
+-- Some servers return textEdit.range starting AT the cursor (insert-only,
+-- no prefix replacement). Native LSP completion then anchors the popup at
+-- the cursor, so accepting `window` on `game.win<Tab>` appends and yields
+-- `game.winwindow` instead of `game.window`. Snap any range start that sits
+-- past the keyword boundary back onto it — `plenary.async`-style spans that
+-- start BEFORE the keyword boundary are left untouched.
+local function patch_completion_concat_bug()
+  local comp = vim.lsp.completion
+  if not (comp and comp._convert_results) then return end
+  local orig = comp._convert_results
+  comp._convert_results = function(
+    line, lnum, cursor_col, client_id,
+    client_start_boundary, server_start_boundary, result, encoding
+  )
+    local enc = encoding or 'utf-16'
+    local boundary_char = vim.str_utfindex(line, enc, client_start_boundary, false)
+    local items = result.items or result
+    for _, item in ipairs(items) do
+      local te = item.textEdit
+      if te then
+        local function fix(rng)
+          if rng and rng.start and rng.start.line == lnum then
+            local sb = vim.str_byteindex(line, enc, rng.start.character, false)
+            if sb > client_start_boundary then
+              rng.start.character = boundary_char
+            end
+          end
+        end
+        fix(te.range)
+        fix(te.insert)
+        fix(te.replace)
+      end
+    end
+    return orig(line, lnum, cursor_col, client_id,
+      client_start_boundary, server_start_boundary, result, encoding)
+  end
+end
+
 ---Main setup function
 function M.setup()
+  patch_completion_concat_bug()
   setup_diagnostics()
 
   -- Configure defaults for ALL LSP servers

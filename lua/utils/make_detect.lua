@@ -4,12 +4,13 @@ local M = {}
 
 -- small helper: does a file exist in CWD?
 local function exists(fname)
-  return vim.fn.filereadable(vim.fn.getcwd() .. "/" .. fname) == 1
+  return vim.uv.fs_stat(vim.uv.cwd() .. "/" .. fname) ~= nil
 end
 
 -- tiny helper: does a dir exist?
 local function dexists(dname)
-  return vim.fn.isdirectory(vim.fn.getcwd() .. "/" .. dname) == 1
+  local st = vim.uv.fs_stat(vim.uv.cwd() .. "/" .. dname)
+  return st ~= nil and st.type == "directory"
 end
 
 -- Error format patterns for different build systems
@@ -179,18 +180,27 @@ local function detect_errorformat(makeprg, buf_ft)
 end
 
 -- Apply detection and wire up commands/autocmds
+local cache = {} -- [cwd] = { [ft] = { makeprg = ..., errorformat = ... } }
+
 function M.apply()
   local ft = vim.bo.filetype
-  local makeprg = detect_makeprg(ft)
-  local errorformat = detect_errorformat(makeprg, ft)
-
-  vim.opt.makeprg = makeprg
-  vim.opt.errorformat = errorformat
+  local cwd = vim.uv.cwd()
+  local by_ft = cache[cwd]
+  local entry = by_ft and by_ft[ft]
+  if not entry then
+    local makeprg = detect_makeprg(ft)
+    entry = { makeprg = makeprg, errorformat = detect_errorformat(makeprg, ft) }
+    cache[cwd] = by_ft or {}
+    cache[cwd][ft] = entry
+  end
+  vim.opt.makeprg = entry.makeprg
+  vim.opt.errorformat = entry.errorformat
 end
 
 function M.setup()
   -- command to force re-detect
   vim.api.nvim_create_user_command("MakeDetect", function()
+    cache[vim.uv.cwd()] = nil
     M.apply()
     print("makeprg → " .. vim.o.makeprg)
   end, {})
@@ -223,11 +233,17 @@ function M.setup()
   vim.keymap.set("n", "<leader>qo", "<cmd>copen<cr>", { desc = "Open quickfix list" })
   vim.keymap.set("n", "<leader>qc", "<cmd>cclose<cr>", { desc = "Close quickfix list" })
 
-  -- keep it fresh as you navigate
+  -- keep it fresh as you navigate.
+  -- FileType handles initial open per buffer; DirChanged covers :cd.
+  -- BufEnter was redundant (every switch within a project re-ran the full
+  -- detect ladder) — the per-(cwd, ft) cache makes repeat opens free.
   local grp = vim.api.nvim_create_augroup("CustomMakeDetect", { clear = true })
-  vim.api.nvim_create_autocmd({ "BufEnter", "DirChanged", "FileType" }, {
+  vim.api.nvim_create_autocmd({ "FileType", "DirChanged" }, {
     group = grp,
-    callback = function() M.apply() end,
+    callback = function(ev)
+      if ev.event == "DirChanged" then cache = {} end
+      M.apply()
+    end,
     desc = "Auto-detect makeprg per project/language (incl. Jai)",
   })
 end

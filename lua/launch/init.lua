@@ -12,9 +12,7 @@ local build_diag_ns = vim.api.nvim_create_namespace('launch_build')
 local active_keymaps = {}
 local current_launch_root = nil
 
-local function find_project_root()
-  return require("utils.project_root").find()
-end
+local find_project_root = require("utils.project_root").find
 
 local function load_launch_json(root)
   local path = root .. "/launch.json"

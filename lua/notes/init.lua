@@ -9,11 +9,6 @@ M.config = {
     default_extension = ".md",
 }
 
--- Use a global variable to cache notes directory validation
-if not _G.notes_cached_dir then
-    _G.notes_cached_dir = nil
-end
-
 local function validate_notes_dir()
     if _G.notes_cached_dir then
         return _G.notes_cached_dir
@@ -43,7 +38,7 @@ local function scan_notes_async(callback)
     end
 
     local files = {}
-    local extensions = { ".md", ".txt", ".markdown" }
+    local extensions = M.config.file_extensions
 
     local function scan_directory(dir, cb)
         vim.uv.fs_scandir(dir, function(err, handle)
