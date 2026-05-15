@@ -54,19 +54,21 @@ vim.opt.ttimeoutlen = 10 -- Near-instant escape key response
 
 vim.g.tex_conceal = "mgs"
 
--- Globally disable all italics
-local function strip_italics()
-    local hls = vim.api.nvim_get_hl(0, {})
-    for name, hl in pairs(hls) do
-        if hl.italic then
-            hl.italic = false
+-- Globally disable italics, bold, and underline-family decorations
+local function strip_decorations()
+    for name, hl in pairs(vim.api.nvim_get_hl(0, {})) do
+        if hl.italic or hl.bold or hl.underline or hl.undercurl
+            or hl.underdouble or hl.underdotted or hl.underdashed then
+            hl.italic, hl.bold = nil, nil
+            hl.underline, hl.undercurl = nil, nil
+            hl.underdouble, hl.underdotted, hl.underdashed = nil, nil, nil
             vim.api.nvim_set_hl(0, name, hl)
         end
     end
 end
-strip_italics()
+strip_decorations()
 vim.api.nvim_create_autocmd("ColorScheme", {
-    callback = function() vim.schedule(strip_italics) end,
+    callback = function() vim.schedule(strip_decorations) end,
 })
 
 vim.o.winborder = 'rounded'

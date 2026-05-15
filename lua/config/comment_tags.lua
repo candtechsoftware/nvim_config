@@ -34,8 +34,6 @@ local function setup_matches()
 end
 
 function M.setup()
-    set_highlights()
-
     vim.api.nvim_create_autocmd("ColorScheme", {
         pattern = "*",
         callback = set_highlights,
