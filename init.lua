@@ -56,6 +56,7 @@ require("config.harpoon").setup()
 
 -- Utilities
 require("utils.make_detect").setup()
+require("utils.ctags").setup()
 require("launch").setup()
 require("notes").setup()
 require("config.clipboard").setup()
