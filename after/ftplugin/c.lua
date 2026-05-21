@@ -15,13 +15,21 @@ vim.bo.tabstop = sw
 vim.bo.softtabstop = sw
 vim.bo.cinoptions = 't0,:0,l1,(0,Ws'
 
--- Keyword completion (<C-n>) sources for unity-build C/C++ with no LSP.
--- Source order = popup order, so put real declared symbols first:
---   t = tags  -> functions, types, macros, struct members, globals — never
---       comment/string words; these lead the popup.
---   . = current buffer -> catches local variables and parameters (not tagged).
--- 'w'/'b'/'u' (other buffers) and 'i' (included-files scan) are dropped: they
--- drag unrelated words in from every open file and are slow on unity builds.
+-- Identifier completion for unity-build C/C++ with no LSP. <Tab> (see
+-- lua/config/keymaps.lua) routes completion by context:
+--   * after `.` / `->` / `::`  -> built-in `ccomplete` omnifunc (members)
+--   * on a plain identifier    -> the `completefunc` below: variable and
+--     function names from the buffer's treesitter tree + ctags, ranked by
+--     scope (local -> file -> project). See lua/config/c_complete.lua.
+vim.bo.completefunc = "v:lua.require'config.c_complete'.complete"
+
+-- Drop 'fuzzy' for these buffers so the completefunc's scope ranking is
+-- preserved instead of being re-sorted by fuzzy match score. 'noselect'
+-- (nothing pre-selected) is kept.
+vim.bo.completeopt = 'menu,menuone,noselect'
+
+-- Manual <C-n> keyword completion still works as a fallback: tags first
+-- (real symbols), then the current buffer.
 vim.bo.complete = 't,.'
 
 -- Custom indentexpr: temporarily replace custom storage-class macros

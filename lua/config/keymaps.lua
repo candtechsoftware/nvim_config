@@ -87,8 +87,11 @@ vim.keymap.set("i", "<Tab>", function()
   end
   -- No LSP attached (e.g. unity-build C/C++): route by context.
   if at_member_access() then return "<C-x><C-o>" end
+  -- Plain identifier: the smart treesitter+tags completefunc when one is set
+  -- (C/C++ — see lua/config/c_complete.lua), else plain keyword completion.
+  if vim.bo.completefunc ~= "" then return "<C-x><C-u>" end
   return "<C-n>"
-end, { expr = true, desc = "Tab: LSP completion, else omni/keyword completion" })
+end, { expr = true, desc = "Tab: LSP completion, else omni/smart/keyword completion" })
 vim.keymap.set("i", "<S-Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-p>" end
   return "<S-Tab>"
