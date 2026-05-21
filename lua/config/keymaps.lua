@@ -52,17 +52,43 @@ end, { desc = "Toggle inlay hints" })
 
 -- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
 -- No auto-triggers anywhere — Tab is the ONLY way to fire completion.
--- Uses vim.lsp.completion.get() (native LSP completion) so textEdit ranges
--- are honored — `<C-x><C-o>` via omnifunc concatenates the prefix with some servers.
+-- With an LSP: vim.lsp.completion.get() (native, textEdit ranges honored;
+--   `<C-x><C-o>` via an LSP omnifunc concatenates the prefix with some servers).
+-- Without an LSP (unity-build C/C++): route by context —
+--   * after a member operator (`.`/`->`/`::`) -> `<C-x><C-o>` omni completion,
+--     which is the built-in `ccomplete` (omnifunc set by runtime ftplugin/c.vim);
+--     it does real struct/union member completion via the tags file.
+--   * otherwise -> `<C-n>` keyword completion: per 'complete' it merges buffer
+--     words, other buffers and tags, so it also catches local variables and
+--     parameters, which are NOT in the tags file.
+
+---True if the text before the cursor ends with a member-access operator
+---(`.`, `->`, `::`) + an optional partial identifier — including when the
+---operator follows `)` or `]` (`get_x().`, `arr[i].`). After ANY member
+---operator we want omni completion: if the type resolves it returns the
+---type's members, and if it can't it returns nothing. Keyword completion
+---here would instead dump the whole tag file ("wild"), which is never what
+---you want after a `.`. A float literal like `3.` also routes to omni and
+---harmlessly yields an empty result.
+---@return boolean
+local function at_member_access()
+  local col = vim.fn.col(".")
+  local before = vim.fn.getline("."):sub(1, col - 1)
+  return before:match("%.%s*[%w_]*$") ~= nil
+    or before:match("%->%s*[%w_]*$") ~= nil
+    or before:match("::%s*[%w_]*$") ~= nil
+end
+
 vim.keymap.set("i", "<Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-n>" end
-  vim.schedule(function()
-    if next(vim.lsp.get_clients({ bufnr = 0 })) then
-      vim.lsp.completion.get()
-    end
-  end)
-  return ""
-end, { expr = true, desc = "Tab: trigger LSP completion" })
+  if next(vim.lsp.get_clients({ bufnr = 0 })) then
+    vim.schedule(function() vim.lsp.completion.get() end)
+    return ""
+  end
+  -- No LSP attached (e.g. unity-build C/C++): route by context.
+  if at_member_access() then return "<C-x><C-o>" end
+  return "<C-n>"
+end, { expr = true, desc = "Tab: LSP completion, else omni/keyword completion" })
 vim.keymap.set("i", "<S-Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-p>" end
   return "<S-Tab>"
