@@ -10,16 +10,15 @@ M.markers = {
   '.project', '.root', '.git',
 }
 
----Find the project root from the current buffer.
----Uses vim.fs.root(0, fn) which resolves from buffer path, falling back to cwd for unnamed buffers.
----@param opts table|nil
+---Find the project root for a buffer (default: the current buffer).
+---Resolves from the buffer's path, falling back to cwd for unnamed buffers.
+---@param opts table|nil  { markers?: string[], buf?: integer }
 ---@return string
 function M.find(opts)
   opts = opts or {}
   local markers = opts.markers or M.markers
 
-  -- vim.fs.root(0, fn): resolves from current buffer, falls back to cwd for unnamed/special buffers
-  local root = vim.fs.root(0, function(name, path)
+  local root = vim.fs.root(opts.buf or 0, function(name, path)
     if vim.fs.normalize(path) == home then return false end
     for _, marker in ipairs(markers) do
       if name == marker then return true end

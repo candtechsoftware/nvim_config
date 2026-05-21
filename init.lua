@@ -62,6 +62,7 @@ require("notes").setup()
 require("config.clipboard").setup()
 require("divider_comments").setup()
 require("config.comment_tags").setup()
+require("config.ctags").setup()
 
 -- Plugins
 require("render-markdown").setup()
