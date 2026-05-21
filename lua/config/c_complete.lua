@@ -1,28 +1,29 @@
 -- Smart identifier completion for unity-build C/C++ with no LSP.
 --
--- Wired as 'completefunc' (see after/ftplugin/c.lua) and invoked by <Tab>
--- via <C-x><C-u> (see lua/config/keymaps.lua) when the cursor sits on a plain
--- identifier prefix. Completes variable and function names.
---
--- Candidates are real identifiers only — never words from comments or string
--- literals — because they come from the buffer's treesitter syntax tree
--- (identifier nodes) merged with the project's ctags symbols. This is what
--- "takes over" the old raw <C-n> tag dump: ctags is now just one ranked
--- source feeding this function. Results are ranked so the most relevant
--- lead the popup:
+-- Wired as 'completefunc' (see after/ftplugin/c.lua), invoked by <Tab> via
+-- <C-x><C-u> on a plain identifier. Candidates are real identifiers only —
+-- never words from comments or string literals — drawn from the buffer's
+-- treesitter tree merged with the project's ctags symbols, ranked so the
+-- most relevant lead the popup:
 --   [local]    identifier inside the function enclosing the cursor
 --   [file]     identifier elsewhere in the current buffer
 --   [project]  symbol from the ctags file (other files in the project)
 --
 -- Struct member completion (`.` / `->` / `::`) is handled separately by the
--- built-in `ccomplete` omnifunc — this function is only the identifier path.
+-- built-in `ccomplete` omnifunc.
 
 local M = {}
 
 -- treesitter node types that are genuine identifiers (valid in c and cpp).
 local ID_QUERY = '[(identifier) (field_identifier) (type_identifier)] @id'
 
-local MAX_IDENTS = 4000   -- cap the treesitter walk on huge unity-build buffers
+-- Node types that bound a "local" scope for the [local] rank.
+local SCOPE_NODES = {
+  function_definition = true,
+  lambda_expression = true,
+}
+
+local MAX_IDENTS = 4000   -- cap the file-wide treesitter walk on huge buffers
 local MAX_TAGS = 300      -- cap project symbols pulled from the tags file
 
 local RANK_LOCAL, RANK_FILE, RANK_TAG = 0, 1, 2
@@ -31,6 +32,18 @@ local RANK_LABEL = {
   [RANK_FILE] = '[file]',
   [RANK_TAG] = '[project]',
 }
+
+---True if `word` can complete `base`: a case-insensitive prefix match that
+---is not an exact-case repeat of `base`. (Completing the typed word to
+---itself is the only true no-op — a different-cased hit like `Foo` for
+---`foo` is a useful completion and must NOT be excluded.)
+---@param word string
+---@param base string
+---@param blow string  base:lower(), hoisted by the caller
+---@return boolean
+local function matches(word, base, blow)
+  return word ~= base and word:sub(1, #blow):lower() == blow
+end
 
 ---0-based byte column where the identifier under the cursor begins.
 ---@return integer
@@ -43,10 +56,33 @@ local function find_start()
   return s
 end
 
+---Record identifier captures under `node`, keeping each word's best (lowest)
+---rank. `cap` bounds the walk; nil = unbounded.
+---@param node TSNode
+---@param query vim.treesitter.Query
+---@param buf integer
+---@param rank integer
+---@param base string
+---@param blow string
+---@param found table<string, integer>
+---@param cap integer?
+local function collect(node, query, buf, rank, base, blow, found, cap)
+  local n = 0
+  for _, idnode in query:iter_captures(node, buf) do
+    n = n + 1
+    if cap and n > cap then break end
+    local text = vim.treesitter.get_node_text(idnode, buf)
+    if matches(text, base, blow) and (found[text] == nil or rank < found[text]) then
+      found[text] = rank
+    end
+  end
+end
+
 ---Real identifiers in the current buffer, via treesitter.
 ---@param base string  prefix to match (may be empty)
+---@param blow string
 ---@return table<string, integer>  identifier -> best (lowest) scope rank
-local function buffer_identifiers(base)
+local function buffer_identifiers(base, blow)
   local found = {}
   local buf = vim.api.nvim_get_current_buf()
   local ok, parser = pcall(vim.treesitter.get_parser, buf)
@@ -57,37 +93,18 @@ local function buffer_identifiers(base)
   if not tree then return found end
   local root = tree:root()
 
-  -- Row range of the function enclosing the cursor — drives the [local] rank.
+  -- The function enclosing the cursor is walked in full (it is small), so
+  -- the [local] rank is always correct; only the file-wide walk is capped,
+  -- so a huge buffer loses some [file] suggestions but never [local] ones.
   local crow, ccol = unpack(vim.api.nvim_win_get_cursor(0))
-  crow = crow - 1
-  local node = root:named_descendant_for_range(crow, ccol, crow, ccol)
-  while node and node:type() ~= 'function_definition' do
+  local node = root:named_descendant_for_range(crow - 1, ccol, crow - 1, ccol)
+  while node and not SCOPE_NODES[node:type()] do
     node = node:parent()
   end
-  local fn_start, fn_end
   if node then
-    fn_start, _, fn_end = node:range()
+    collect(node, query, buf, RANK_LOCAL, base, blow, found)
   end
-
-  local blow = base:lower()
-  local n = 0
-  for _, idnode in query:iter_captures(root, buf) do
-    n = n + 1
-    if n > MAX_IDENTS then break end
-    local text = vim.treesitter.get_node_text(idnode, buf)
-    if text:match('^[%a_][%w_]*$')
-        and text ~= base
-        and text:sub(1, #base):lower() == blow then
-      local row = idnode:range()
-      local rank = RANK_FILE
-      if fn_start and row >= fn_start and row <= fn_end then
-        rank = RANK_LOCAL
-      end
-      if found[text] == nil or rank < found[text] then
-        found[text] = rank
-      end
-    end
-  end
+  collect(root, query, buf, RANK_FILE, base, blow, found, MAX_IDENTS)
   return found
 end
 
@@ -109,28 +126,27 @@ function M.complete(findstart, base)
     return find_start()
   end
   base = base or ''
+  local blow = base:lower()
 
   local list = {}
   local seen = {}
-  for word, rank in pairs(buffer_identifiers(base)) do
+  for word, rank in pairs(buffer_identifiers(base, blow)) do
     seen[word] = true
     list[#list + 1] = { word = word, rank = rank }
   end
 
-  local blow = base:lower()
   local tag_count = 0
   for _, name in ipairs(tag_symbols(base)) do
     if tag_count >= MAX_TAGS then break end
-    if not seen[name] and name ~= base
-        and name:match('^[%a_][%w_]*$')
-        and name:sub(1, #base):lower() == blow then
+    -- tag names can be operators or qualified (operator==, Foo::bar) — this
+    -- path only completes plain identifiers.
+    if not seen[name] and name:match('^[%a_][%w_]*$') and matches(name, base, blow) then
       seen[name] = true
       list[#list + 1] = { word = name, rank = RANK_TAG }
       tag_count = tag_count + 1
     end
   end
 
-  -- Rank first (local -> file -> project), then alphabetical within a rank.
   table.sort(list, function(a, b)
     if a.rank ~= b.rank then return a.rank < b.rank end
     return a.word < b.word
