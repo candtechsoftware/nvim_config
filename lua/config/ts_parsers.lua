@@ -71,11 +71,19 @@ local function compile_parser(src_dir, output_path)
     local cmd = {
         compiler,
         "-shared",
+        "-fPIC",
         "-o", output_path,
         "-I", src_dir,
         "-O2",
-        "-undefined", "dynamic_lookup", -- macOS
     }
+    -- macOS resolves tree-sitter's undefined symbols against the host nvim
+    -- at load time and needs this flag to permit them. On Linux/BSD `ld`
+    -- rejects it ("cannot find dynamic_lookup"), which fails every parser
+    -- build — so gate it to macOS only.
+    if vim.fn.has("mac") == 1 then
+        table.insert(cmd, "-undefined")
+        table.insert(cmd, "dynamic_lookup")
+    end
     for _, f in ipairs(c_files) do
         table.insert(cmd, f)
     end

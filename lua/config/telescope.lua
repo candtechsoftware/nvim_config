@@ -207,8 +207,21 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
 
-    vim.keymap.set("n", "<leader>ds", builtin.lsp_document_symbols, { desc = "Document symbols" })
-    vim.keymap.set("n", "<leader>ws", builtin.lsp_workspace_symbols, { desc = "Workspace symbols" })
+    vim.keymap.set("n", "<leader>ds", function()
+        if next(vim.lsp.get_clients({ bufnr = 0 })) then
+            builtin.lsp_document_symbols()
+        else
+            builtin.current_buffer_tags()
+        end
+    end, { desc = "Document symbols (LSP, fallback ctags)" })
+
+    vim.keymap.set("n", "<leader>ws", function()
+        if next(vim.lsp.get_clients({ bufnr = 0 })) then
+            builtin.lsp_workspace_symbols()
+        else
+            builtin.tags({ ctags_file = vim.fn.tagfiles()[1] })
+        end
+    end, { desc = "Workspace symbols (LSP, fallback ctags)" })
 
     vim.keymap.set("n", "<leader>gc", builtin.git_commits, { desc = "Git commits" })
     vim.keymap.set("n", "<leader>gb", builtin.git_branches, { desc = "Git branches" })
