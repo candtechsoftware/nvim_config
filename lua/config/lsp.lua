@@ -265,12 +265,10 @@ function M.setup()
       vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
       vim.wo[args.data.winid or 0].foldlevel = 99
 
-      -- Native LSP completion. clangd: autotrigger on so `.`, `->`, `::`
-      -- fire member completion with triggerKind=TriggerCharacter (more
-      -- reliable than the Invoked path that <Tab> uses). Every other
-      -- server stays Tab-only via lua/config/keymaps.lua.
-      local autotrigger = client.name == 'clangd'
-      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = autotrigger })
+      -- Native LSP completion — no auto-triggers anywhere. Tab is the
+      -- only invocation path (see lua/config/keymaps.lua). User: "remove
+      -- the popup when typing — should not be popping up until I hit tab".
+      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
 
       -- Signature help on '(' and ',' — one-line cmdline echo only, no popup.
       vim.api.nvim_create_autocmd('InsertCharPre', {
@@ -289,36 +287,16 @@ function M.setup()
       -- Set keymaps (omnifunc/tagfunc are auto-set by 0.12)
       set_keymaps(bufnr)
 
-      -- Unity builds index every .c as its own TU, so the same symbol
-      -- often resolves to several candidates. Auto-pick the one that
-      -- looks like a real definition: prefer source files over headers,
-      -- and prefer paths outside build/ output dirs.
+      -- Unity builds: route gd through ctags first (works without
+      -- compile_commands.json/.clangd), with LSP fallback. The ctags
+      -- module applies the same source-over-header ranking on the LSP
+      -- branch, so behavior on .clangd-enabled projects is unchanged.
       if client.name == 'clangd' then
-        vim.keymap.set('n', 'gd', function()
-          vim.lsp.buf.definition({
-            on_list = function(opts)
-              local items = opts.items or {}
-              if #items == 0 then return end
-              local function score(item)
-                local f = item.filename or ''
-                local s = 0
-                if f:match('%.c$') or f:match('%.cpp$') or f:match('%.cc$') or f:match('%.m$') or f:match('%.mm$') then
-                  s = s + 2
-                elseif f:match('%.h$') or f:match('%.hpp$') then
-                  s = s - 1
-                end
-                if f:match('/build/') or f:match('/dist/') then
-                  s = s - 3
-                end
-                return s
-              end
-              table.sort(items, function(a, b) return score(a) > score(b) end)
-              local best = items[1]
-              vim.cmd('edit ' .. vim.fn.fnameescape(best.filename))
-              vim.api.nvim_win_set_cursor(0, { best.lnum, math.max(0, (best.col or 1) - 1) })
-            end,
-          })
-        end, { buffer = bufnr, silent = true, desc = 'Clangd: go to best definition' })
+        local ctags = require('config.ctags')
+        vim.keymap.set('n', 'gd', ctags.goto_definition,
+          { buffer = bufnr, silent = true, desc = 'ctags-first definition' })
+        vim.keymap.set('n', '<leader>gi', ctags.goto_definition_ctags_only,
+          { buffer = bufnr, silent = true, desc = 'ctags-only definition' })
       end
     end,
   })

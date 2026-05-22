@@ -52,17 +52,35 @@ end, { desc = "Toggle inlay hints" })
 
 -- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
 -- No auto-triggers anywhere — Tab is the ONLY way to fire completion.
--- Uses vim.lsp.completion.get() (native LSP completion) so textEdit ranges
--- are honored — `<C-x><C-o>` via omnifunc concatenates the prefix with some servers.
+-- Non-expr callback so we can safely call vim.fn.complete() — relying on
+-- <C-x><C-o> via expr-mapping replacement was silent in raddebugger-mac-mirror.
+local C_FAMILY = { c = true, cpp = true, objc = true, objcpp = true }
 vim.keymap.set("i", "<Tab>", function()
-  if vim.fn.pumvisible() == 1 then return "<C-n>" end
-  vim.schedule(function()
-    if next(vim.lsp.get_clients({ bufnr = 0 })) then
-      vim.lsp.completion.get()
+  if vim.fn.pumvisible() == 1 then
+    vim.api.nvim_feedkeys(
+      vim.api.nvim_replace_termcodes("<C-n>", true, false, true), "n", false)
+    return
+  end
+  if C_FAMILY[vim.bo.filetype] then
+    local ok, ctags = pcall(require, "config.ctags")
+    if not ok then return end
+    local start_col = ctags.omnifunc(1, "")
+    local line = vim.api.nvim_get_current_line()
+    local cursor_col = vim.api.nvim_win_get_cursor(0)[2]
+    local prefix = line:sub(start_col + 1, cursor_col)
+    local matches = ctags.omnifunc(0, prefix)
+    if matches and #matches > 0 then
+      vim.fn.complete(start_col + 1, matches)
     end
-  end)
-  return ""
-end, { expr = true, desc = "Tab: trigger LSP completion" })
+    return
+  end
+  if next(vim.lsp.get_clients({ bufnr = 0 })) then
+    vim.lsp.completion.get()
+    return
+  end
+  vim.api.nvim_feedkeys(
+    vim.api.nvim_replace_termcodes("<Tab>", true, false, true), "n", false)
+end, { desc = "Tab: trigger ctags omnifunc (C) or LSP completion" })
 vim.keymap.set("i", "<S-Tab>", function()
   if vim.fn.pumvisible() == 1 then return "<C-p>" end
   return "<S-Tab>"

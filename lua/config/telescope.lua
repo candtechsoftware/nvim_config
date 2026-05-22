@@ -187,7 +187,7 @@ function M.setup()
     end, { desc = "Live grep (current dir)" })
 
     vim.keymap.set("n", "<leader>pg", function()
-        local root = get_project_root()
+        local root = find_project_root()
         builtin.live_grep({
             cwd = root,
             prompt_title = "Grep (strict, .gitignore) in " .. vim.fn.fnamemodify(root, ":t"),
