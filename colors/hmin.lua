@@ -321,8 +321,12 @@ hl(0, "WhichKeyDesc",   { fg = c.fg })
 hl(0, "WhichKeyFloat",  { bg = c.back2 })
 
 -- Scope background cycle: collapse hh's rainbow tints into one faint lift --
+local scope_bgs = {
+  "#0e0d0b", "#131210", "#181613", "#1c1a16",
+  "#201d18", "#23201a", "#26221c", "#28241d",
+}
 for i = 1, 8 do
-  hl(0, "HHScope" .. i, { bg = "#0b0b0b" })
+  hl(0, "HHScope" .. i, { bg = scope_bgs[i] })
 end
 
 return c
