@@ -72,4 +72,4 @@ require("render-markdown").setup()
 require('vim._core.ui2').enable({})
 
 -- Colorscheme
-vim.cmd.colorscheme("hh")
+vim.cmd.colorscheme("hmin")
