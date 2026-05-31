@@ -17,11 +17,14 @@ vim.bo.cinoptions = 't0,:0,l1,(0,Ws'
 
 -- Identifier completion for unity-build C/C++ with no LSP. <Tab> (see
 -- lua/config/keymaps.lua) routes completion by context:
---   * after `.` / `->` / `::`  -> built-in `ccomplete` omnifunc (members)
+--   * after `.` / `->` / `::`  -> the `omnifunc` below: treesitter resolves the
+--     type of the variable before the operator, then the ctags index supplies
+--     that type's members (replaces the unreliable built-in `ccomplete`).
 --   * on a plain identifier    -> the `completefunc` below: variable and
 --     function names from the buffer's treesitter tree + ctags, ranked by
 --     scope (local -> file -> project). See lua/config/c_complete.lua.
 vim.bo.completefunc = "v:lua.require'config.c_complete'.complete"
+vim.bo.omnifunc = "v:lua.require'config.c_complete'.omnifunc"
 
 -- Drop 'fuzzy' for these buffers so the completefunc's scope ranking is
 -- preserved instead of being re-sorted by fuzzy match score. 'noselect'
