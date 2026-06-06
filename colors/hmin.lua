@@ -37,10 +37,11 @@ local c = {
 
   gold     = "#b8923a", -- the one accent: keywords, types, headings
   sage     = "#8a8d6b", -- literals: strings, numbers, constants
+  blue     = "#4a8db5", -- hh's macro/index blue: UI accent for the focused/selected element
 
   sel      = "#16222c", -- visual selection
   sel_soft = "#10181f", -- cursorline / menus
-  search   = "#2a3a30", -- search background
+  search   = "#173042", -- search background (blue tint)
 
   error    = "#a85442", -- muted red
   warn     = "#b8923a", -- reuse gold
@@ -72,7 +73,7 @@ vim.opt.guicursor = {
 hl(0, "Normal",       { fg = c.fg, bg = c.back })
 hl(0, "NormalFloat",  { fg = c.fg, bg = c.back2 })
 hl(0, "FloatBorder",  { fg = c.fg_dim, bg = c.back2 })
-hl(0, "FloatTitle",   { fg = c.gold, bg = c.back2 })
+hl(0, "FloatTitle",   { fg = c.blue, bg = c.back2 })
 hl(0, "NormalNC",     { fg = c.fg, bg = c.back })
 
 hl(0, "CursorLine",   { bg = c.sel_soft })
@@ -82,7 +83,7 @@ hl(0, "Visual",       { bg = c.sel })
 hl(0, "VisualNOS",    { bg = c.sel })
 
 hl(0, "LineNr",       { fg = c.ghost, bg = c.line_bg })
-hl(0, "CursorLineNr", { fg = c.gold, bg = c.line_bg, bold = true })
+hl(0, "CursorLineNr", { fg = c.blue, bg = c.line_bg, bold = true })
 hl(0, "SignColumn",   { bg = c.line_bg })
 hl(0, "FoldColumn",   { fg = c.comment, bg = c.line_bg })
 hl(0, "Folded",       { fg = c.comment, bg = c.sel_soft })
@@ -93,22 +94,22 @@ hl(0, "WinBar",       { fg = c.fg, bg = c.back })
 hl(0, "WinBarNC",     { fg = c.comment, bg = c.back })
 hl(0, "TabLine",      { fg = c.fg_dim, bg = c.bar })
 hl(0, "TabLineFill",  { bg = c.bar })
-hl(0, "TabLineSel",   { fg = c.gold, bg = c.back, bold = true })
+hl(0, "TabLineSel",   { fg = c.blue, bg = c.back, bold = true })
 
 hl(0, "VertSplit",    { fg = c.bar, bg = c.back })
 hl(0, "WinSeparator", { fg = c.bar, bg = c.back })
 
 hl(0, "Search",       { fg = c.fg, bg = c.search })
-hl(0, "IncSearch",    { fg = c.back, bg = c.cur_normal })
-hl(0, "CurSearch",    { fg = c.back, bg = c.cur_normal })
+hl(0, "IncSearch",    { fg = c.back, bg = c.blue })
+hl(0, "CurSearch",    { fg = c.back, bg = c.blue })
 hl(0, "Substitute",   { fg = c.back, bg = c.warn })
-hl(0, "MatchParen",   { fg = c.gold, bold = true })
+hl(0, "MatchParen",   { fg = c.blue, bold = true })
 
 hl(0, "Pmenu",        { fg = c.fg, bg = c.back2 })
-hl(0, "PmenuSel",     { fg = c.gold, bg = c.sel })
+hl(0, "PmenuSel",     { fg = c.blue, bg = c.sel })
 hl(0, "PmenuSbar",    { bg = c.bar })
 hl(0, "PmenuThumb",   { bg = c.fg_dim })
-hl(0, "WildMenu",     { fg = c.gold, bg = c.sel })
+hl(0, "WildMenu",     { fg = c.blue, bg = c.sel })
 hl(0, "QuickFixLine", { bg = c.sel })
 
 hl(0, "NonText",      { fg = c.ghost })
@@ -116,7 +117,7 @@ hl(0, "SpecialKey",   { fg = c.ghost })
 hl(0, "Whitespace",   { fg = c.ghost })
 hl(0, "Conceal",      { fg = c.ghost })
 hl(0, "EndOfBuffer",  { fg = c.back })
-hl(0, "Directory",    { fg = c.gold })
+hl(0, "Directory",    { fg = c.blue })
 hl(0, "Title",        { fg = c.gold, bold = true })
 
 hl(0, "ModeMsg",      { fg = c.fg_dim })
@@ -163,7 +164,7 @@ hl(0, "SpecialChar",  { fg = c.gold })
 hl(0, "Delimiter",    { fg = c.fg_dim })
 hl(0, "Tag",          { fg = c.gold })
 hl(0, "Debug",        { fg = c.error })
-hl(0, "Underlined",   { fg = c.fg, underline = true })
+hl(0, "Underlined",   { fg = c.blue, underline = true })
 hl(0, "Ignore",       { fg = c.ghost })
 hl(0, "Error",        { fg = c.error, bold = true })
 hl(0, "Todo",         { fg = c.gold, bg = c.sel_soft, bold = true })
@@ -270,6 +271,15 @@ for group, target in pairs(links) do
   hl(0, group, { link = target })
 end
 
+-- Function call sites pick up the blue accent (definitions stay plain `fg`).
+hl(0, "@function.call",        { fg = c.blue })
+hl(0, "@function.method.call", { fg = c.blue })
+-- Jai defines its own `.jai`-suffixed capture groups; hh sets them and our `hi clear`
+-- above leaves them *cleared* (empty), which shadows the generic groups instead of
+-- inheriting them. Re-assert them so Jai call sites are blue and definitions stay plain.
+hl(0, "@function.call.jai",    { fg = c.blue })
+hl(0, "@function.jai",         { fg = c.fg })
+
 -- Diagnostics (muted) -----------------------------------------------------
 hl(0, "DiagnosticError", { fg = c.error })
 hl(0, "DiagnosticWarn",  { fg = c.warn })
@@ -303,19 +313,19 @@ hl(0, "TelescopeNormal",         { fg = c.fg, bg = c.back })
 hl(0, "TelescopeBorder",         { fg = c.fg_dim, bg = c.back })
 hl(0, "TelescopePromptNormal",   { fg = c.fg, bg = c.back })
 hl(0, "TelescopePromptBorder",   { fg = c.fg_dim, bg = c.back })
-hl(0, "TelescopePromptPrefix",   { fg = c.gold, bg = c.back })
+hl(0, "TelescopePromptPrefix",   { fg = c.blue, bg = c.back })
 hl(0, "TelescopeResultsNormal",  { fg = c.fg, bg = c.back })
 hl(0, "TelescopeResultsBorder",  { fg = c.fg_dim, bg = c.back })
 hl(0, "TelescopePreviewNormal",  { fg = c.fg, bg = c.back })
 hl(0, "TelescopePreviewBorder",  { fg = c.fg_dim, bg = c.back })
-hl(0, "TelescopeSelection",      { fg = c.gold, bg = c.sel })
-hl(0, "TelescopeSelectionCaret", { fg = c.gold, bg = c.sel })
-hl(0, "TelescopeMatching",       { fg = c.gold, bold = true })
+hl(0, "TelescopeSelection",      { fg = c.blue, bg = c.sel })
+hl(0, "TelescopeSelectionCaret", { fg = c.blue, bg = c.sel })
+hl(0, "TelescopeMatching",       { fg = c.blue, bold = true })
 
 -- Indent / misc -----------------------------------------------------------
 hl(0, "IblIndent",  { fg = c.ghost })
-hl(0, "IblScope",   { fg = c.fg_dim })
-hl(0, "WhichKey",       { fg = c.gold })
+hl(0, "IblScope",   { fg = c.blue })
+hl(0, "WhichKey",       { fg = c.blue })
 hl(0, "WhichKeyGroup",  { fg = c.fg_dim })
 hl(0, "WhichKeyDesc",   { fg = c.fg })
 hl(0, "WhichKeyFloat",  { bg = c.back2 })
