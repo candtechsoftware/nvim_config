@@ -78,6 +78,7 @@ function M.telescope_sections()
         vim.notify("Telescope not available", vim.log.levels.ERROR)
         return
     end
+    require("config.telescope").ensure()
 
     local pickers = require("telescope.pickers")
     local finders = require("telescope.finders")

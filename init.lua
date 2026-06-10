@@ -64,8 +64,8 @@ require("config.clipboard").setup()
 require("divider_comments").setup()
 require("config.comment_tags").setup()
 
--- Plugins
-require("render-markdown").setup()
+-- render-markdown.nvim self-initializes via its plugin/render-markdown.lua
+-- (sourced by vim.pack), so no explicit setup() call is needed here.
 
 -- UI2: new commandline + message UI (Neovim 0.12)
 require('vim._core.ui2').enable({})

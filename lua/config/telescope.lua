@@ -1,4 +1,11 @@
 -- Telescope configuration
+--
+-- Lazy-loaded: requiring the telescope plugin (and the fzf-native extension)
+-- is the single biggest cost in startup, but none of it is needed until the
+-- first picker is opened. So M.setup() only registers keymaps; the plugin is
+-- required and configured exactly once, on first use, via ensure(). External
+-- callers that drive telescope directly (notes, divider_comments) call
+-- M.ensure() first so they get this same custom config.
 
 local M = {}
 
@@ -26,7 +33,12 @@ end
 
 local find_project_root = require("utils.project_root").find
 
-function M.setup()
+-- Configure telescope exactly once, on first use.
+local configured = false
+function M.ensure()
+    if configured then return end
+    configured = true
+
     local telescope = require("telescope")
     local actions = require("telescope.actions")
 
@@ -115,13 +127,20 @@ function M.setup()
     if vim.fn.has("win32") ~= 1 then
         pcall(telescope.load_extension, "fzf")
     end
+end
 
-    -- Keymaps
-    local builtin = require("telescope.builtin")
+-- Lazy accessor: telescope.builtin behind a one-time ensure().
+local function builtin()
+    M.ensure()
+    return require("telescope.builtin")
+end
+
+function M.setup()
+    -- Keymaps only — setup() above is deferred to the first picker.
 
     vim.keymap.set("n", "<leader>pws", function()
         local root = find_project_root()
-        builtin.grep_string({
+        builtin().grep_string({
             search = vim.fn.expand("<cword>"),
             cwd = root,
             search_dirs = { root },
@@ -132,7 +151,7 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>pWs", function()
         local root = find_project_root()
-        builtin.grep_string({
+        builtin().grep_string({
             search = vim.fn.expand("<cWORD>"),
             cwd = root,
             search_dirs = { root },
@@ -143,7 +162,7 @@ function M.setup()
     vim.keymap.set("v", "<leader>ps", function()
         local root = find_project_root()
         local text = get_visual_selection()
-        builtin.grep_string({
+        builtin().grep_string({
             search = text,
             cwd = root,
             search_dirs = { root },
@@ -153,7 +172,7 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>ff", function()
         local root = find_project_root()
-        builtin.find_files({
+        builtin().find_files({
             cwd = root,
             prompt_title = "Files in " .. vim.fn.fnamemodify(root, ":t")
         })
@@ -161,7 +180,7 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>/", function()
         local root = find_project_root()
-        builtin.live_grep({
+        builtin().live_grep({
             cwd = root,
             prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
             on_input_filter_cb = function(prompt)
@@ -179,7 +198,7 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>.", function()
         local cwd = vim.fn.getcwd()
-        builtin.live_grep({
+        builtin().live_grep({
             cwd = cwd,
             search_dirs = { cwd },
             prompt_title = "Grep in " .. vim.fn.fnamemodify(cwd, ":t")
@@ -188,7 +207,7 @@ function M.setup()
 
     vim.keymap.set("n", "<leader>pg", function()
         local root = find_project_root()
-        builtin.live_grep({
+        builtin().live_grep({
             cwd = root,
             prompt_title = "Grep (strict, .gitignore) in " .. vim.fn.fnamemodify(root, ":t"),
             vimgrep_arguments = {
@@ -205,27 +224,27 @@ function M.setup()
         })
     end, { desc = "Live grep (strict, honors .gitignore)" })
 
-    vim.keymap.set("n", "<leader>gf", builtin.git_files, { desc = "Git files" })
+    vim.keymap.set("n", "<leader>gf", function() builtin().git_files() end, { desc = "Git files" })
 
     vim.keymap.set("n", "<leader>ds", function()
         if next(vim.lsp.get_clients({ bufnr = 0 })) then
-            builtin.lsp_document_symbols()
+            builtin().lsp_document_symbols()
         else
-            builtin.current_buffer_tags()
+            builtin().current_buffer_tags()
         end
     end, { desc = "Document symbols (LSP, fallback ctags)" })
 
     vim.keymap.set("n", "<leader>ws", function()
         if next(vim.lsp.get_clients({ bufnr = 0 })) then
-            builtin.lsp_workspace_symbols()
+            builtin().lsp_workspace_symbols()
         else
-            builtin.tags({ ctags_file = vim.fn.tagfiles()[1] })
+            builtin().tags({ ctags_file = vim.fn.tagfiles()[1] })
         end
     end, { desc = "Workspace symbols (LSP, fallback ctags)" })
 
-    vim.keymap.set("n", "<leader>gc", builtin.git_commits, { desc = "Git commits" })
-    vim.keymap.set("n", "<leader>gb", builtin.git_branches, { desc = "Git branches" })
-    vim.keymap.set("n", "<leader>gs", builtin.git_status, { desc = "Git status" })
+    vim.keymap.set("n", "<leader>gc", function() builtin().git_commits() end, { desc = "Git commits" })
+    vim.keymap.set("n", "<leader>gb", function() builtin().git_branches() end, { desc = "Git branches" })
+    vim.keymap.set("n", "<leader>gs", function() builtin().git_status() end, { desc = "Git status" })
 
     -- Jai module search
     local jai_modules_path = "/Users/alexmatthewcandelario/gits/jai/modules"
@@ -248,7 +267,7 @@ function M.setup()
                     search_pattern = "^\\s*\\w+\\s*::\\s*:"
                 end
 
-                builtin.live_grep({
+                builtin().live_grep({
                     cwd = jai_modules_path,
                     prompt_title = "Jai " .. choice,
                     default_text = search_pattern,
@@ -258,7 +277,7 @@ function M.setup()
     end, { desc = "Search Jai module symbols" })
 
     vim.keymap.set("n", "<leader>jg", function()
-        builtin.live_grep({
+        builtin().live_grep({
             cwd = jai_modules_path,
             prompt_title = "Grep Jai Modules",
         })
@@ -275,7 +294,7 @@ function M.setup()
                 glob = nil
             end
 
-            builtin.live_grep({
+            builtin().live_grep({
                 cwd = root,
                 default_text = search,
                 glob_pattern = glob,

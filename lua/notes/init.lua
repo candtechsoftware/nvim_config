@@ -127,6 +127,7 @@ end
 
 -- Search notes using telescope
 function M.search_notes()
+    require("config.telescope").ensure()
     local telescope_ok, builtin = pcall(require, "telescope.builtin")
     if not telescope_ok then
         return
@@ -150,6 +151,7 @@ function M.find_notes()
     local notes_dir = validate_notes_dir()
     if not notes_dir then return end
 
+    require("config.telescope").ensure()
     local telescope_ok, pickers = pcall(require, "telescope.pickers")
     local finders_ok, finders = pcall(require, "telescope.finders")
     local conf_ok, conf = pcall(require, "telescope.config")
