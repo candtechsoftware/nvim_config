@@ -9,9 +9,7 @@ local M = {}
 -- gaps with Expo/React Native projects (e.g. ~/work/app/IrisBetaApp). Use
 -- ts_ls (typescript-language-server) instead. To experiment with tsgo on a
 -- single buffer, run :lsp enable tsgo manually.
--- clangd only attaches in projects with a .clangd / compile_commands.json /
--- compile_flags.txt (workspace_required in lsp/clangd.lua). Unity-build
--- projects opt in with :ClangdSetup; everything else keeps the ctags path.
+-- clangd is marker-gated (see lsp/clangd.lua); :ClangdSetup opts a project in.
 local servers = {
   'clangd',
   'lua_ls',

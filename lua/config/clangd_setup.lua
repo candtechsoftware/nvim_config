@@ -3,11 +3,12 @@
 -- Unity builds have no compile_commands.json and member files don't compile
 -- standalone, so clangd needs to be told the preamble each file is compiled
 -- under. This command scans the project for unity translation units (sources
--- that #include other .c/.cpp files), turns each TU's ordered header includes
--- into an `-include` chain, and writes a multi-fragment .clangd at the project
--- root (global fragment = primary TU; `If: PathMatch` fragments for the other
--- TU subtrees). Diagnostics keep real syntax errors but suppress the
--- undeclared/unknown-type family that is pure unity false-positive noise.
+-- that #include other .c/.cpp files), turns each TU's ordered includes into
+-- an `-include` chain, and writes a multi-fragment .clangd at the project
+-- root: shared flags globally, every TU's chain scoped to the dirs it covers
+-- via `If: PathMatch` fragments. Diagnostics keep real syntax errors but
+-- suppress the unity false-positive noise (undeclared/unknown-type/
+-- redefinition families).
 --
 -- :ClangdSetup! overwrites an existing .clangd.
 
@@ -17,6 +18,27 @@ local SRC_EXT = { c = true, cc = true, cpp = true, cxx = true, m = true, mm = tr
 local SKIP_DIRS = {
   'build', 'bin', 'out', 'dist',
   'third_party', 'thirdparty', 'vendor', 'node_modules',
+}
+
+-- Candidate -I dirs tried (relative to root) when an include doesn't resolve
+-- against the includer's own dir. Only ones that resolve something are
+-- emitted. 'code' is 4coder convention; missing dirs cost one stat.
+local INCLUDE_BASES = { '', 'src', 'include', 'code' }
+
+-- Path components that mark sources for OTHER platforms — those can never
+-- compile on the named host, so their diagnostics get fully silenced.
+local FOREIGN_PLATFORM = {
+  Darwin = 'win32|windows|linux|wayland|x11',
+  Linux = 'win32|windows|mac|macos|darwin|cocoa|metal',
+  Windows_NT = 'mac|macos|darwin|cocoa|metal|linux|wayland|x11',
+}
+
+-- #include/#import forms; second element marks system (<...>) includes.
+local INCLUDE_PATTERNS = {
+  { '^%s*#%s*include%s+"([^"]+)"', false },
+  { '^%s*#%s*import%s+"([^"]+)"', false },
+  { '^%s*#%s*include%s+<([^>]+)>', true },
+  { '^%s*#%s*import%s+<([^>]+)>', true },
 }
 
 -- Diagnostics that fire on every unity member file parsed standalone even
@@ -94,16 +116,18 @@ local function parse_includes(path)
   local incs, saw_cond = {}, false
   for _, line in ipairs(lines) do
     if line:match('^%s*#%s*if') then saw_cond = true end
-    local raw = line:match('^%s*#%s*include%s+"([^"]+)"')
-      or line:match('^%s*#%s*import%s+"([^"]+)"')
-    if raw then
-      local e = ext_of(raw)
-      incs[#incs + 1] = { raw = raw, is_src = (e ~= nil and SRC_EXT[e]) or false }
-    else
-      local sys = line:match('^%s*#%s*include%s+<([^>]+)>')
-        or line:match('^%s*#%s*import%s+<([^>]+)>')
-      if sys and not saw_cond then
-        incs[#incs + 1] = { raw = sys, is_src = false, system = true }
+    for _, pat in ipairs(INCLUDE_PATTERNS) do
+      local raw, system = line:match(pat[1]), pat[2]
+      if raw then
+        if not (system and saw_cond) then
+          local e = ext_of(raw)
+          incs[#incs + 1] = {
+            raw = raw,
+            is_src = not system and (e ~= nil and SRC_EXT[e]) or false,
+            system = system or nil,
+          }
+        end
+        break
       end
     end
   end
@@ -128,8 +152,9 @@ local function scan(root)
   -- first (no -I needed), then against candidate -I bases. A base that
   -- actually resolves something is recorded so it ends up as a -I flag.
   local bases = {}
-  for _, b in ipairs({ root, root .. '/src', root .. '/include', root .. '/code' }) do
-    if vim.uv.fs_stat(b) then bases[#bases + 1] = b end
+  for _, b in ipairs(INCLUDE_BASES) do
+    local dir = b == '' and root or (root .. '/' .. b)
+    if vim.uv.fs_stat(dir) then bases[#bases + 1] = dir end
   end
   local used_bases = {}
 
@@ -398,58 +423,39 @@ local function render(model)
     '  Background: Build',
   })
 
+  ---Append an `If: PathMatch -> CompileFlags: Add` fragment.
+  local function flags_fragment(pathmatch, flags)
+    vim.list_extend(out, {
+      '---',
+      'If:',
+      '  PathMatch: ' .. pathmatch,
+      'CompileFlags:',
+      '  Add: ' .. flags,
+    })
+  end
+
   -- Per-extension language standards (see comment above on why not global).
-  -- -ObjC mirrors the real build when the unity TU pulls in .m files: the C
-  -- sources must parse as Objective-C or their `#error requires
-  -- Objective-C` guards fire.
-  local c_flags = model.objc_unity and '[-std=c99, -ObjC]' or '[-std=c99]'
-  vim.list_extend(out, {
-    '---',
-    'If:',
-    '  PathMatch: [.*\\.c, .*\\.m]',
-    'CompileFlags:',
-    '  Add: ' .. c_flags,
-    '---',
-    'If:',
-    '  PathMatch: [.*\\.(cpp|cc|cxx|mm)]',
-    'CompileFlags:',
-    '  Add: [-std=c++17]',
-  })
+  -- -ObjC mirrors the real mac build when the unity TU pulls in .m files:
+  -- the C sources must parse as Objective-C or their `#error requires
+  -- Objective-C` guards fire. Mac hosts only — on linux/windows the unity
+  -- TU takes the non-mac platform branch and compiles as plain C.
+  local sysname = vim.uv.os_uname().sysname
+  local objc = model.objc_unity and sysname == 'Darwin'
+  flags_fragment('[.*\\.c, .*\\.m]', objc and '[-std=c99, -ObjC]' or '[-std=c99]')
+  flags_fragment('[.*\\.(cpp|cc|cxx|mm)]', '[-std=c++17]')
   if n_c >= n_cpp then
     -- C project: force headers to C (ObjC when the unity build is ObjC),
     -- else clangd's ObjC++ header mode rejects C-isms (and a C std would
     -- be an invalid argument).
-    local hdr_lang = model.objc_unity and '-xobjective-c-header' or '-xc-header'
-    vim.list_extend(out, {
-      '---',
-      'If:',
-      '  PathMatch: [.*\\.h]',
-      'CompileFlags:',
-      '  Add: [' .. hdr_lang .. ', -std=c99]',
-    })
+    local hdr_lang = objc and '-xobjective-c-header' or '-xc-header'
+    flags_fragment('[.*\\.h]', '[' .. hdr_lang .. ', -std=c99]')
   else
     -- C++ project: keep clangd's permissive ObjC++ header mode (some
     -- platform headers may hold ObjC), just pin the C++ std (valid there).
-    vim.list_extend(out, {
-      '---',
-      'If:',
-      '  PathMatch: [.*\\.(h|hh|hpp)]',
-      'CompileFlags:',
-      '  Add: [-std=c++17]',
-    })
+    flags_fragment('[.*\\.(h|hh|hpp)]', '[-std=c++17]')
   end
 
-  -- Sources for OTHER platforms can never compile on this host (their
-  -- system headers don't exist here); every diagnostic in them is noise.
-  local sysname = vim.uv.os_uname().sysname
-  local foreign
-  if sysname == 'Darwin' then
-    foreign = 'win32|windows|linux|wayland|x11'
-  elseif sysname == 'Linux' then
-    foreign = 'win32|windows|mac|macos|darwin|cocoa|metal'
-  else
-    foreign = 'mac|macos|darwin|cocoa|metal|linux|wayland|x11'
-  end
+  local foreign = FOREIGN_PLATFORM[sysname] or FOREIGN_PLATFORM.Windows_NT
   vim.list_extend(out, {
     '---',
     '# Foreign-platform sources: cannot compile on this host, silence fully.',
