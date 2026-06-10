@@ -1015,7 +1015,7 @@ vim.api.nvim_create_autocmd("WinClosed", {
 local function reapply_all_c_windows()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local buf = vim.api.nvim_win_get_buf(win)
-    local bft = vim.api.nvim_buf_get_option(buf, "filetype")
+    local bft = vim.bo[buf].filetype
     if bft == "c" or bft == "cpp" or bft == "objc" or bft == "objcpp" then
       if yg_match_ids[win] then
         for _, id in ipairs(yg_match_ids[win]) do

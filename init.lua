@@ -36,7 +36,6 @@ vim.pack.add({
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
     { src = 'https://github.com/ThePrimeagen/harpoon', version = 'harpoon2' },
     'https://github.com/MeanderingProgrammer/render-markdown.nvim',
-    'https://github.com/rebelot/kanagawa.nvim'
 })
 
 -- Core
@@ -64,7 +63,6 @@ require("notes").setup()
 require("config.clipboard").setup()
 require("divider_comments").setup()
 require("config.comment_tags").setup()
-require("config.ctags").setup()
 
 -- Plugins
 require("render-markdown").setup()
