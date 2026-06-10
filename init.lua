@@ -46,6 +46,7 @@ require("config.keymaps")
 -- LSP + completion
 require("config.lsp").setup()
 require("config.ctags").setup()
+require("config.clangd_setup").setup()
 
 -- Treesitter
 require("config.treesitter").setup()
