@@ -101,8 +101,9 @@ named_argument: (identifier) @variable
 ; Procedure declarations with various patterns
 (procedure_declaration (identifier) @function (block))
 
-; Function calls
-(call_expression function: (identifier) @function.call)
+; Function calls — the callee is the first named child of call_expression
+; (this grammar has no `function:` field, so anchor to the first child instead)
+(call_expression . (identifier) @function.call)
 
 ; Procedure/function name patterns from Emacs mode
 ; Match function declarations like: name :: () {...}
