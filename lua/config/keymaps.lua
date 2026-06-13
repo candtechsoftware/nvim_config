@@ -16,6 +16,10 @@ vim.keymap.set("x", "<leader>p", [["_dP]]) -- Paste without yanking
 vim.keymap.set({"n", "v"}, "<leader>d", "\"_d") -- Delete without yanking
 
 -- Quickfix navigation
+vim.keymap.set("n", "<leader>qf", function()
+    vim.diagnostic.setqflist({ severity = vim.diagnostic.severity.ERROR })
+    vim.cmd("copen")
+end, { desc = "Send diagnostic errors to quickfix" }) -- e.g. clang/clangd errors
 vim.keymap.set("n", "<C-k>", "<cmd>cnext<CR>zz") -- Move to the next quickfix item
 vim.keymap.set("n", "<C-j>", "<cmd>cprev<CR>zz") -- Move to the previous quickfix item
 vim.keymap.set("n", "<leader>k", "<cmd>lnext<CR>zz") -- Move to the next location list item
