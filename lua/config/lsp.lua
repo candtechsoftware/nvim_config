@@ -22,6 +22,57 @@ local servers = {
   'jails',
 }
 
+local function lsp_command_names()
+  local names, seen = {}, {}
+  for _, name in ipairs(servers) do
+    names[#names + 1] = name
+    seen[name] = true
+  end
+  for _, client in ipairs(vim.lsp.get_clients()) do
+    if not seen[client.name] then
+      names[#names + 1] = client.name
+      seen[client.name] = true
+    end
+  end
+  table.sort(names)
+  return names
+end
+
+local function complete_lsp_name(arg_lead)
+  local out = {}
+  for _, name in ipairs(lsp_command_names()) do
+    if name:find('^' .. vim.pesc(arg_lead)) then
+      out[#out + 1] = name
+    end
+  end
+  return out
+end
+
+local function command_targets(name)
+  if name ~= '' then return { name } end
+  return vim.deepcopy(servers)
+end
+
+local function attached_clients(bufnr, name)
+  local opts = { bufnr = bufnr }
+  if name ~= '' then opts.name = name end
+  return vim.lsp.get_clients(opts)
+end
+
+local function stop_clients(bufnr, name)
+  local clients = attached_clients(bufnr, name)
+  for _, client in ipairs(clients) do
+    client:stop()
+  end
+  return clients
+end
+
+local function enable_targets(targets)
+  for _, name in ipairs(targets) do
+    vim.lsp.enable(name)
+  end
+end
+
 ---Get LSP capabilities (no snippets, full completion support)
 ---@return table
 local function get_capabilities()
@@ -302,9 +353,47 @@ function M.setup()
     vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
   end, { desc = 'Show LSP clients attached to current buffer' })
 
+  -- Compatibility commands for the old common spellings. Neovim 0.12 has
+  -- lower-case `:lsp ...`, but these are easier to type from memory.
+  vim.api.nvim_create_user_command('LspStop', function(cmd)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local clients = stop_clients(bufnr, cmd.args)
+    local label = cmd.args ~= '' and cmd.args or 'attached LSP clients'
+    vim.notify(('Stopped %d %s for buffer %d'):format(#clients, label, bufnr), vim.log.levels.INFO)
+  end, {
+    nargs = '?',
+    complete = complete_lsp_name,
+    desc = 'Stop LSP clients attached to current buffer',
+  })
+
+  vim.api.nvim_create_user_command('LspStart', function(cmd)
+    local targets = command_targets(cmd.args)
+    enable_targets(targets)
+    vim.notify(('Started/enabled LSP: %s'):format(table.concat(targets, ', ')), vim.log.levels.INFO)
+  end, {
+    nargs = '?',
+    complete = complete_lsp_name,
+    desc = 'Start or enable LSP clients',
+  })
+
+  vim.api.nvim_create_user_command('LspRestart', function(cmd)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local targets = command_targets(cmd.args)
+    local stopped = stop_clients(bufnr, cmd.args)
+    vim.defer_fn(function()
+      enable_targets(targets)
+      vim.notify(('Restarted LSP: %s (%d stopped)'):format(table.concat(targets, ', '), #stopped),
+        vim.log.levels.INFO)
+    end, 200)
+  end, {
+    nargs = '?',
+    complete = complete_lsp_name,
+    desc = 'Restart LSP clients for current buffer',
+  })
+
   -- :LspLog — open the LSP log file in a new tab.
   vim.api.nvim_create_user_command('LspLog', function()
-    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.log.get_filename()))
   end, { desc = 'Open the LSP log file' })
 end
 

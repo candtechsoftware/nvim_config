@@ -14,19 +14,49 @@ local current_launch_root = nil
 
 local find_project_root = require("utils.project_root").find
 
+---Read and parse <root>/launch.json.
+---
+---pcall'd: this is reached from a BufEnter autocmd, and a malformed file would
+---otherwise throw on every buffer switch. launch.json is canonically JSONC —
+---VS Code permits // comments and trailing commas, neither of which the decoder
+---accepts — so a perfectly ordinary file can land here and fail. Report once
+---per root rather than on every BufEnter.
+---@param root string
+---@return table?
+local reported_bad_json = {}
 local function load_launch_json(root)
   local path = root .. "/launch.json"
-  if vim.fn.filereadable(path) == 1 then
-    local contents = vim.fn.readfile(path)
-    local joined = table.concat(contents, "\n")
-    return vim.fn.json_decode(joined)
+  if vim.fn.filereadable(path) ~= 1 then return nil end
+
+  local joined = table.concat(vim.fn.readfile(path), "\n")
+  local ok, config = pcall(vim.json.decode, joined)
+  if not ok then
+    if not reported_bad_json[root] then
+      reported_bad_json[root] = true
+      vim.notify(("launch.json: could not parse %s\n%s\n(comments and trailing commas are not supported)")
+        :format(path, config), vim.log.levels.WARN)
+    end
+    return nil
   end
-  return nil
+  return config
 end
+
+-- Mappings that existed before launch.json overrode them, keyed by lhs, so
+-- clear_keymaps can put them back. Without this, a launch.json binding a key
+-- the config already owns (<leader>t, <F5>, ...) would silently clobber it,
+-- and the vim.keymap.del on the next project switch would then delete it
+-- outright — gone until restart.
+local shadowed = {}
 
 local function clear_keymaps()
   for _, key in ipairs(active_keymaps) do
     pcall(vim.keymap.del, "n", key)
+    local prev = shadowed[key]
+    if prev then
+      -- maparg(..., true) gives a dict restorable by mapset.
+      pcall(vim.fn.mapset, prev)
+      shadowed[key] = nil
+    end
   end
   active_keymaps = {}
 end
@@ -50,6 +80,11 @@ local function apply_launch(root)
 
   for key, cmd in pairs(key_map) do
     table.insert(active_keymaps, key)
+    -- Remember any existing mapping so clear_keymaps can restore it.
+    local prev = vim.fn.maparg(key, "n", false, true)
+    if prev and not vim.tbl_isempty(prev) then
+      shadowed[key] = prev
+    end
     vim.keymap.set("n", key, function()
       local current_root = find_project_root()
       local output_lines = {}

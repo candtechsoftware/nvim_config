@@ -24,7 +24,15 @@ vim.api.nvim_create_autocmd('PackChanged', {
         local name = ev.data.spec.name
         local path = ev.data.path
         if name == 'telescope-fzf-native.nvim' then
-            vim.system({ 'make' }, { cwd = path }):wait()
+            -- Async + exit-code checked: a :wait() here froze the UI for the
+            -- whole build, and a silent failure left telescope on the slow Lua
+            -- sorter with no indication (telescope.lua pcall's load_extension).
+            vim.system({ 'make' }, { cwd = path }, vim.schedule_wrap(function(res)
+                if res.code ~= 0 then
+                    vim.notify('telescope-fzf-native build failed:\n' .. (res.stderr or ''),
+                        vim.log.levels.ERROR)
+                end
+            end))
         end
     end,
 })
@@ -57,7 +65,6 @@ require("config.harpoon").setup()
 
 -- Utilities
 require("utils.make_detect").setup()
-require("utils.ctags").setup()
 require("launch").setup()
 require("notes").setup()
 require("config.clipboard").setup()
@@ -67,8 +74,13 @@ require("config.comment_tags").setup()
 -- render-markdown.nvim self-initializes via its plugin/render-markdown.lua
 -- (sourced by vim.pack), so no explicit setup() call is needed here.
 
--- UI2: new commandline + message UI (Neovim 0.12)
-require('vim._core.ui2').enable({})
+-- UI2: new commandline + message UI (Neovim 0.12+).
+-- `vim._core.ui2` is private/@nodoc and there is still no public equivalent in
+-- 0.13 (:h ui2 documents this exact call). pcall'd so a rename upstream can't
+-- abort init.lua before the colorscheme below ever loads.
+pcall(function()
+    require('vim._core.ui2').enable({})
+end)
 
 -- Colorscheme
 vim.cmd.colorscheme("naysayer")

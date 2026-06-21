@@ -193,8 +193,14 @@ function M.apply()
     cache[cwd] = by_ft or {}
     cache[cwd][ft] = entry
   end
-  vim.opt.makeprg = entry.makeprg
-  vim.opt.errorformat = entry.errorformat
+  -- Buffer-local, not global. Both options are global-local, and detection only
+  -- re-runs on FileType/DirChanged — so writing the GLOBAL value meant opening
+  -- a Rust file set makeprg=`cargo build` for the whole session, and switching
+  -- back to a C buffer fired no FileType event to undo it. A plain `:make` in
+  -- that C buffer then ran cargo with the Rust errorformat. (`:Make` happened to
+  -- be safe only because it calls apply() first.)
+  vim.bo.makeprg = entry.makeprg
+  vim.bo.errorformat = entry.errorformat
 end
 
 function M.setup()

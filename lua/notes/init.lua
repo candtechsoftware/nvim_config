@@ -9,24 +9,34 @@ M.config = {
     default_extension = ".md",
 }
 
-local function validate_notes_dir()
-    if _G.notes_cached_dir then
-        return _G.notes_cached_dir
-    end
+-- Module-local, not _G: this was a global leak that could only be cleared via
+-- :NotesReset.
+local cached_dir = nil
 
+---The notes directory, or nil if it does not exist.
+---
+---Being a git repo is NOT a precondition here. It used to be, which meant a
+---plain (non-git) ~/notes made M.setup() bail out before registering a single
+---command or keymap — the whole module was silently dead. Git is only needed
+---for auto-commit, which is gated separately in M.setup.
+---@return string?
+local function validate_notes_dir()
+    if cached_dir then
+        return cached_dir
+    end
     local notes_dir = M.config.notes_dir
     if vim.fn.isdirectory(notes_dir) == 1 then
-        -- Check if it's a git repo
-        local git_dir = notes_dir .. "/.git"
-        if vim.fn.isdirectory(git_dir) == 1 then
-            _G.notes_cached_dir = notes_dir
-            return notes_dir
-        else
-            return nil
-        end
-    else
-        return nil
+        cached_dir = notes_dir
+        return notes_dir
     end
+    return nil
+end
+
+---True if the notes directory is a git repo (required for auto-commit).
+---@return boolean
+local function notes_is_git()
+    local notes_dir = validate_notes_dir()
+    return notes_dir ~= nil and vim.fn.isdirectory(notes_dir .. "/.git") == 1
 end
 
 -- Get all note files recursively (async)
@@ -216,6 +226,7 @@ end
 -- Auto-commit function
 function M.auto_commit(filepath)
     if not M.config.auto_commit then return end
+    if not notes_is_git() then return end
 
     local notes_dir = validate_notes_dir()
     if not notes_dir then return end
@@ -263,19 +274,24 @@ function M.setup(opts)
     opts = opts or {}
     M.config = vim.tbl_deep_extend("force", M.config, opts)
 
-    -- Validate notes directory on setup
-    if not validate_notes_dir() then
-        return
-    end
+    -- Commands and keymaps are registered unconditionally — each one checks
+    -- validate_notes_dir() at call time. Bailing out here (as this used to do
+    -- when ~/notes was not a git repo) left :NotesNew/:NotesSearch/<leader>n*
+    -- undefined with no message at all.
 
-    -- Set up auto-commit on save for notes files
-    vim.api.nvim_create_autocmd("BufWritePost", {
-        pattern = M.config.notes_dir .. "/*",
-        callback = function(args)
-            M.auto_commit(args.file)
-        end,
-        desc = "Auto-commit notes on save"
-    })
+    -- Auto-commit on save is the one thing that genuinely needs git, so it is
+    -- the only thing gated on it. Grouped so that re-sourcing this file does
+    -- not stack duplicate autocmds (which would double every git add/commit).
+    if notes_is_git() then
+        vim.api.nvim_create_autocmd("BufWritePost", {
+            group = vim.api.nvim_create_augroup("NotesAutoCommit", { clear = true }),
+            pattern = M.config.notes_dir .. "/*",
+            callback = function(args)
+                M.auto_commit(args.file)
+            end,
+            desc = "Auto-commit notes on save"
+        })
+    end
 
     -- Create user commands
     vim.api.nvim_create_user_command("NotesNew", function(cmd)
@@ -295,7 +311,7 @@ function M.setup(opts)
 
     -- Clear cache command
     vim.api.nvim_create_user_command("NotesReset", function()
-        _G.notes_cached_dir = nil
+        cached_dir = nil
     end, { desc = "Reset notes directory cache" })
 
     -- Keymaps

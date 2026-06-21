@@ -21,13 +21,13 @@ local c = {
   line_bg  = "#062329", -- gutter background (same as editor in naysayer)
   cur_line = "#0b3335", -- cursorline / current-line highlight
 
-  fg       = "#d1b897", -- default text (warm tan)
-  comment  = "#44b340", -- comments (green)
+  fg       = "#d0b892", -- default text (warm tan)
+  comment  = "#53d549", -- comments (green)
   punct    = "#8cde94", -- punctuation, operators, types, preproc (light green)
   white    = "#ffffff", -- keywords, functions, builtins
-  variable = "#c1d1e3", -- variables, members, properties (cool grey-blue)
-  string   = "#2ec09c", -- strings (teal)
-  constant = "#7ad0c6", -- constants, numbers, escapes (light teal)
+  variable = "#d0b892", -- variables, members, properties (tan, matching naysayer.nvim)
+  string   = "#3ad0b5", -- strings (teal)
+  constant = "#87ffde", -- constants, numbers, escapes (light teal)
 
   line_fg  = "#126367", -- line numbers / non-current
   ghost    = "#0f4145", -- non-text, whitespace, indent guides
@@ -123,7 +123,7 @@ hl(0, "Boolean",      { fg = c.constant })
 hl(0, "Constant",     { fg = c.constant })
 
 hl(0, "Identifier",   { fg = c.fg })
-hl(0, "Function",     { fg = c.white })
+hl(0, "Function",     { fg = c.fg })
 
 hl(0, "Statement",    { fg = c.white })
 hl(0, "Conditional",  { fg = c.white })
@@ -239,6 +239,23 @@ local links = {
   ["@lsp.type.comment"]       = "Comment",
   ["@lsp.type.decorator"]     = "PreProc",
   ["@lsp.typemod.enumMember"] = "Constant",
+  ["@lsp.mod.inactive"]       = "Normal",
+  ["@lsp.typemod.class.inactive"] = "Type",
+  ["@lsp.typemod.enum.inactive"] = "Type",
+  ["@lsp.typemod.enumMember.inactive"] = "Constant",
+  ["@lsp.typemod.interface.inactive"] = "Type",
+  ["@lsp.typemod.struct.inactive"] = "Type",
+  ["@lsp.typemod.namespace.inactive"] = "Type",
+  ["@lsp.typemod.type.inactive"] = "Type",
+  ["@lsp.typemod.typeParameter.inactive"] = "Type",
+  ["@lsp.typemod.function.inactive"] = "Function",
+  ["@lsp.typemod.method.inactive"] = "Function",
+  ["@lsp.typemod.macro.inactive"] = "PreProc",
+  ["@lsp.typemod.parameter.inactive"] = "Identifier",
+  ["@lsp.typemod.property.inactive"] = "@variable",
+  ["@lsp.typemod.variable.inactive"] = "@variable",
+  ["@lsp.typemod.comment.inactive"] = "Comment",
+  ["@lsp.typemod.decorator.inactive"] = "PreProc",
 
   -- Markup
   ["@markup"]                = "Normal",
