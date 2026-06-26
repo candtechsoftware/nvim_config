@@ -338,6 +338,25 @@ local function scan(root)
     }
   end
 
+  -- Every project dir holding a source or header. Used for the orphan-dir
+  -- fallback: a module that exists but isn't yet pulled into any unity TU
+  -- (e.g. an `*_inc.h` aggregate nothing includes — src/render before an
+  -- example app wires it in) is in zero coverage sets, so it'd match only
+  -- the global `.h` fragment and parse with NO preamble: every base type
+  -- and keyword (internal, u32, Mat4) then reads as undefined.
+  local all_dirs = {}
+  for _, abs in ipairs(files) do
+    all_dirs[relpath(root, vim.fs.dirname(abs))] = true
+  end
+  local hdrs = vim.fs.find(function(name, path)
+    return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$'))
+      and not skipped(path)
+  end, { path = root, type = 'file', limit = 1000 })
+  for _, h in ipairs(hdrs) do
+    all_dirs[relpath(root, vim.fs.dirname(vim.fs.normalize(h)))] = true
+  end
+  model.all_dirs = all_dirs
+
   -- Primary TU = widest coverage; ties prefer main.* then stable path order.
   table.sort(model.tus, function(a, b)
     if a.coverage ~= b.coverage then return a.coverage > b.coverage end
@@ -500,6 +519,33 @@ local function render(model)
       emit_chain(tu.chain, tu.rel, out)
     end
   end
+  -- Orphan dirs: hold sources/headers but sit in no TU's coverage — a real
+  -- module not yet included by any app/test TU (src/render before an example
+  -- wires it in). Give them the primary TU's base preamble so their types
+  -- resolve standalone; a TU claiming the dir later supersedes this on the
+  -- next :ClangdSetup! run.
+  if primary and #primary.chain > 0 then
+    local orphans = {}
+    for d in pairs(model.all_dirs or {}) do
+      if d ~= '.' and not claimed[d] then orphans[#orphans + 1] = d end
+    end
+    table.sort(orphans)
+    if #orphans > 0 then
+      vim.list_extend(out, {
+        '---',
+        '# Orphan dirs — no unity TU includes these yet; base preamble so',
+        '# their types resolve standalone (a TU claiming them wins on rerun).',
+        'If:',
+        '  PathMatch:',
+      })
+      for _, d in ipairs(orphans) do
+        out[#out + 1] = '    - ' .. path_pattern(d)
+      end
+      vim.list_extend(out, { 'CompileFlags:', '  Add:' })
+      emit_chain(primary.chain, primary.rel, out)
+    end
+  end
+
   if #collisions > 0 then
     out[#out + 1] = ''
     out[#out + 1] = '# TUs sharing dirs with the ones above (multiple TUs here — hand-tune'
