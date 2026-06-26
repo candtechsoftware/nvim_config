@@ -71,4 +71,4 @@ require("config.comment_tags").setup()
 require('vim._core.ui2').enable({})
 
 -- Colorscheme
-vim.cmd.colorscheme("hmin")
+vim.cmd.colorscheme("naysayer")

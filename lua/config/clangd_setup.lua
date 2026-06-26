@@ -49,6 +49,12 @@ local SUPPRESS = {
   'implicit_function_decl_c99',
   'implicit_function_decl',
   'implicit-function-declaration',
+  -- Cascade from an implicit declaration: the un-declared function is assumed
+  -- to return int, so returning/assigning/passing its result against the real
+  -- (unity-visible) type trips an incompatible-conversion error even though
+  -- the implicit_function_decl that caused it is itself suppressed. Covers the
+  -- err_ (int->aggregate) and ext_ (-Wincompatible-pointer-types) variants.
+  'typecheck_convert_incompatible',
   'undeclared_var_use',
   'undeclared_var_use_suggest',
   'unknown_typename',
