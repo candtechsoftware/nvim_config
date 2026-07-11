@@ -333,6 +333,7 @@ local function scan(root)
       rel = relpath(root, tu),
       ext = ext_of(tu),
       dirs = dirs,
+      seen = seen,
       coverage = vim.tbl_count(seen),
       chain = chain,
     }
@@ -352,10 +353,16 @@ local function scan(root)
     return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$'))
       and not skipped(path)
   end, { path = root, type = 'file', limit = 1000 })
+  local headers_by_dir = {}
   for _, h in ipairs(hdrs) do
-    all_dirs[relpath(root, vim.fs.dirname(vim.fs.normalize(h)))] = true
+    h = vim.fs.normalize(h)
+    local dir = relpath(root, vim.fs.dirname(h))
+    all_dirs[dir] = true
+    headers_by_dir[dir] = headers_by_dir[dir] or {}
+    headers_by_dir[dir][#headers_by_dir[dir] + 1] = h
   end
   model.all_dirs = all_dirs
+  model.headers_by_dir = headers_by_dir
 
   -- Primary TU = widest coverage; ties prefer main.* then stable path order.
   table.sort(model.tus, function(a, b)
@@ -460,14 +467,15 @@ local function render(model)
   end
 
   -- Per-extension language standards (see comment above on why not global).
-  -- -ObjC mirrors the real mac build when the unity TU pulls in .m files:
-  -- the C sources must parse as Objective-C or their `#error requires
-  -- Objective-C` guards fire. Mac hosts only — on linux/windows the unity
-  -- TU takes the non-mac platform branch and compiles as plain C.
+  -- Objective-C language mode mirrors the real mac build when the unity TU
+  -- pulls in .m/.mm files: C and C++ sources must parse as ObjC/ObjC++ or
+  -- their `#error requires Objective-C` guards fire. Mac hosts only — on
+  -- linux/windows the unity TU takes the non-mac platform branch and compiles
+  -- as plain C/C++.
   local sysname = vim.uv.os_uname().sysname
   local objc = model.objc_unity and sysname == 'Darwin'
-  flags_fragment('[.*\\.c, .*\\.m]', objc and '[-std=c99, -ObjC]' or '[-std=c99]')
-  flags_fragment('[.*\\.(cpp|cc|cxx|mm)]', '[-std=c++17]')
+  flags_fragment('[.*\\.c, .*\\.m]', objc and '[-xobjective-c, -std=c99]' or '[-std=c99]')
+  flags_fragment('[.*\\.(cpp|cc|cxx|mm)]', objc and '[-xobjective-c++, -std=c++17]' or '[-std=c++17]')
   if n_c >= n_cpp then
     -- C project: force headers to C (ObjC when the unity build is ObjC),
     -- else clangd's ObjC++ header mode rejects C-isms (and a C std would
@@ -475,9 +483,9 @@ local function render(model)
     local hdr_lang = objc and '-xobjective-c-header' or '-xc-header'
     flags_fragment('[.*\\.h]', '[' .. hdr_lang .. ', -std=c99]')
   else
-    -- C++ project: keep clangd's permissive ObjC++ header mode (some
-    -- platform headers may hold ObjC), just pin the C++ std (valid there).
-    flags_fragment('[.*\\.(h|hh|hpp)]', '[-std=c++17]')
+    -- C++ project: headers follow the source language. If the mac unity build
+    -- is ObjC++, headers need __OBJC__ too (e.g. AppKit-backed platform code).
+    flags_fragment('[.*\\.(h|hh|hpp)]', objc and '[-xobjective-c++-header, -std=c++17]' or '[-std=c++17]')
   end
 
   local foreign = FOREIGN_PLATFORM[sysname] or FOREIGN_PLATFORM.Windows_NT
@@ -497,6 +505,22 @@ local function render(model)
   -- platform-layer .mm files).
   local claimed = {}
   local fragments, collisions = 0, {}
+
+  -- A module-aggregate TU (modules/render/render_inc.cpp) is written to be
+  -- included by a parent unity TU after the base preamble; until an app TU
+  -- wires it in, its own chain never defines the base types (u32,
+  -- inline_function), so its members degrade into "expected ';'" parse
+  -- errors — real-error territory no Suppress entry should hide. When a
+  -- TU's transitive includes don't reach the primary TU's first chain
+  -- header, prefix the primary preamble onto its own chain.
+  local base_hdr
+  for _, h in ipairs(primary and primary.chain or {}) do
+    if primary.seen[h.path] then
+      base_hdr = h.path
+      break
+    end
+  end
+
   for i = 1, #model.tus do
     local tu = model.tus[i]
     local frag_dirs = {}
@@ -507,30 +531,85 @@ local function render(model)
       end
     end
     table.sort(frag_dirs)
+
+    local chain, from = tu.chain, tu.rel
+    if base_hdr and tu ~= primary and not tu.seen[base_hdr] then
+      chain, from = vim.deepcopy(primary.chain), primary.rel .. ' + ' .. tu.rel
+      local have = {}
+      for _, h in ipairs(chain) do have[h.path] = true end
+      for _, h in ipairs(tu.chain) do
+        if not have[h.path] then chain[#chain + 1] = h end
+      end
+    end
+
     if #frag_dirs == 0 then
       collisions[#collisions + 1] = tu.rel
-    elseif #tu.chain > 0 then
+    elseif #chain > 0 then
       fragments = fragments + 1
       vim.list_extend(out, { '---', 'If:', '  PathMatch:' })
       for _, d in ipairs(frag_dirs) do
         out[#out + 1] = '    - ' .. path_pattern(d)
       end
       vim.list_extend(out, { 'CompileFlags:', '  Add:' })
-      emit_chain(tu.chain, tu.rel, out)
+      emit_chain(chain, from, out)
     end
   end
   -- Orphan dirs: hold sources/headers but sit in no TU's coverage — a real
   -- module not yet included by any app/test TU (src/render before an example
-  -- wires it in). Give them the primary TU's base preamble so their types
-  -- resolve standalone; a TU claiming the dir later supersedes this on the
-  -- next :ClangdSetup! run.
+  -- wires it in). Give them the primary TU's base preamble plus local/parent
+  -- module headers so implementation files still see local types. A TU
+  -- claiming the dir later supersedes this on the next :ClangdSetup! run.
   if primary and #primary.chain > 0 then
     local orphans = {}
     for d in pairs(model.all_dirs or {}) do
       if d ~= '.' and not claimed[d] then orphans[#orphans + 1] = d end
     end
     table.sort(orphans)
-    if #orphans > 0 then
+    local no_local_headers = {}
+    local function orphan_headers(dir)
+      local headers, seen, parts = {}, {}, {}
+      if dir ~= '.' then
+        for p in dir:gmatch('[^/]+') do parts[#parts + 1] = p end
+      end
+      for i = 1, #parts do
+        local parent = table.concat(parts, '/', 1, i)
+        for _, h in ipairs((model.headers_by_dir and model.headers_by_dir[parent]) or {}) do
+          if not seen[h] then
+            seen[h] = true
+            headers[#headers + 1] = h
+          end
+        end
+      end
+      table.sort(headers)
+      return headers
+    end
+    for _, d in ipairs(orphans) do
+      local headers = orphan_headers(d)
+      if #headers > 0 then
+        local chain, seen = vim.deepcopy(primary.chain), {}
+        for _, h in ipairs(chain) do seen[h.path] = true end
+        for _, h in ipairs(headers) do
+          if not seen[h] then
+            seen[h] = true
+            chain[#chain + 1] = { path = h }
+          end
+        end
+        vim.list_extend(out, {
+          '---',
+          '# Orphan dir — no unity TU includes this yet; base preamble plus',
+          '# local/parent headers so implementation files see module types.',
+          'If:',
+          '  PathMatch:',
+          '    - ' .. path_pattern(d),
+          'CompileFlags:',
+          '  Add:',
+        })
+        emit_chain(chain, primary.rel .. ' + ' .. d .. ' headers', out)
+      else
+        no_local_headers[#no_local_headers + 1] = d
+      end
+    end
+    if #no_local_headers > 0 then
       vim.list_extend(out, {
         '---',
         '# Orphan dirs — no unity TU includes these yet; base preamble so',
@@ -538,7 +617,7 @@ local function render(model)
         'If:',
         '  PathMatch:',
       })
-      for _, d in ipairs(orphans) do
+      for _, d in ipairs(no_local_headers) do
         out[#out + 1] = '    - ' .. path_pattern(d)
       end
       vim.list_extend(out, { 'CompileFlags:', '  Add:' })

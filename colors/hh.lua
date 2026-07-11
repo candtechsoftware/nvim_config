@@ -7,18 +7,18 @@ local M = {}
 -- Color palette (matched to 4coder Fleury theme)
 local colors = {
   -- Core background/foreground
-  bar_bg = "#0c0c10",        -- defcolor_bar: Status bar background
+  bar_bg = "#1f1f27",        -- defcolor_bar: Status bar background
   base = "#cb9401",          -- defcolor_base: Status bar text / golden accent
   pop1 = "#70971e",          -- defcolor_pop1: Color of prompts
   pop2 = "#cb9401",          -- defcolor_pop2: Annotations
-  back = "#030303",          -- defcolor_back: Text area background
-  margin = "#030303",        -- defcolor_margin: Frame around inactive panel
+  back = "#0c0c0c",          -- defcolor_back: Text area background
+  margin = "#0c0c0c",        -- defcolor_margin: Frame around inactive panel
   margin_hover = "#00ff00",  -- defcolor_margin_hover
-  margin_active = "#030303", -- defcolor_margin_active
+  margin_active = "#0c0c0c", -- defcolor_margin_active
 
   -- List/hover colors
-  list_item_hover = "#0a0d0e",  -- defcolor_list_item_hover
-  list_item_active = "#161a1f", -- defcolor_list_item_active
+  list_item_hover = "#171e20",  -- defcolor_list_item_hover
+  list_item_active = "#2d3640", -- defcolor_list_item_active
 
   -- Cursor colors for different modes
   cursor_normal = "#00ee00",   -- defcolor_cursor[0]: Green for normal mode
@@ -28,8 +28,8 @@ local colors = {
   cursor_command = "#70971e",  -- Olive for command mode
   cursor_inactive = "#404040", -- fleury_color_cursor_inactive
 
-  at_cursor = "#030303",       -- defcolor_at_cursor
-  highlight_line = "#0c0c10",  -- defcolor_highlight_cursor_line
+  at_cursor = "#0c0c0c",       -- defcolor_at_cursor
+  highlight_line = "#1f1f27",  -- defcolor_highlight_cursor_line
   highlight = "#315268",       -- defcolor_highlight: Search highlight background
   at_highlight = "#c4b82b",    -- defcolor_at_highlight: Search highlight text
   mark = "#494949",            -- defcolor_mark
@@ -53,14 +53,14 @@ local colors = {
   undo = "#80005d",          -- defcolor_undo
 
   -- Line numbers
-  line_numbers_bg = "#060606",   -- defcolor_line_numbers_back
+  line_numbers_bg = "#101010",   -- defcolor_line_numbers_back
   line_numbers_text = "#404040", -- defcolor_line_numbers_text
 
   -- Indexer/semantic colors (fleury_color_index_*)
   index_type = "#d8a51d",         -- fleury_color_index_product_type/sum_type: Types (gold)
   index_function = "#cc5735",     -- fleury_color_index_function: Functions (rust red)
   index_constant = "#478980",     -- fleury_color_index_constant: Constants (teal)
-  index_macro = "#4a8db5",        -- fleury_color_index_macro: Macros (blue)
+  index_macro = "#478980",        -- fleury_color_index_macro: Macros (teal)
   index_decl = "#c04047",         -- fleury_color_index_decl: Declarations (red)
   index_4coder_command = "#23de33", -- fleury_color_index_4coder_command
   index_comment_tag = "#00ff00", -- fleury_color_index_comment_tag
@@ -74,14 +74,14 @@ local colors = {
 
   -- Pane colors
   inactive_pane_overlay = "#000000", -- fleury_color_inactive_pane_overlay (transparent in original)
-  inactive_pane_bg = "#030303",      -- fleury_color_inactive_pane_background
-  file_progress_bar = "#0c0c0c",     -- fleury_color_file_progress_bar
+  inactive_pane_bg = "#0c0c0c",      -- fleury_color_inactive_pane_background
+  file_progress_bar = "#232323",     -- fleury_color_file_progress_bar (alpha dropped)
 
   -- Brace matching
   brace_highlight = "#b09573",   -- fleury_color_brace_highlight: Active brace
   brace_line = "#9ba290",        -- fleury_color_brace_line: Brace connection lines
   brace_annotation = "#9ba290",  -- fleury_color_brace_annotation
-  token_highlight = "#141418",   -- fleury_color_token_highlight
+  token_highlight = "#2f2f37",   -- fleury_color_token_highlight
 
   -- Cycle colors for text variations
   text_cycle1 = "#c0a583",       -- defcolor_text_cycle[0]
@@ -94,20 +94,18 @@ local colors = {
   -- Plot cycle colors
   plot_cycle = { "#03d3fc", "#22b80b", "#f0bb0c", "#f0500c" },
 
-  -- Custom yggdrasil macros (blue, same as index_macro)
-  yg_keyword = "#4a8db5",
+  -- Custom yggdrasil macros (same as index_macro)
+  yg_keyword = "#478980",
 
   -- Scope background cycle colors (like 4coder's defcolor_back_cycle)
-  -- Subtle tints visible against near-black background
+  -- Subtle warm tints over the 0x0c0c0c background, deeper nesting = warmer.
   back_cycle = {
-    "#0d0a0f",  -- Level 1: purple/magenta tint
-    "#0a0d0a",  -- Level 2: green tint
-    "#0a0b10",  -- Level 3: blue tint
-    "#0f0c08",  -- Level 4: amber/orange tint
-    "#0f0a0d",  -- Level 5: pink tint
-    "#080e0f",  -- Level 6: cyan tint
-    "#0d0d08",  -- Level 7: olive tint
-    "#0b0810",  -- Level 8: violet tint
+    "#0c0c0c",
+    "#12100d",
+    "#181410",
+    "#1e1813",
+    "#241c15",
+    "#2a2018",
   },
 }
 
