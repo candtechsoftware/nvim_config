@@ -83,4 +83,4 @@ pcall(function()
 end)
 
 -- Colorscheme
-vim.cmd.colorscheme("naysayer")
+vim.cmd.colorscheme("handmade")
