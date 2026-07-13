@@ -411,4 +411,11 @@ end
 M.colors = p
 M.setup()
 
+-- Opt in to the nested-scope background cycle and the project #define indexer
+-- (lua/hh/scope.lua, lua/hh/macros.lua). These used to be bootstrapped by
+-- dofile-ing the whole hh colorscheme, which set ~400 highlight groups that
+-- this file then immediately overwrote.
+require("hh.scope").setup({ cycle_len = #p.back_cycle })
+require("hh.macros").setup()
+
 return M

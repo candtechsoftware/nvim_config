@@ -4,13 +4,22 @@ local M = {}
 local ns_id = vim.api.nvim_create_namespace("divider_comments")
 local pending_timer = nil
 
--- Pattern to match section comments: //- (C/C++), #- (shell/python), --- (lua)
-local section_pattern = "^%s*//%-"
-local alt_patterns = { "^%s*#%-", "^%s*%-%-%-" }
+-- Patterns that mark a section comment: //- (C/C++), #- (shell/python),
+-- ---- (lua).
+--
+-- The Lua marker needs FOUR dashes, not three. LuaLS doc comments are exactly
+-- `---` (`---@param`, `---@return`, and plain `---description` lines), so a
+-- three-dash pattern matched every annotated function in this config — 236
+-- lines of it, every one a false positive, versus zero real dividers. Four
+-- dashes reads as a rule and can never collide with an annotation.
+local patterns = {
+    "^%s*//%-",
+    "^%s*#%-",
+    "^%s*%-%-%-%-",
+}
 
 local function is_section_comment(line)
-    if line:match(section_pattern) then return true end
-    for _, pat in ipairs(alt_patterns) do
+    for _, pat in ipairs(patterns) do
         if line:match(pat) then return true end
     end
     return false
@@ -121,18 +130,30 @@ function M.telescope_sections()
     }):find()
 end
 
+-- Don't scan buffers that can't meaningfully have section comments. This ran
+-- unconditionally on every BufEnter for every filetype — pulling the entire
+-- buffer into Lua in quickfix, netrw, help and terminal windows too.
+local MAX_LINES = 20000
+
+---@param bufnr integer
+---@return boolean
+local function should_render(bufnr)
+  if vim.bo[bufnr].buftype ~= "" then return false end -- quickfix/help/terminal/prompt
+  return vim.api.nvim_buf_line_count(bufnr) <= MAX_LINES
+end
+
 function M.render_dividers()
   local bufnr = vim.api.nvim_get_current_buf()
 
   -- Clear existing extmarks
   vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+  if not should_render(bufnr) then return end
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local width = vim.api.nvim_win_get_width(0)
+  local divider_line = string.rep("─", vim.api.nvim_win_get_width(0))
 
   for i, line in ipairs(lines) do
     if is_section_comment(line) then
-      local divider_line = string.rep("─", width)
       vim.api.nvim_buf_set_extmark(bufnr, ns_id, i - 1, 0, {
         virt_lines_above = true,
         virt_lines = { { { divider_line, "Comment" } } },
@@ -142,8 +163,13 @@ function M.render_dividers()
 end
 
 local function render_debounced()
+  -- vim.defer_fn's timer closes itself when it FIRES. Cancelling with a bare
+  -- timer_stop() left the handle open forever, so every superseded debounce
+  -- leaked a uv handle. Close it explicitly when we cancel it.
   if pending_timer then
-    vim.uv.timer_stop(pending_timer)
+    pending_timer:stop()
+    if not pending_timer:is_closing() then pending_timer:close() end
+    pending_timer = nil
   end
   pending_timer = vim.defer_fn(function()
     pending_timer = nil

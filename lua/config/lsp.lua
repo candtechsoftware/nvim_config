@@ -393,7 +393,7 @@ function M.setup()
 
   -- :LspLog — open the LSP log file in a new tab.
   vim.api.nvim_create_user_command('LspLog', function()
-    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.log.get_filename()))
   end, { desc = 'Open the LSP log file' })
 end
 

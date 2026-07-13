@@ -49,25 +49,27 @@ local function start_watcher()
       end)
     end,
   })
-  -- Initial sync
-  ClipboardWatcher:sync()
 end
 
--- Track yanks inside Neovim via TextYankPost
--- Only track yanks to registers other than the system clipboard,
--- since the watcher handles system clipboard changes
+-- Track yanks inside Neovim via TextYankPost.
+--
+-- Every yank is recorded, including the unnamed one. `clipboard=unnamedplus`
+-- (see config/options.lua) means a plain `yy` reports regname == '' — NOT '+'
+-- — so the old guard that skipped '' skipped literally every ordinary yank,
+-- and nothing reached the history until the next FocusGained. `last_clip` is
+-- updated in step so that FocusGained sync does not then re-push the same text.
 local function setup_yank_tracking()
   vim.api.nvim_create_autocmd("TextYankPost", {
     group = vim.api.nvim_create_augroup("ClipboardYankTrack", { clear = true }),
     callback = function()
       local event = vim.v.event
-      -- Skip if yanking to system clipboard - watcher will handle it
-      if event.regname == '+' or event.regname == '*' or event.regname == '' then
-        return
-      end
-      if event.operator == 'y' then
-        local text = table.concat(event.regcontents, '\n')
-        ClipboardWatcher:push(text)
+      if event.operator ~= 'y' then return end
+      local text = table.concat(event.regcontents, '\n')
+      ClipboardWatcher:push(text)
+      -- With unnamedplus this yank also went to the system clipboard; record
+      -- it so the FocusGained sync sees no change and does not double-push.
+      if event.regname == '' or event.regname == '+' or event.regname == '*' then
+        ClipboardWatcher.last_clip = text
       end
     end,
   })
@@ -134,12 +136,20 @@ local function setup_keymaps()
 end
 
 function M.setup()
-  -- Initialize last_clip with current clipboard to avoid adding stale content to history
-  ClipboardWatcher.last_clip = vim.fn.getreg('+')
   start_watcher()
   setup_yank_tracking()
   setup_commands()
   setup_keymaps()
+
+  -- Seed last_clip with the current clipboard so pre-existing content is not
+  -- pushed into history as if it were just yanked. Deferred: on macOS every
+  -- getreg('+') spawns `pbpaste` (~12ms), and this used to run twice on the
+  -- startup critical path — once here and once in start_watcher's initial
+  -- sync, which was redundant anyway since it had just been set to the same
+  -- value. Now it costs one spawn, off the critical path.
+  vim.schedule(function()
+    ClipboardWatcher.last_clip = vim.fn.getreg('+')
+  end)
 end
 
 -- Clear clipboard history

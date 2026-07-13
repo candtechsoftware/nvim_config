@@ -34,12 +34,19 @@ local function setup_matches()
 end
 
 function M.setup()
+    local group = vim.api.nvim_create_augroup("CommentTags", { clear = true })
+
+    -- Grouped like the two below it. Ungrouped, re-sourcing this file stacked a
+    -- second ColorScheme handler every time.
     vim.api.nvim_create_autocmd("ColorScheme", {
+        group = group,
         pattern = "*",
         callback = set_highlights,
     })
 
-    local group = vim.api.nvim_create_augroup("CommentTags", { clear = true })
+    -- The tag colors are plain hex, not links, so a colorscheme's `hi clear`
+    -- wipes them; set them once now in case no ColorScheme event follows.
+    set_highlights()
 
     vim.api.nvim_create_autocmd({ "FileType", "WinEnter" }, {
         group = group,

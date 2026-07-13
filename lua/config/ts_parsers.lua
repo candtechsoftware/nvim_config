@@ -173,52 +173,61 @@ function M.install(lang, opts)
     end
 end
 
-function M.update(lang)
-    -- Reinstall (re-clone and recompile)
-    if lang then
-        M.install(lang)
-    else
-        for _, l in ipairs(M.ensure_installed) do
-            M.install(l)
+-- M.install above clones and compiles with :wait() — it BLOCKS. That is fine
+-- inside the `nvim --headless` child spawned below (a batch process with no UI
+-- to freeze), but calling it from the UI process locks the editor for the whole
+-- clone+compile. Every entry point in the UI must go through install_async.
+--
+---Install `langs` one at a time, each in its own headless child, without
+---blocking the editor.
+---@param langs string[]
+local function install_async(langs)
+    if #langs == 0 then return end
+    vim.notify(("Installing %d treesitter parser(s)..."):format(#langs), vim.log.levels.INFO)
+
+    local function install_next(i)
+        if i > #langs then
+            vim.notify("All parsers installed", vim.log.levels.INFO)
+            return
         end
+        local lang = langs[i]
+        vim.system(
+            { "nvim", "--headless",
+              "-c", ("lua require('config.ts_parsers').install(%q, {silent=true})"):format(lang),
+              "-c", "qa" },
+            {},
+            vim.schedule_wrap(function(result)
+                if result.code == 0 then
+                    pcall(vim.treesitter.language.add, lang)
+                    vim.notify(("Installed %s (%d/%d)"):format(lang, i, #langs), vim.log.levels.INFO)
+                else
+                    vim.notify(("Failed: %s\n%s"):format(lang, result.stderr or ""), vim.log.levels.ERROR)
+                end
+                install_next(i + 1)
+            end)
+        )
     end
+    install_next(1)
 end
 
 function M.setup()
     -- Install missing parsers asynchronously on startup
     vim.schedule(function()
+        -- install_async spawns `nvim --headless`, and that child loads this
+        -- same init.lua — so without this guard the child runs setup() too,
+        -- sees the parsers still missing, and spawns a grandchild. Each child
+        -- seeds an independent self-perpetuating chain, all compiling to the
+        -- same parser/<lang>.so concurrently. Headless has no UI attached; bail
+        -- out there. (Neovim itself uses this guard in _core/ui2.lua.)
+        if #vim.api.nvim_list_uis() == 0 then return end
+
         local missing = {}
         for _, lang in ipairs(M.ensure_installed) do
             if not parser_exists(lang) then
                 table.insert(missing, lang)
             end
         end
-        if #missing > 0 then
-            vim.notify("Installing " .. #missing .. " treesitter parsers...", vim.log.levels.INFO)
-            -- Install sequentially in background to avoid overwhelming the system
-            local function install_next(i)
-                if i > #missing then
-                    vim.notify("All parsers installed", vim.log.levels.INFO)
-                    return
-                end
-                vim.system(
-                    { "nvim", "--headless",
-                      "-c", "lua require('config.ts_parsers').install('" .. missing[i] .. "', {silent=true})",
-                      "-c", "qa" },
-                    {},
-                    vim.schedule_wrap(function(result)
-                        if result.code == 0 then
-                            pcall(vim.treesitter.language.add, missing[i])
-                            vim.notify("Installed " .. missing[i] .. " (" .. i .. "/" .. #missing .. ")", vim.log.levels.INFO)
-                        else
-                            vim.notify("Failed: " .. missing[i], vim.log.levels.ERROR)
-                        end
-                        install_next(i + 1)
-                    end)
-                )
-            end
-            install_next(1)
-        end
+        install_async(missing)
     end)
 
     -- Commands
@@ -228,7 +237,7 @@ function M.setup()
             vim.notify("Usage: :TSInstall <lang>", vim.log.levels.WARN)
             return
         end
-        M.install(lang)
+        install_async({ lang })
     end, {
         nargs = 1,
         complete = parser_names,
@@ -236,7 +245,7 @@ function M.setup()
 
     vim.api.nvim_create_user_command("TSUpdate", function(cmd_opts)
         local lang = cmd_opts.args
-        M.update(lang ~= "" and lang or nil)
+        install_async(lang ~= "" and { lang } or vim.deepcopy(M.ensure_installed))
     end, {
         nargs = "?",
         complete = parser_names,

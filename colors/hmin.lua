@@ -8,11 +8,6 @@
 
 -- Load hh first to install its scope highlighting, macro indexer and autocmds.
 -- (require() can't find files under colors/, so resolve the path off runtimepath.)
-local hh_path = vim.api.nvim_get_runtime_file("colors/hh.lua", false)[1]
-if hh_path then
-  pcall(dofile, hh_path)
-end
-
 vim.cmd("hi clear")
 if vim.fn.exists("syntax_on") then
   vim.cmd("syntax reset")
@@ -338,5 +333,12 @@ local scope_bgs = {
 for i = 1, 8 do
   hl(0, "HHScope" .. i, { bg = scope_bgs[i] })
 end
+
+-- Opt in to the nested-scope background cycle and the project #define indexer
+-- (lua/hh/scope.lua, lua/hh/macros.lua). These used to be bootstrapped by
+-- dofile-ing the whole hh colorscheme, which set ~400 highlight groups that
+-- this file then immediately overwrote.
+require("hh.scope").setup({ cycle_len = #scope_bgs })
+require("hh.macros").setup()
 
 return c
