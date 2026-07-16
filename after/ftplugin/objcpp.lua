@@ -1,46 +1,22 @@
 -- Reuse C ftplugin settings for Objective-C++
 dofile(vim.fn.stdpath("config") .. "/after/ftplugin/c.lua")
 
--- Override indentexpr: extend C version to also neutralize id<Protocol> angle brackets
--- that confuse cindent (it treats < > as operators, breaking indentation)
-local macros = { internal = true, global = true, local_persist = true, ["function"] = true }
+-- Override indentexpr: extend the C version to also neutralize id<Protocol>
+-- angle brackets that confuse cindent (it treats < > as operators, breaking
+-- indentation).
+--
+-- Only the line rewrite differs from C — the scan window comes from
+-- config.c_indent. This file used to carry its own full copy of the indentexpr,
+-- which is how it kept `for i = 1, lnum` (the O(file length) scan) long after
+-- c.lua had been fixed: `.m`/`.mm` still froze for ~2.7s on a 300-line `=`
+-- motion. Sharing the machinery is what stops that drift recurring.
+local c_indent = require('config.c_indent')
 
-local function objcpp_indentexpr()
-  local lnum = vim.v.lnum
-  local saved = {}
-
-  for i = 1, lnum do
-    local line = vim.fn.getline(i)
-    local new_line = line
-    local changed = false
-
-    -- Replace custom storage-class macros with 'static'
-    local ws, word, rest = new_line:match('^(%s*)(%w+)(.*)')
-    if word and macros[word] then
-      new_line = ws .. 'static' .. rest
-      changed = true
-    end
-
-    -- Replace id<Protocol> with plain typedef so cindent doesn't choke on angle brackets
-    if new_line:find('id<') then
-      new_line = new_line:gsub('id<([%w_]+)>', 'id_%1')
-      changed = true
-    end
-
-    if changed then
-      saved[i] = line
-      vim.fn.setline(i, new_line)
-    end
+_G._objcpp_indentexpr = c_indent.make_indentexpr(function(line)
+  line = c_indent.sub_macros(line)
+  if line:find('id<') then
+    line = line:gsub('id<([%w_]+)>', 'id_%1')
   end
-
-  local result = vim.fn.cindent(lnum)
-
-  for i, orig in pairs(saved) do
-    vim.fn.setline(i, orig)
-  end
-
-  return result
-end
-
-_G._objcpp_indentexpr = objcpp_indentexpr
+  return line
+end)
 vim.bo.indentexpr = 'v:lua._objcpp_indentexpr()'

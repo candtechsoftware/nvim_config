@@ -97,7 +97,14 @@ function M.new_note(name)
     local notes_dir = validate_notes_dir()
     if not notes_dir then return end
 
-    name = name or vim.fn.input("Note name: ")
+    -- `""`, not just nil, has to trigger the prompt: :NotesNew is declared
+    -- `nargs = "?"`, and a bare `:NotesNew` passes `cmd.args == ""` rather than
+    -- nil. `name or input(...)` kept the empty string, fell straight through the
+    -- guard below, and the command silently did nothing. (<leader>nn worked,
+    -- since a keymap callback passes no argument at all.)
+    if name == nil or name == "" then
+        name = vim.fn.input("Note name: ")
+    end
     if name == "" then return end
 
     -- Sanitize filename and add extension if missing

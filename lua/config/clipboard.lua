@@ -11,13 +11,17 @@ local ClipboardWatcher = {
 }
 
 -- Push a new value into history (dedupe consecutive and skip empty)
+--
+-- No "strip the `%3d: ` history-display prefix" pass here any more. It was
+-- meant to stop a yank *from* the ClipboardHistory buffer re-entering history
+-- with its line number attached — but the <CR> handler below reads
+-- `history[row]` directly, never the rendered line, so nothing could reach
+-- push() in that form. What the strip did do was silently eat the leading
+-- `42: ` from any legitimate yank that happened to start with digits and a
+-- colon: `grep -n` output, compiler errors, log lines. Routine content in a
+-- quickfix-driven config, corrupted on the way into the history.
 function ClipboardWatcher:push(text)
   if not text or text == '' then return end
-  -- Strip all clipboard history prefix patterns (e.g., "  1: " or "1:   1: ")
-  while text:match('^%s*%d+:%s*') do
-    text = text:gsub('^%s*%d+:%s*', '')
-  end
-  if text == '' then return end
   if self.history[1] == text then return end
   table.insert(self.history, 1, text)
   if #self.history > self.max_items then
@@ -31,10 +35,7 @@ function ClipboardWatcher:sync()
   if current ~= self.last_clip then
     self.last_clip = current
     vim.fn.setreg(self.target_reg, current)
-    -- Skip if this looks like a clipboard history display line
-    if not current:match('^%s*%d+:%s') then
-      self:push(current)
-    end
+    self:push(current)
   end
 end
 
@@ -66,6 +67,11 @@ local function setup_yank_tracking()
       if event.operator ~= 'y' then return end
       local text = table.concat(event.regcontents, '\n')
       ClipboardWatcher:push(text)
+      -- Keep the mirror register in step with the yank. Without this, setreg
+      -- only ever ran from sync() (FocusGained) and the history picker, so
+      -- after any in-Neovim yank `<leader>ca` pasted whatever the clipboard
+      -- held at the last focus change — stale, and silently so.
+      vim.fn.setreg(ClipboardWatcher.target_reg, text)
       -- With unnamedplus this yank also went to the system clipboard; record
       -- it so the FocusGained sync sees no change and does not double-push.
       if event.regname == '' or event.regname == '+' or event.regname == '*' then

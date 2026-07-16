@@ -168,7 +168,7 @@ end
 
 -- Parsed ctags member index, keyed by the project tags file + its mtime so it
 -- is rebuilt only after a regenerate (debounced save in lua/config/ctags.lua).
-local tag_index_cache = { path = nil, mtime = nil, index = nil }
+local tag_index_cache = { path = nil, stamp = nil, index = nil }
 
 ---First existing tags file on &tags (the project cache file is listed first).
 ---@return string?
@@ -177,6 +177,20 @@ local function project_tags_file()
     if vim.uv.fs_stat(t) then return t end
   end
 end
+
+-- The ctags kind letters this index actually uses, keyed by byte value so the
+-- hot loop in parse_tags can test one byte instead of building a substring.
+--   m member  e enumerator  t typedef  s struct  u union  g enum
+-- Everything else in the file (f function, v variable, d macro, p prototype,
+-- x extern, l local, ...) is skipped before any pattern matching runs.
+local WANT_KIND = {
+  [string.byte('m')] = true,
+  [string.byte('e')] = true,
+  [string.byte('t')] = true,
+  [string.byte('s')] = true,
+  [string.byte('u')] = true,
+  [string.byte('g')] = true,
+}
 
 ---Pull a `struct:`/`union:`/`enum:`/`class:` scope token out of a tag field.
 ---@param field string
@@ -198,35 +212,47 @@ local function parse_tags(path)
   if not f then return { members = members, typedefs = typedefs, aggregates = aggregates } end
   for line in f:lines() do
     if line:byte(1) ~= 33 then -- skip "!_TAG_..." pseudo-tags
-      local name = line:match('^([^\t]+)\t')
-      -- Fields follow the `;"` that terminates the search command; the first
-      -- field is the kind letter, the rest are key:value (scope, typeref, ...).
-      local fields = line:match(';"\t(.*)$')
-      if name and fields then
-        local kind, scope, typeref
-        local i = 0
-        for fld in (fields .. '\t'):gmatch('([^\t]*)\t') do
-          i = i + 1
-          if i == 1 then
-            kind = fld
-          else
-            scope = scope_token(fld) or scope
-            typeref = fld:match('^typeref:(.+)$') or typeref
+      -- Reject uninteresting lines as cheaply as possible, BEFORE running any
+      -- pattern match. About half of a C tags file is kinds this index does not
+      -- use (f, v, d, p, x, l...), and the old code ran `^([^\t]+)\t` plus a
+      -- gmatch field loop over every one of them. On a 6.7MB/35k-line file that
+      -- was 77ms; rejecting on the kind letter first brings it to 33ms for a
+      -- byte-identical index.
+      --
+      -- `find(..., true)` is a plain substring search (no regex engine). `sep`
+      -- is the index of the ';' in the `;"` that terminates the search command,
+      -- so: ';'=sep, '"'=sep+1, '\t'=sep+2, kind letter=sep+3.
+      local sep = line:find(';"\t', 1, true)
+      if sep and WANT_KIND[line:byte(sep + 3)] then
+        local kind = line:sub(sep + 3, sep + 3)
+        local name = line:match('^([^\t]+)\t')
+        -- Fields follow the `;"`; the first is the kind letter, the rest are
+        -- key:value (scope, typeref, ...).
+        local fields = line:sub(sep + 3)
+        if name then
+          local scope, typeref
+          local i = 0
+          for fld in (fields .. '\t'):gmatch('([^\t]*)\t') do
+            i = i + 1
+            if i > 1 then
+              scope = scope_token(fld) or scope
+              typeref = fld:match('^typeref:(.+)$') or typeref
+            end
           end
-        end
-        if (kind == 'm' or kind == 'e') and scope then
-          local list = members[scope]
-          if not list then list = {}; members[scope] = list end
-          list[#list + 1] = { name = name, type = typeref }
-        elseif kind == 't' and typeref then
-          local tr = scope_token(typeref)
-          if tr then typedefs[name] = tr end
-        elseif kind == 's' then
-          aggregates[name] = 'struct:' .. name
-        elseif kind == 'u' then
-          aggregates[name] = 'union:' .. name
-        elseif kind == 'g' then
-          aggregates[name] = 'enum:' .. name
+          if (kind == 'm' or kind == 'e') and scope then
+            local list = members[scope]
+            if not list then list = {}; members[scope] = list end
+            list[#list + 1] = { name = name, type = typeref }
+          elseif kind == 't' and typeref then
+            local tr = scope_token(typeref)
+            if tr then typedefs[name] = tr end
+          elseif kind == 's' then
+            aggregates[name] = 'struct:' .. name
+          elseif kind == 'u' then
+            aggregates[name] = 'union:' .. name
+          elseif kind == 'g' then
+            aggregates[name] = 'enum:' .. name
+          end
         end
       end
     end
@@ -242,12 +268,16 @@ local function get_tag_index()
   if not path then return end
   local st = vim.uv.fs_stat(path)
   if not st then return end
-  local mtime = st.mtime.sec
-  if tag_index_cache.path == path and tag_index_cache.mtime == mtime then
+  -- Key on nanoseconds AND size, not just mtime.sec. At one-second granularity
+  -- a regenerate landing in the same wall-clock second as the previous stat
+  -- looked unchanged, and the stale index was served with no way to invalidate
+  -- it short of another save.
+  local stamp = ('%d.%d.%d'):format(st.mtime.sec, st.mtime.nsec, st.size)
+  if tag_index_cache.path == path and tag_index_cache.stamp == stamp then
     return tag_index_cache.index
   end
   local index = parse_tags(path)
-  tag_index_cache = { path = path, mtime = mtime, index = index }
+  tag_index_cache = { path = path, stamp = stamp, index = index }
   return index
 end
 
@@ -305,8 +335,95 @@ local function type_name(type_node)
   return vim.treesitter.get_node_text(type_node, 0)
 end
 
+-- The project's storage-class macros. tree-sitter has no idea these are
+-- storage classes, so it mis-parses any declaration starting with one and the
+-- `type:`/`declarator:` fields cannot be trusted — see `decl_binds` below.
+-- (after/ftplugin/c.lua plays the same trick for cindent, and
+-- after/queries/c/highlights.scm has its own ERROR-node workaround for
+-- highlighting. This is the completion path's version.)
+local STORAGE_MACROS = {
+  internal = true, global = true, local_persist = true, ['function'] = true,
+}
+
+---Does `node` bind `var`, and if so to what type?
+---
+---Straightforward for a well-formed declaration: read the `type:` and
+---`declarator:` fields. But `global Foo bar;` parses as
+---  (declaration type: (type_identifier)"global" (ERROR (identifier)"Foo")
+---                declarator: (identifier)"bar")
+---— the macro is taken as the type and the real type is stranded in an ERROR
+---node. There is no stable rule for digging it back out, because the recovery
+---shape is not even consistent: for `internal Widget w;` the parser puts the
+---TYPE in `declarator:` and the NAME in the ERROR node, exactly the other way
+---round. So instead of pattern-matching error recovery, rewrite the macro to
+---`static` (which tree-sitter parses correctly, as a real storage_class_specifier)
+---and re-parse the one declaration in isolation.
+---@param node TSNode
+---@param buf integer
+---@param var string
+---@return string?  type name, if this declaration binds `var`
+local function decl_binds(node, buf, var)
+  local tnode = node:field('type')[1]
+  if not tnode then return end
+
+  local macro = vim.treesitter.get_node_text(tnode, buf)
+  if not STORAGE_MACROS[macro] then
+    -- Normal declaration: trust the fields.
+    for _, dnode in ipairs(node:field('declarator')) do
+      if declared_name(dnode) == var then return type_name(tnode) end
+    end
+    return
+  end
+
+  local text = vim.treesitter.get_node_text(node, buf)
+  local fixed = text:gsub('^(%s*)' .. vim.pesc(macro) .. '%f[%W]', '%1static', 1)
+  if fixed == text then return end
+
+  local ok, sparser = pcall(vim.treesitter.get_string_parser, fixed, 'c')
+  if not ok or not sparser then return end
+  local stree = (sparser:parse() or {})[1]
+  if not stree then return end
+
+  -- Find the declaration in the re-parsed fragment and read its real fields.
+  local found
+  local function walk(n)
+    if found then return end
+    if n:type() == 'declaration' or n:type() == 'parameter_declaration' then
+      found = n
+      return
+    end
+    for c in n:iter_children() do walk(c) end
+  end
+  walk(stree:root())
+  if not found then return end
+
+  local ftype = found:field('type')[1]
+  if not ftype then return end
+  for _, dnode in ipairs(found:field('declarator')) do
+    -- declared_name/type_name read text via buffer 0; on this detached tree the
+    -- nodes belong to `fixed`, so pull the text from the string instead.
+    local name = vim.treesitter.get_node_text(dnode, fixed)
+    -- peel pointer/array declarators down to the bare name
+    name = name:match('([%a_][%w_]*)%s*[%[%(]?') or name
+    if name == var then
+      local tn = vim.treesitter.get_node_text(ftype, fixed)
+      local nm = ftype:field('name')[1]
+      if nm then tn = vim.treesitter.get_node_text(nm, fixed) end
+      return tn
+    end
+  end
+end
+
 ---Type name of the variable `var`, via the nearest declaration at or above the
----cursor that binds it (a local, parameter, or file-scope variable).
+---cursor that binds it, preferring one inside the cursor's enclosing function
+---over a file-scope one.
+---
+---The scope preference matters in a unity build: this used to take the nearest
+---declaration above the cursor anywhere in the file, so in a 17k-line file
+---where `arena`/`ctx`/`state` are re-declared in every function, a name that is
+---NOT declared in the current function silently resolved to some unrelated
+---function's local and offered that type's members. Wrong-but-confident is
+---worse than empty.
 ---@param buf integer
 ---@param var string
 ---@param crow integer  1-based cursor row
@@ -319,17 +436,45 @@ local function resolve_var_type(buf, var, crow)
   local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), DECL_QUERY)
   if not ok_q or not query then return end
 
-  local best, best_row = nil, -1
+  -- The function (if any) the cursor sits in.
+  local cursor_scope = vim.treesitter.get_node({ bufnr = buf, pos = { crow - 1, 0 } })
+  while cursor_scope and not SCOPE_NODES[cursor_scope:type()] do
+    cursor_scope = cursor_scope:parent()
+  end
+
+  ---The function enclosing `node`, or nil if it is at file scope.
+  ---@param node TSNode
+  ---@return TSNode?
+  local function enclosing_fn(node)
+    local n = node:parent()
+    while n and not SCOPE_NODES[n:type()] do
+      n = n:parent()
+    end
+    return n
+  end
+
+  local best, best_row, best_local = nil, -1, false
   for _, node in query:iter_captures(tree:root(), buf) do
     local srow = node:range()
-    if srow <= crow - 1 and srow > best_row then
-      local tnode = node:field('type')[1]
-      if tnode then
-        for _, dnode in ipairs(node:field('declarator')) do
-          if declared_name(dnode) == var then
-            local tn = type_name(tnode)
-            if tn then best, best_row = tn, srow end
-            break
+    if srow <= crow - 1 then
+      local fn = enclosing_fn(node)
+      -- Only two kinds of declaration can bind the name the cursor sees: one
+      -- in the cursor's own function, or one at file scope. A declaration
+      -- inside a DIFFERENT function is invisible here, and must be ignored
+      -- rather than used as a fallback — that is what made `arena`/`ctx`/
+      -- `state` resolve to an unrelated function's type and complete members
+      -- that do not exist on the variable in front of you. No answer is the
+      -- correct answer for an undeclared name.
+      local visible = (fn == nil) or (cursor_scope ~= nil and fn:equal(cursor_scope))
+      if visible then
+        local is_local = fn ~= nil
+        -- A local shadows a file-scope declaration; among equals, nearest wins.
+        local better = (is_local and not best_local)
+          or (is_local == best_local and srow > best_row)
+        if better then
+          local tn = decl_binds(node, buf, var)
+          if tn then
+            best, best_row, best_local = tn, srow, is_local
           end
         end
       end

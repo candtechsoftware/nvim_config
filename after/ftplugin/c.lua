@@ -38,32 +38,11 @@ vim.bo.complete = 't,.'
 -- Custom indentexpr: temporarily replace custom storage-class macros
 -- (internal, global, local_persist) with 'static' so cindent understands them.
 -- Combined with cinoptions=t0 for "return type on its own line" style.
-local macros = { internal = true, global = true, local_persist = true, ["function"] = true }
+-- The scan window and rewrite/restore dance live in config.c_indent, shared
+-- with the Obj-C++ ftplugin.
+local c_indent = require('config.c_indent')
 
-local function c_indentexpr()
-  local lnum = vim.v.lnum
-  local saved = {}
-
-  local start = 1
-  for i = start, lnum do
-    local line = vim.fn.getline(i)
-    local ws, word, rest = line:match('^(%s*)(%w+)(.*)')
-    if word and macros[word] then
-      saved[i] = line
-      vim.fn.setline(i, ws .. 'static' .. rest)
-    end
-  end
-
-  local result = vim.fn.cindent(lnum)
-
-  for i, orig in pairs(saved) do
-    vim.fn.setline(i, orig)
-  end
-
-  return result
-end
-
-_G._c_indentexpr = c_indentexpr
+_G._c_indentexpr = c_indent.make_indentexpr(c_indent.sub_macros)
 vim.bo.indentexpr = 'v:lua._c_indentexpr()'
 vim.bo.smartindent = false
 

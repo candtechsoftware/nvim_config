@@ -187,6 +187,11 @@ function M.setup()
   hl(0, "PmenuSel", { fg = colors.at_highlight, bg = colors.list_item_active })
   hl(0, "PmenuSbar", { bg = colors.bar_bg })
   hl(0, "PmenuThumb", { bg = colors.mark })
+  -- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+  -- need an explicit fg rather than the bold-only default. pop1, not
+  -- at_highlight: PmenuSel already uses at_highlight as its fg.
+  hl(0, "PmenuMatch", { fg = colors.pop1 })
+  hl(0, "PmenuMatchSel", { fg = colors.pop1 })
 
   -- Messages
   hl(0, "MsgArea", { fg = colors.text_default })

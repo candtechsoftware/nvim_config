@@ -104,6 +104,11 @@ hl(0, "Pmenu",        { fg = c.fg, bg = c.back2 })
 hl(0, "PmenuSel",     { fg = c.blue, bg = c.sel })
 hl(0, "PmenuSbar",    { bg = c.bar })
 hl(0, "PmenuThumb",   { bg = c.fg_dim })
+-- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+-- need an explicit fg rather than the bold-only default. gold, not blue:
+-- PmenuSel already uses blue as its fg.
+hl(0, "PmenuMatch",   { fg = c.gold })
+hl(0, "PmenuMatchSel", { fg = c.gold })
 hl(0, "WildMenu",     { fg = c.blue, bg = c.sel })
 hl(0, "QuickFixLine", { bg = c.sel })
 

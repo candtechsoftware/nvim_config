@@ -50,6 +50,25 @@ local c = {
   violet   = "#ae81ff",
 }
 
+-- Cursor ------------------------------------------------------------------
+-- 'guicursor' is a global option and the other schemes point it at these
+-- per-mode groups. Without this block, switching to naysayer kept whatever
+-- guicursor the previous scheme set while the `hi clear` above wiped the
+-- Cursor* groups it names — leaving a plain inverted cursor with no mode
+-- indication. Every scheme that participates in guicursor has to define them.
+hl(0, "CursorNormal",  { fg = c.back, bg = c.comment })
+hl(0, "CursorInsert",  { fg = c.back, bg = c.warning })
+hl(0, "CursorVisual",  { fg = c.back, bg = c.yellow })
+hl(0, "CursorReplace", { fg = c.back, bg = c.error })
+hl(0, "CursorCommand", { fg = c.back, bg = c.blue })
+vim.opt.guicursor = {
+  "n-c:block-CursorNormal",      -- normal / command -> green block
+  "i-ci-ve:block-CursorInsert",  -- insert -> amber block
+  "v-V:block-CursorVisual",      -- visual -> yellow block
+  "r-cr:block-CursorReplace",    -- replace -> red block
+  "o:block-CursorNormal",        -- operator-pending -> green block
+}
+
 -- Core UI -----------------------------------------------------------------
 hl(0, "Normal",       { fg = c.fg, bg = c.back })
 hl(0, "NormalNC",     { fg = c.fg, bg = c.back })
@@ -94,6 +113,10 @@ hl(0, "Pmenu",        { fg = c.fg, bg = c.float })
 hl(0, "PmenuSel",     { fg = c.white, bg = c.sel_soft })
 hl(0, "PmenuSbar",    { bg = c.cur_line })
 hl(0, "PmenuThumb",   { bg = c.line_fg })
+-- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+-- need an explicit fg rather than the bold-only default.
+hl(0, "PmenuMatch",   { fg = c.warning })
+hl(0, "PmenuMatchSel", { fg = c.warning })
 hl(0, "WildMenu",     { fg = c.white, bg = c.sel_soft })
 hl(0, "QuickFixLine", { bg = c.cur_line })
 

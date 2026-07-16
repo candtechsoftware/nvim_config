@@ -117,6 +117,10 @@ hl(0, "Pmenu", { fg = c.text, bg = c.panel })
 hl(0, "PmenuSel", { fg = c.text, bg = c.list_cursor })
 hl(0, "PmenuSbar", { bg = c.panel_deep })
 hl(0, "PmenuThumb", { bg = c.ui_neutral })
+-- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+-- need an explicit fg rather than the bold-only default.
+hl(0, "PmenuMatch", { fg = c.highlight })
+hl(0, "PmenuMatchSel", { fg = c.highlight })
 hl(0, "WildMenu", { fg = c.text, bg = c.list_cursor })
 hl(0, "QuickFixLine", { bg = c.list_hover })
 

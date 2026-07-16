@@ -129,6 +129,12 @@ hl(0, "Pmenu", { fg = c.text, bg = c.list_hover })
 hl(0, "PmenuSel", { fg = c.at_highlight, bg = c.list_active })
 hl(0, "PmenuSbar", { bg = c.bar })
 hl(0, "PmenuThumb", { bg = c.mark })
+-- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+-- need an explicit fg rather than the bold-only default. pop1, not
+-- at_highlight: PmenuSel already uses at_highlight as its fg, so the match
+-- would be invisible on the selected row.
+hl(0, "PmenuMatch", { fg = c.pop1 })
+hl(0, "PmenuMatchSel", { fg = c.pop1 })
 hl(0, "WildMenu", { fg = c.at_highlight, bg = c.list_active })
 hl(0, "QuickFixLine", { bg = c.list_active })
 

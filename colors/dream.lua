@@ -115,6 +115,23 @@ function M.setup()
   hl(0, "FloatTitle",   { fg = p.yellow_cooler, bg = p.bg_popup, bold = true })
   hl(0, "EndOfBuffer",  { fg = p.bg_main })
   hl(0, "Cursor",       { fg = p.bg_main, bg = p.cursor })
+
+  -- Per-mode cursor. 'guicursor' is global and the other schemes point it at
+  -- these groups; without them, switching to dream kept the previous scheme's
+  -- guicursor while the `hi clear` above wiped the Cursor* groups it names, so
+  -- the cursor silently lost its mode colors. See naysayer.lua.
+  hl(0, "CursorNormal",  { fg = p.bg_main, bg = p.cursor })
+  hl(0, "CursorInsert",  { fg = p.bg_main, bg = p.green_cooler })
+  hl(0, "CursorVisual",  { fg = p.bg_main, bg = p.yellow_warmer })
+  hl(0, "CursorReplace", { fg = p.bg_main, bg = p.red })
+  hl(0, "CursorCommand", { fg = p.bg_main, bg = p.fg_alt })
+  vim.opt.guicursor = {
+    "n-c:block-CursorNormal",
+    "i-ci-ve:block-CursorInsert",
+    "v-V:block-CursorVisual",
+    "r-cr:block-CursorReplace",
+    "o:block-CursorNormal",
+  }
   hl(0, "CursorLine",   { bg = p.bg_hl_line })
   hl(0, "CursorColumn", { bg = p.bg_hl_line })
   hl(0, "ColorColumn",  { bg = p.bg_dim })
@@ -151,6 +168,10 @@ function M.setup()
   hl(0, "PmenuSel",     { fg = p.fg_main, bg = p.bg_completion, bold = true })
   hl(0, "PmenuSbar",    { bg = p.bg_dim })
   hl(0, "PmenuThumb",   { bg = p.bg_active })
+  -- Fuzzy-matched chars in the completion menu; see handmade.lua for why these
+  -- need an explicit fg rather than the bold-only default.
+  hl(0, "PmenuMatch",   { fg = p.fg_changed })
+  hl(0, "PmenuMatchSel", { fg = p.fg_changed })
 
   -- Messages
   hl(0, "ModeMsg",      { fg = p.cyan })

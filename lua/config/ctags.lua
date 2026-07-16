@@ -87,18 +87,31 @@ end
 -- is never silently dropped.
 local generating = {}
 local pending = {}
+-- One "ctags is not installed" message per session, not one per save.
+local warned_missing = false
 
 ---Regenerate a project's cache tags file in the background.
+---
+---Failures are reported regardless of `notify`; only the success message is
+---opt-in. Previously the open-time generate passed notify=false, so a missing
+---`ctags` binary or a nonzero exit produced no tags file, no message, and — via
+---the fs_stat guard on BufWritePost — no retry on any later save. The project
+---silently had no member completion and no `gd` for the whole session, with
+---nothing on screen to say why.
 ---@param root string  project root to scan
----@param notify boolean  report success/failure via vim.notify
+---@param notify boolean  report *success* via vim.notify (errors always report)
 local function generate(root, notify)
   if generating[root] then
     pending[root] = true
     return
   end
   if vim.fn.executable("ctags") == 0 then
-    if notify then
-      vim.notify("ctags: executable not found in PATH", vim.log.levels.ERROR)
+    -- Once per session: this is now reachable from every save, and a message
+    -- per `:w` would be worse than the silence it replaces.
+    if not warned_missing then
+      warned_missing = true
+      vim.notify("ctags: executable not found in PATH — no tags, so `gd` and member completion are unavailable",
+        vim.log.levels.ERROR)
     end
     return
   end
@@ -115,15 +128,19 @@ local function generate(root, notify)
   }
   generating[root] = true
   vim.system(cmd, { text = true }, function(obj)
-    generating[root] = nil
     vim.schedule(function()
-      if notify then
-        if obj.code == 0 then
+      -- Cleared inside the schedule, together with the `pending` handoff.
+      -- Clearing it in the libuv callback instead left a window where a save
+      -- saw generating == nil, started its own run, and then the scheduled
+      -- block fired the queued one too — two full-tree scans for one save.
+      generating[root] = nil
+      if obj.code == 0 then
+        if notify then
           vim.notify("ctags: regenerated " .. tags, vim.log.levels.INFO)
-        else
-          local msg = (obj.stderr ~= "" and obj.stderr) or ("exit " .. tostring(obj.code))
-          vim.notify("ctags failed: " .. msg, vim.log.levels.ERROR)
         end
+      else
+        local msg = (obj.stderr ~= "" and obj.stderr) or ("exit " .. tostring(obj.code))
+        vim.notify("ctags failed: " .. msg, vim.log.levels.ERROR)
       end
       -- A save landed while this run was in flight — index it now.
       if pending[root] then
@@ -166,15 +183,19 @@ function M.setup()
 
   -- Debounced background refresh on save: one reusable timer *per project
   -- root*, re-armed on each save. A single shared timer would let a save in
-  -- project B cancel the pending refresh for project A. The fs_stat guard
-  -- skips projects with no tags file yet (their first generate happens on
-  -- open, above).
+  -- project B cancel the pending refresh for project A.
+  --
+  -- No fs_stat guard here any more. It was meant to skip projects whose first
+  -- generate happens on open — but it also meant that if that first generate
+  -- ever failed, `tags` never existed, so every subsequent save returned right
+  -- here and the project could never recover. A missing tags file is now
+  -- exactly the case that most needs a save to retry.
   local timers = {}
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = vim.api.nvim_create_augroup("ctags_auto_refresh", { clear = true }),
     callback = function(args)
-      local root, tags = resolve(args.buf)
-      if not root or not vim.uv.fs_stat(tags) then return end
+      local root = resolve(args.buf)
+      if not root then return end
       if clangd_owns(args.buf) then return end
       local timer = timers[root]
       if not timer then

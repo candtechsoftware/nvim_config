@@ -27,8 +27,14 @@ local C_FT = { c = true, cpp = true, objc = true, objcpp = true }
 
 -- [root] = { "MACRO_NAME", ... }
 local macro_cache = {}
--- [root] = true while a scan is in flight (so N windows do not spawn N scans)
-local scanning = {}
+-- [root] = { done_cb, ... } while a scan is in flight, so N windows still only
+-- spawn ONE scan but every one of them gets repainted when it lands. This was a
+-- bare `true`: callers 2..N were turned away and their `done` dropped on the
+-- floor, and since add_matches() had already filled match_ids[winid] with the
+-- static patterns, the `if match_ids[winid] then return end` guard meant they
+-- never retried either. The second window of a `:vsp` permanently showed no
+-- project #defines.
+local scan_waiters = {}
 -- [winid] = { match id, ... }
 local match_ids = {}
 
@@ -87,15 +93,24 @@ local function scan_macros(root, done)
     done(cached)
     return
   end
-  if scanning[root] then return end -- a scan is already running; its callback repaints
-  scanning[root] = true
+  -- A scan is already in flight for this root: queue up behind it rather than
+  -- dropping this caller, and rather than spawning a second rg.
+  local waiting = scan_waiters[root]
+  if waiting then
+    waiting[#waiting + 1] = done
+    return
+  end
+  scan_waiters[root] = { done }
 
   vim.system(scan_cmd(root), { text = true }, vim.schedule_wrap(function(res)
-    scanning[root] = nil
+    local callbacks = scan_waiters[root] or {}
+    scan_waiters[root] = nil
     -- rg exits 1 when it finds nothing; that is a legitimate empty result.
     local names = parse_defines(res.stdout or "")
     macro_cache[root] = names
-    done(names)
+    for _, cb in ipairs(callbacks) do
+      cb(names)
+    end
   end))
 end
 

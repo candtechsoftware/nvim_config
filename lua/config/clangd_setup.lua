@@ -436,10 +436,13 @@ local function render(model)
     '    - -Wno-error=incompatible-pointer-types',
     '    - -Wno-incompatible-pointer-types',
   })
+  -- No `Remove:` block here. It strips flags from the *compile command*, and
+  -- there is no compile_commands.json or compile_flags.txt in these projects —
+  -- that absence is this whole file's premise. clangd falls back to `clang --
+  -- <file>`, which carries neither -Wall nor -Werror, so removing them was a
+  -- no-op that read like a real setting. `-w` above is what actually silences
+  -- warnings.
   vim.list_extend(out, {
-    '  Remove:',
-    '    - -Werror*',
-    '    - -Wall',
     'Diagnostics:',
     '  UnusedIncludes: None',
     '  MissingIncludes: None',

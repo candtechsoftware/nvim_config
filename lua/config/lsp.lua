@@ -73,52 +73,38 @@ local function enable_targets(targets)
   end
 end
 
----Get LSP capabilities (no snippets, full completion support)
+---Get LSP capabilities: the deltas from Neovim's defaults, and nothing else.
+---
+---This used to assign `caps.textDocument.completion = { ... }` wholesale, ~46
+---lines restating what `make_client_capabilities()` already returns
+---(contextSupport, deprecatedSupport, labelDetailsSupport, insertReplaceSupport,
+---preselectSupport, tagSupport, parameterInformation...). Those were no-ops:
+---`Client:_init` deep-merges our table over the defaults, so anything identical
+---to the default, and anything omitted, ends up the same either way.
+---
+---What was NOT a no-op: `tbl_deep_extend` REPLACES lists rather than merging
+---them, so restating `resolveSupport.properties` without `'command'` (which the
+---default includes) actually dropped it, weakening lazy resolution of
+---completion-item commands — ts_ls auto-imports in particular. Mutating the
+---defaults in place keeps every list intact and leaves only the three real
+---intentions: no snippets, and plaintext preferred over markdown.
 ---@return table
 local function get_capabilities()
   local caps = vim.lsp.protocol.make_client_capabilities()
+  local td = caps.textDocument
 
-  -- Completion capabilities (no snippets)
-  caps.textDocument.completion = {
-    completionItem = {
-      snippetSupport = false,
-      documentationFormat = { 'plaintext', 'markdown' },
-      resolveSupport = {
-        properties = {
-          'detail',
-          'documentation',
-          'additionalTextEdits',
-        },
-      },
-      deprecatedSupport = true,
-      labelDetailsSupport = true,
-      insertReplaceSupport = true,
-      preselectSupport = true,
-      tagSupport = {
-        valueSet = { 1 },  -- Deprecated tag
-      },
-    },
-    contextSupport = true,
-    dynamicRegistration = false,
-  }
+  td.completion.completionItem.snippetSupport = false
+  td.completion.completionItem.documentationFormat = { 'plaintext', 'markdown' }
+  td.signatureHelp.signatureInformation.documentationFormat = { 'plaintext', 'markdown' }
+  td.hover.contentFormat = { 'plaintext', 'markdown' }
 
-  -- Signature help capabilities
-  caps.textDocument.signatureHelp = {
-    signatureInformation = {
-      documentationFormat = { 'plaintext', 'markdown' },
-      parameterInformation = {
-        labelOffsetSupport = true,
-      },
-      activeParameterSupport = true,
-    },
-    dynamicRegistration = false,
-  }
-
-  -- Hover capabilities
-  caps.textDocument.hover = {
-    contentFormat = { 'plaintext', 'markdown' },
-    dynamicRegistration = false,
-  }
+  -- Kept only to preserve the previous behavior exactly: the old wholesale
+  -- assignment set this, and the default is `true`. Unlike completion's and
+  -- signatureHelp's (which are false by default anyway), this one is a real
+  -- deviation. Nothing here records why it was wanted, so it stays rather than
+  -- get flipped as a side effect of a cleanup. Safe to drop if hover should
+  -- follow the default.
+  td.hover.dynamicRegistration = false
 
   return caps
 end
@@ -274,14 +260,44 @@ function M.setup()
   patch_completion_concat_bug()
   setup_diagnostics()
 
-  -- Configure defaults for ALL LSP servers
+  -- Configure defaults for ALL LSP servers.
+  -- No `root_markers` here: config resolution deep-extends '*' with the
+  -- server's own table, and lists REPLACE rather than merge — so every
+  -- lsp/*.lua's root_markers won outright and a '.git' default here was never
+  -- read by anything. It also read as if it were *adding* to each server's
+  -- markers, which it was not. All nine servers set their own.
   vim.lsp.config('*', {
     capabilities = get_capabilities(),
-    root_markers = { '.git' },
   })
 
   -- Enable all servers (vim.lsp.enable handles missing executables gracefully)
   vim.lsp.enable(servers)
+
+  -- One augroup for every buffer-local LSP autocmd. This used to be
+  -- `nvim_create_augroup('lsp_insert_trigger_' .. bufnr)` per attach, which
+  -- leaked one augroup per buffer that ever had a client — buffer numbers only
+  -- go up, so a long session accumulated them forever. Scoping the *clear* to
+  -- the buffer (below) keeps the anti-stacking property when two clients attach
+  -- to one buffer (ts_ls + eslint) without the leak.
+  local buf_group = vim.api.nvim_create_augroup('lsp_buf_local', { clear = true })
+
+  ---Turn on LSP folding for every window currently displaying `bufnr`.
+  ---
+  ---`LspAttach` is fired with `data = { client_id }` only — there is no
+  ---`winid`. `vim.wo[args.data.winid or 0]` therefore always took the `or 0`
+  ---branch and configured the *current* window, whichever that happened to be
+  ---when the async `initialize` response landed. Splitting to another file
+  ---while clangd started up gave that window clangd's foldexpr. Folding is
+  ---window-local, so it also has to be re-applied when a new window shows the
+  ---buffer, hence the BufWinEnter hook.
+  ---@param bufnr integer
+  local function set_folding(bufnr)
+    for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
+      vim.wo[win].foldmethod = 'expr'
+      vim.wo[win].foldexpr = 'v:lua.vim.lsp.foldexpr()'
+      vim.wo[win].foldlevel = 99
+    end
+  end
 
   -- LspAttach: Set up keymaps and completion when LSP attaches
   vim.api.nvim_create_autocmd('LspAttach', {
@@ -295,18 +311,26 @@ function M.setup()
       local bufnr = args.buf
 
       -- LSP folding
-      vim.wo[args.data.winid or 0].foldmethod = 'expr'
-      vim.wo[args.data.winid or 0].foldexpr = 'v:lua.vim.lsp.foldexpr()'
-      vim.wo[args.data.winid or 0].foldlevel = 99
+      set_folding(bufnr)
 
       -- Native LSP completion — Tab-only, no auto-triggers
       -- (see lua/config/keymaps.lua).
       vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
 
+      -- Replace only THIS buffer's autocmds, leaving other buffers' intact.
+      vim.api.nvim_clear_autocmds({ group = buf_group, buffer = bufnr })
+
+      -- A window opened on this buffer later needs folding too.
+      vim.api.nvim_create_autocmd('BufWinEnter', {
+        buffer = bufnr,
+        group = buf_group,
+        callback = function() set_folding(bufnr) end,
+      })
+
       -- Signature help on '(' and ',' — one-line cmdline echo only, no popup.
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
-        group = vim.api.nvim_create_augroup('lsp_insert_trigger_' .. bufnr, { clear = true }),
+        group = buf_group,
         callback = function()
           local char = vim.v.char
           if char == '(' or char == ',' then

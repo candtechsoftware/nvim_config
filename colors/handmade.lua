@@ -117,6 +117,13 @@ hl(0, "Pmenu", { fg = c.text, bg = c.panel })
 hl(0, "PmenuSel", { fg = c.text, bg = c.list_cursor })
 hl(0, "PmenuSbar", { bg = c.panel_deep })
 hl(0, "PmenuThumb", { bg = c.list_cursor })
+-- The fuzzy-matched characters in the completion menu ('completeopt' has
+-- 'fuzzy'). Neovim's default for these is bold-only, which options.lua's
+-- strip_decorations then removes — leaving them invisible. Give them a real
+-- fg so the match still reads with no decoration. Only fg is set; the bg
+-- comes from Pmenu/PmenuSel underneath.
+hl(0, "PmenuMatch", { fg = c.highlight })
+hl(0, "PmenuMatchSel", { fg = c.highlight })
 hl(0, "WildMenu", { fg = c.text, bg = c.list_cursor })
 hl(0, "QuickFixLine", { bg = c.list_hover })
 

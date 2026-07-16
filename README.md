@@ -1,235 +1,112 @@
 # Neovim Configuration
 
-A minimal Neovim configuration with no plugin manager, using Vim's native plugin system.
+Neovim 0.12+ configuration. No plugin-manager plugin, no LSP installer, no
+completion plugin: it leans on what ships with Neovim — `vim.pack` for plugins,
+native LSP, native treesitter, and built-in completion driven by a custom
+`completefunc`.
 
-## Installation 
+Requires **Neovim 0.12 or newer** (`vim.pack`, `vim.lsp.config`,
+`vim.lsp.completion`).
+
+## Installation
 
 ```bash
 brew install neovim
+git clone git@github.com:candtechsoftware/nvim_config.git ~/.config/nvim
 ```
 
-Clone this repo:
-```bash
-git clone --recurse-submodules git@github.com:candtechsoftware/nvim_config.git ~/.config/nvim
-```
-
-Note: Use `--recurse-submodules` to automatically clone all plugin submodules.
+Start `nvim`. `vim.pack` installs the plugins listed in `init.lua` on first
+launch and writes the resolved commits to `nvim-pack-lock.json`.
+`telescope-fzf-native` is built automatically by the `PackChanged` hook in
+`init.lua`.
 
 ## Plugins
 
-This configuration uses Vim's native plugin system (`pack/plugins/start/`) with the following plugins as git submodules:
+Declared in `init.lua` via `vim.pack.add`:
 
-- **harpoon** - Quick file navigation
-- **jai.vim** - Jai language support 
-- **nvim-treesitter** - Syntax highlighting and parsing
-- **plenary.nvim** - Lua utility functions (dependency for other plugins)
-- **telescope-fzf-native.nvim** - Fast fuzzy finder for Telescope
-- **telescope.nvim** - Fuzzy finder and picker
+- **plenary.nvim** — dependency of telescope
+- **telescope.nvim** + **telescope-fzf-native.nvim** — fuzzy finding
+- **harpoon** (`harpoon2` branch) — file marks
+- **render-markdown.nvim** — markdown rendering
 
-## Updating Plugins
+Managing them:
 
-Since plugins are managed as git submodules, use these commands to update them:
+| Action | How |
+|---|---|
+| Update all | `:lua vim.pack.update()` |
+| Update one | `:lua vim.pack.update({ 'telescope.nvim' })` |
+| Remove | `:lua vim.pack.del({ 'name' })` |
+| List | `:lua vim.pack.get()` |
 
-### Update All Plugins
+## C / C++
 
-```bash
-git submodule update --remote
+These are unity-build codebases, and the setup is built around that.
+
+**clangd is opt-in.** It attaches only in a project where `:ClangdSetup` has
+generated a `.clangd` describing the unity build (see
+`lua/config/clangd_setup.lua`). There is no `compile_commands.json`.
+
+**Everywhere else, ctags + treesitter do the work:**
+
+- `lua/config/ctags.lua` generates a per-project tags file under
+  `~/.cache/nvim/tags/` (never in the project tree), refreshed in the background
+  on save. `:Ctags` regenerates on demand.
+- `gd` is a tag jump (`:tjump`); `<C-]>` / `<C-t>` work too.
+- `lua/config/c_complete.lua` drives `<Tab>` completion: treesitter resolves the
+  type before a `.` / `->`, then the tags index supplies that type's members.
+  Plain identifiers are ranked local → file → project.
+
+The custom storage-class macros (`internal`, `global`, `local_persist`,
+`function`) are understood by neither `cindent` nor tree-sitter, so both the
+indent path (`lua/config/c_indent.lua`) and the completion path rewrite them to
+`static` before parsing.
+
+Requires `ctags` (`brew install universal-ctags`) and `rg`.
+
+## Language servers
+
+Configured per-server in `lsp/*.lua`, enabled in `lua/config/lsp.lua`. Install
+whichever you need:
+
+| Language | Server | Install |
+|---|---|---|
+| C/C++ | clangd | `brew install llvm` |
+| Lua | lua_ls | [releases](https://github.com/LuaLS/lua-language-server/releases) |
+| Go | gopls | `go install golang.org/x/tools/gopls@latest` |
+| Rust | rust_analyzer | `rustup component add rust-analyzer` |
+| TypeScript | ts_ls, eslint | `npm i -g typescript-language-server typescript` |
+| Zig | zls | [releases](https://github.com/zigtools/zls/releases) |
+| Odin | ols | [ols](https://github.com/DanielGavin/ols) |
+| Jai | jails | [Jails](https://github.com/SogoCZE/Jails) |
+
+`:LspInfo` summarizes state for the current buffer, `:LspRestart` restarts, and
+`:checkhealth vim.lsp` is the deeper view.
+
+Other tools assumed present: **ripgrep** (telescope, project macro scanning).
+
+## Keymaps
+
+See [KEYMAPS.md](KEYMAPS.md) — it is the single source of truth, and it marks
+which mappings are Neovim 0.12 built-ins (`grn`, `grr`, `gra`, `gO`, `K`) rather
+than config.
+
+Leader is `<Space>`.
+
+## Layout
+
 ```
-
-### Update a Specific Plugin
-
-```bash
-git submodule update --remote pack/plugins/start/PLUGIN_NAME
+init.lua              plugin declarations + module wiring
+lua/config/           options, keymaps, lsp, ctags, completion, treesitter
+lua/hh/               scope shading + project macro highlighting (loaded BY the
+                      colorschemes, not by init.lua)
+lua/notes/            notes browser
+lua/launch/           run/build helpers
+lua/utils/            project root, makeprg detection
+lsp/                  per-server LSP configs
+colors/               8 colorschemes (`handmade` is the default)
+after/ftplugin/       filetype overrides (c, cpp, objc, objcpp, markdown)
+after/queries/        treesitter query overrides
+queries/jai/          Jai treesitter queries
+syntax/jai.vim        Jai syntax
+ghostty/              terminal config + shaders (not used by Neovim)
 ```
-
-For example:
-```bash
-git submodule update --remote pack/plugins/start/telescope.nvim
-```
-
-### Check Plugin Status
-
-```bash
-git submodule status
-```
-
-### After Updates
-
-After updating plugins, you may need to:
-
-1. **Restart Neovim** to load the updated plugins
-2. **Update Treesitter parsers** (if nvim-treesitter was updated):
-   ```vim
-   :TSUpdate
-   ```
-3. **Rebuild telescope-fzf-native** (if telescope-fzf-native was updated):
-   ```bash
-   cd pack/plugins/start/telescope-fzf-native.nvim
-   make
-   ```
-
-## Adding New Plugins
-
-To add a new plugin as a submodule:
-
-```bash
-git submodule add PLUGIN_GIT_URL pack/plugins/start/PLUGIN_NAME
-```
-
-## Removing Plugins
-
-To remove a plugin:
-
-```bash
-git submodule deinit pack/plugins/start/PLUGIN_NAME
-git rm pack/plugins/start/PLUGIN_NAME
-```
-
-## Installing Dependencies: Language Servers and Tools (macOS & Ubuntu)
-
-1. **Ripgrep** (required for searching)
-2. **Node.js** (required for some language servers)
-3. **TypeScript Language Server** (for JavaScript/TypeScript) [docs](https://github.com/typescript-language-server/typescript-language-server)
-4. **Rust Analyzer** (for Rust) [docs](https://rust-analyzer.github.io/manual.html#installation)
-5. **gopls** (for Go) [docs](https://pkg.go.dev/golang.org/x/tools/gopls)
-6. **zls** (for Zig) [docs](https://github.com/zigtools/zls) 
-
-### Install Ripgrep
-
-Ripgrep is a fast search tool used by many plugins like Telescope for searching file contents.
-
-#### macOS:
-```bash
-brew install ripgrep
-```
-
-#### Ubuntu:
-```bash
-sudo apt-get install ripgrep
-```
-
-## Updating Language Servers
-
-Your config includes several LSPs that can be updated independently:
-
-### TypeScript Language Server
-```bash
-npm update -g typescript-language-server
-npm update -g typescript
-```
-
-### Other LSPs
-- **Go**: `go install golang.org/x/tools/gopls@latest`
-- **Rust**: `rustup update` (rust-analyzer updates with rustup)
-- **Lua**: Download latest from [lua-language-server releases](https://github.com/LuaLS/lua-language-server/releases)
-- **C/C++**: `brew install llvm` (macOS) or install clang/clangd via package manager
-- **Zig**: `zig install zls` or download from [ZLS releases](https://github.com/zigtools/zls/releases)
-
-### Checking LSP Status
-- `:LspInfo` - Show active LSP clients
-- `:LspStop` - Stop LSP for current buffer
-- `:LspStart` - Start LSP for current buffer
-
-## Navigation Keybindings
-
-| Category | Key | Action |
-|----------|-----|--------|
-| **Page Movement** | `<C-d>` | Half page down (centered) |
-| | `<C-u>` | Half page up (centered) |
-| | `n` / `N` | Search next/prev (centered) |
-| **LSP Navigation** | `gd` | Go to definition |
-| | `gD` | Go to declaration |
-| | `gv` | Definition in vsplit |
-| | `<leader>vrr` | Find references |
-| | `<leader>gi` | Go to implementation |
-| | `<leader>vi` | Incoming calls |
-| **Diagnostics** | `[d` / `]d` | Prev/next diagnostic |
-| | `<leader>vd` | Show diagnostic float |
-| | `<leader>qf` | Diagnostics to quickfix |
-| **Telescope Symbols** | `<leader>ds` | Document symbols |
-| | `<leader>ws` | Workspace symbols |
-| | `<leader>vws` | Workspace symbol (LSP native) |
-| **Comments** | `[c` / `]c` | Prev/next comment |
-| **Quickfix** | `<C-k>` / `<C-j>` | Next/prev quickfix item |
-| | `<leader>k` / `<leader>j` | Next/prev location list |
-| **Harpoon** | `<leader>ha` | Add file to harpoon |
-| | `<C-h/t/n/s>` | Jump to slots 1-4 |
-| | `<C-e>` | Toggle harpoon menu |
-| **File Explorer** | `<leader>pv` | Open netrw |
-| **Tabs** | `<leader>t` | New tab |
-| | `<leader><Tab>` | Next tab |
-| | `<leader>tc` | Close tab |
-
-## Search Keybindings
-
-| Key | Action |
-|-----|--------|
-| `<leader>ff` | Find files |
-| `<leader>/` | Live grep (project root) |
-| `<leader>.` | Live grep (cwd) |
-| `<leader>gf` | Git files |
-| `<leader>pws` | Grep word under cursor |
-| `<leader>pWs` | Grep WORD under cursor |
-| `<leader>ps` | Grep visual selection |
-| `<leader>fg` | Live grep with file type filter (`search --- *.ext`) |
-
-## Git Keybindings
-
-| Key | Action |
-|-----|--------|
-| `<leader>gc` | Git commits |
-| `<leader>gb` | Git branches |
-| `<leader>gs` | Git status |
-
-## Editing Keybindings
-
-| Key | Action |
-|-----|--------|
-| `<leader>f` | Format file (jai-format for .jai, LSP for others) |
-| `<leader>s` | Search and replace word under cursor |
-| `<leader>y` | Copy to system clipboard |
-| `<leader>Y` | Copy line to system clipboard |
-| `<leader>d` | Delete without yanking |
-| `<leader>p` | Paste without yanking (visual mode) |
-| `<leader>pc` | Paste from system clipboard |
-| `J` | Join lines (cursor stays in place) |
-| `J` / `K` | Move selected lines down/up (visual mode) |
-
-## LSP Actions
-
-| Key | Action |
-|-----|--------|
-| `<leader>vca` | Code actions |
-| `<leader>vrn` | Rename symbol |
-| `K` | Hover documentation |
-| `<C-h>` | Signature help (insert mode) |
-
-## Completion
-
-| Key | Action |
-|-----|--------|
-| `<Tab>` / `<S-Tab>` | Navigate completion menu |
-| `<CR>` | Accept completion |
-
-## Notes
-
-| Key | Action |
-|-----|--------|
-| `<leader>n` | Open notes directory |
-| `<leader>ns` | Search notes content |
-| `<leader>nf` | Find notes by filename |
-| `<leader>nn` | Create new note |
-| `<leader>ng` | Notes git status |
-
-## Jai Language
-
-| Key | Action |
-|-----|--------|
-| `<leader>js` | Search Jai module symbols |
-| `<leader>jg` | Grep Jai modules |
-
-## Misc
-
-| Key | Action |
-|-----|--------|
-| `<leader><leader>` | Source current file |
