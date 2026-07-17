@@ -25,6 +25,15 @@ local SKIP_DIRS = {
 -- emitted. 'code' is 4coder convention; missing dirs cost one stat.
 local INCLUDE_BASES = { '', 'src', 'include', 'code' }
 
+-- Build-output roots searched as a LAST resort for generated headers. These
+-- live under SKIP_DIRS entries on purpose — build trees are full of artifacts
+-- that must stay out of the TU scan and the header index — but a code
+-- generator's output is a real dependency of the source: wayland-scanner emits
+-- xdg-shell-protocol.h into build/, and modules/linux/gfx/gfx_wayland.c
+-- includes it. Without this, that include resolves nowhere, no -I is emitted,
+-- and clangd reports a missing header for a file the real build compiles fine.
+local GENERATED_BASES = { 'build', 'out', 'gen', 'generated' }
+
 -- Path components that mark sources for OTHER platforms — those can never
 -- compile on the named host, so their diagnostics get fully silenced.
 local FOREIGN_PLATFORM = {
@@ -191,6 +200,37 @@ local function scan(root)
     return matches[1], matches[1]:sub(1, #matches[1] - #raw - 1)
   end
 
+  -- Generated-header index, built only if a normal resolve fails, and only
+  -- over the build roots that exist. Separate from header_index so build
+  -- output can never shadow a real project header of the same name.
+  local gen_index
+  local function generated_lookup(raw)
+    if not gen_index then
+      gen_index = {}
+      for _, b in ipairs(GENERATED_BASES) do
+        local dir = root .. '/' .. b
+        if vim.uv.fs_stat(dir) then
+          local hdrs = vim.fs.find(function(name, path)
+            return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$'))
+              and not path:find('/%.git/')
+          end, { path = dir, type = 'file', limit = 500 })
+          for _, h in ipairs(hdrs) do
+            h = vim.fs.normalize(h)
+            local base = vim.fs.basename(h)
+            gen_index[base] = gen_index[base] or {}
+            table.insert(gen_index[base], h)
+          end
+        end
+      end
+    end
+    local matches = {}
+    for _, h in ipairs(gen_index[vim.fs.basename(raw)] or {}) do
+      if h:sub(-(#raw + 1)) == '/' .. raw then matches[#matches + 1] = h end
+    end
+    if #matches ~= 1 then return nil end
+    return matches[1], matches[1]:sub(1, #matches[1] - #raw - 1)
+  end
+
   local function resolve(raw, filedir)
     local cand = vim.fs.normalize(vim.fs.joinpath(filedir, raw))
     if vim.uv.fs_stat(cand) then return cand end
@@ -202,6 +242,11 @@ local function scan(root)
       end
     end
     local abs, base = header_lookup(raw)
+    if abs then
+      used_bases[base] = true
+      return abs
+    end
+    abs, base = generated_lookup(raw)
     if abs then
       used_bases[base] = true
       return abs

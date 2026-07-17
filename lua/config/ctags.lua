@@ -110,8 +110,17 @@ local function generate(root, notify)
     -- per `:w` would be worse than the silence it replaces.
     if not warned_missing then
       warned_missing = true
-      vim.notify("ctags: executable not found in PATH — no tags, so `gd` and member completion are unavailable",
-        vim.log.levels.ERROR)
+      -- Deferred, not direct: generate() runs from a FileType autocmd, and an
+      -- error-level notify raised synchronously inside one aborts the rest of
+      -- the autocmd chain and surfaces as a Vim(append) error with a Lua
+      -- traceback (reproducible by opening a C file through netrw, where the
+      -- FileType autocmd is nested inside NetrwBrowseChgDir). The scheduled
+      -- message lands after the autocmd unwinds, so it reads as the plain
+      -- warning it is.
+      vim.schedule(function()
+        vim.notify("ctags: executable not found in PATH — no tags, so `gd` and member completion are unavailable",
+          vim.log.levels.WARN)
+      end)
     end
     return
   end
