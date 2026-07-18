@@ -29,12 +29,21 @@ local SCOPE_NODES = {
 local MAX_IDENTS = 4000   -- cap the file-wide treesitter walk on huge buffers
 local MAX_TAGS = 300      -- cap project symbols pulled from the tags file
 
-local RANK_LOCAL, RANK_FILE, RANK_TAG = 0, 1, 2
+local RANK_LOCAL, RANK_FILE, RANK_OBUF, RANK_TAG = 0, 1, 2, 3
 local RANK_LABEL = {
   [RANK_LOCAL] = '[local]',
   [RANK_FILE] = '[file]',
+  [RANK_OBUF] = '[open]',
   [RANK_TAG] = '[project]',
 }
+
+-- Per-buffer cap on identifiers pulled from each OTHER open buffer ([open]),
+-- so completing from a session with many files loaded stays bounded.
+local MAX_OBUF_IDENTS = 2000
+
+-- Filetypes whose open buffers contribute [open] identifiers (treesitter
+-- parses these as c/cpp). Matches the C-family completion is wired for.
+local OBUF_FILETYPES = { c = true, cpp = true, objc = true, objcpp = true }
 
 ---True if `word` can complete `base`: a case-insensitive prefix match that
 ---is not an exact-case repeat of `base`. (Completing the typed word to
@@ -111,6 +120,34 @@ local function buffer_identifiers(base, blow)
   return found
 end
 
+---Merge identifiers from the OTHER loaded, listed C-family buffers into
+---`found` at RANK_OBUF. This is what lets <Tab> complete across the files you
+---have open with `:e`/`:vs`, with no project-wide index — `collect` only
+---lowers a word's rank, so an identifier already seen in the current buffer
+---([local]/[file]) keeps its better rank and is not demoted to [open].
+---@param base string
+---@param blow string
+---@param found table<string, integer>
+local function open_buffer_identifiers(base, blow, found)
+  local cur = vim.api.nvim_get_current_buf()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if buf ~= cur
+      and vim.api.nvim_buf_is_loaded(buf)
+      and vim.bo[buf].buflisted
+      and OBUF_FILETYPES[vim.bo[buf].filetype]
+    then
+      local ok, parser = pcall(vim.treesitter.get_parser, buf)
+      if ok and parser then
+        local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), ID_QUERY)
+        local tree = ok_q and (parser:parse() or {})[1] or nil
+        if tree and query then
+          collect(tree:root(), query, buf, RANK_OBUF, base, blow, found, MAX_OBUF_IDENTS)
+        end
+      end
+    end
+  end
+end
+
 ---Project symbols matching `base` from the ctags file (&tags).
 ---@param base string
 ---@return string[]
@@ -131,9 +168,12 @@ function M.complete(findstart, base)
   base = base or ''
   local blow = base:lower()
 
+  local found = buffer_identifiers(base, blow)
+  open_buffer_identifiers(base, blow, found)
+
   local list = {}
   local seen = {}
-  for word, rank in pairs(buffer_identifiers(base, blow)) do
+  for word, rank in pairs(found) do
     seen[word] = true
     list[#list + 1] = { word = word, rank = rank }
   end

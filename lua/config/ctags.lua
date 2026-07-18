@@ -12,22 +12,6 @@ local TAG_FILETYPES = {
   c = true, cpp = true, objc = true, objcpp = true,
 }
 
--- The markers that make clangd attach — must stay in sync with the
--- `root_markers` in lsp/clangd.lua, which is `workspace_required`, so these
--- files are exactly the opt-in signal. Where clangd attaches it owns both
--- completion (keymaps.lua routes <Tab> to vim.lsp.completion.get whenever a
--- client is present) and `gd` (rebound on LspAttach in config/lsp.lua), so the
--- tags index is never read there — generating it on open and re-running a
--- full-tree `ctags -R` after every save would be pure waste.
-local CLANGD_MARKERS = { ".clangd", "compile_commands.json", "compile_flags.txt" }
-
----True if this buffer sits in a project that has opted in to clangd.
----@param buf integer
----@return boolean
-local function clangd_owns(buf)
-  return vim.fs.root(buf, CLANGD_MARKERS) ~= nil
-end
-
 -- Tags files live under Neovim's cache dir, one per project, instead of in
 -- the project tree — so a large generated `tags` file never pollutes the
 -- repo (no stray file to gitignore). Each project gets its own file keyed
@@ -164,23 +148,27 @@ function M.setup()
   vim.fn.mkdir(TAGS_DIR, "p")
 
   -- C/C++/Obj-C buffers: point &tags at the project's cache tags file (the
-  -- project-local defaults stay appended as a fallback), and generate that
-  -- file once in the background if it does not exist yet — so `gd` works on
-  -- a fresh project with no manual :Ctags.
+  -- project-local defaults stay appended as a fallback) and set &path for `gf`.
+  --
+  -- NO automatic index generation. Opening a C file used to kick off a full
+  -- `ctags -R` over that file's WHOLE project tree — and since files are
+  -- resolved to their own project root, browsing into files from several
+  -- projects in one session (`:e`/`:vs` across `~/projects/*`) fired one
+  -- full-tree scan per project and overloaded the machine. Completion of the
+  -- open files does not need any of that: the <Tab> completefunc parses the
+  -- open buffers via treesitter (see lua/config/c_complete.lua). The project
+  -- index is now opt-in only, via :Ctags, for when cross-file `gd`/member
+  -- completion (or vendored symbols like vulkan) is actually wanted.
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("ctags_tagpath", { clear = true }),
     callback = function(args)
       local root, tags = resolve(args.buf)
       if not root then return end
-      -- &tags and &path are set unconditionally: they cost nothing, and they
-      -- keep <C-n>/<C-x><C-]> and `gf` working even in a clangd project (and
-      -- as a fallback if clangd fails to start).
+      -- &tags points at the (possibly not-yet-built) cache file so a manual
+      -- :Ctags index is picked up the moment it exists; cheap and harmless
+      -- when it doesn't. &path keeps `gf`/`:find` resolving #include targets.
       vim.bo[args.buf].tags = tags .. "," .. vim.go.tags
       set_c_path(args.buf, root)
-      if clangd_owns(args.buf) then return end
-      if not vim.uv.fs_stat(tags) then
-        generate(root, false)
-      end
     end,
   })
 
@@ -190,33 +178,11 @@ function M.setup()
     generate(root_util.find(), true)
   end, { desc = "Regenerate the project tags file" })
 
-  -- Debounced background refresh on save: one reusable timer *per project
-  -- root*, re-armed on each save. A single shared timer would let a save in
-  -- project B cancel the pending refresh for project A.
-  --
-  -- No fs_stat guard here any more. It was meant to skip projects whose first
-  -- generate happens on open — but it also meant that if that first generate
-  -- ever failed, `tags` never existed, so every subsequent save returned right
-  -- here and the project could never recover. A missing tags file is now
-  -- exactly the case that most needs a save to retry.
-  local timers = {}
-  vim.api.nvim_create_autocmd("BufWritePost", {
-    group = vim.api.nvim_create_augroup("ctags_auto_refresh", { clear = true }),
-    callback = function(args)
-      local root = resolve(args.buf)
-      if not root then return end
-      if clangd_owns(args.buf) then return end
-      local timer = timers[root]
-      if not timer then
-        timer = assert(vim.uv.new_timer())
-        timers[root] = timer
-      end
-      timer:stop()
-      timer:start(2000, 0, function()
-        vim.schedule(function() generate(root, false) end)
-      end)
-    end,
-  })
+  -- No BufWritePost auto-refresh. Saves used to re-run a full-tree `ctags -R`
+  -- (debounced), which for a project with a large vendored tree meant steady
+  -- background CPU churn on every `:w`. The index is refreshed on demand with
+  -- :Ctags instead — run it when you want cross-file navigation to pick up
+  -- new symbols.
 end
 
 return M
