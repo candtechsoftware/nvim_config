@@ -142,15 +142,32 @@ local function should_render(bufnr)
   return vim.api.nvim_buf_line_count(bufnr) <= MAX_LINES
 end
 
+-- Last completed render per buffer (changedtick + window width). Extmarks
+-- persist on the buffer, so a BufEnter where neither the text nor the width
+-- changed has nothing to do — without this gate every buffer switch re-pulled
+-- the whole buffer into Lua and re-matched every line.
+local last_render = {}
+
+---@param bufnr integer
+---@return boolean
+local function render_current(bufnr)
+  local prev = last_render[bufnr]
+  return prev ~= nil
+    and prev.tick == vim.api.nvim_buf_get_changedtick(bufnr)
+    and prev.width == vim.api.nvim_win_get_width(0)
+end
+
 function M.render_dividers()
   local bufnr = vim.api.nvim_get_current_buf()
 
   -- Clear existing extmarks
   vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+  last_render[bufnr] = nil
   if not should_render(bufnr) then return end
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local divider_line = string.rep("─", vim.api.nvim_win_get_width(0))
+  local width = vim.api.nvim_win_get_width(0)
+  local divider_line = string.rep("─", width)
 
   for i, line in ipairs(lines) do
     if is_section_comment(line) then
@@ -160,6 +177,7 @@ function M.render_dividers()
       })
     end
   end
+  last_render[bufnr] = { tick = vim.api.nvim_buf_get_changedtick(bufnr), width = width }
 end
 
 local function render_debounced()
@@ -180,11 +198,23 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("DividerComments", { clear = true })
 
-  -- Immediate render for these events (no conflict with treesitter)
+  -- Immediate render for these events (no conflict with treesitter). The
+  -- render_current gate makes the common case — switching back to an
+  -- unchanged buffer at the same width — a table lookup instead of a scan.
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost", "WinResized" }, {
     group = group,
-    callback = function()
+    callback = function(args)
+      if render_current(args.buf) then return end
       M.render_dividers()
+    end,
+  })
+
+  -- Drop the render record when a buffer goes away so the cache can't grow
+  -- for the life of the session.
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+    group = group,
+    callback = function(args)
+      last_render[args.buf] = nil
     end,
   })
 

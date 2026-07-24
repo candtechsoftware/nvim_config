@@ -158,7 +158,15 @@ function M.search_notes()
         prompt_title = "Search Notes",
         search_dirs = { notes_dir },
         additional_args = function()
-            return { "--type", "md", "--type", "txt" }
+            -- Derived from config.file_extensions — this used to hardcode
+            -- `--type md --type txt`, so `.markdown` (and any extension a
+            -- user configured) was silently unsearchable.
+            local args = {}
+            for _, ext in ipairs(M.config.file_extensions) do
+                table.insert(args, "--glob")
+                table.insert(args, "*" .. ext)
+            end
+            return args
         end
     })
 end
@@ -306,9 +314,6 @@ function M.setup(opts)
     end, {
         nargs = "?",
         desc = "Create a new note",
-        complete = function()
-            return {}
-        end
     })
 
     vim.api.nvim_create_user_command("NotesSearch", M.search_notes, { desc = "Search notes content" })

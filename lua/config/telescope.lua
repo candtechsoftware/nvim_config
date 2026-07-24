@@ -10,25 +10,9 @@
 local M = {}
 
 local function get_visual_selection()
-    local _, ls, cs = unpack(vim.fn.getpos("v"))
-    local _, le, ce = unpack(vim.fn.getpos("."))
-
-    if ls > le or (ls == le and cs > ce) then
-        ls, le = le, ls
-        cs, ce = ce, cs
-    end
-
-    local lines = vim.fn.getline(ls, le)
-    if #lines == 0 then return "" end
-
-    if #lines == 1 then
-        lines[1] = string.sub(lines[1], cs, ce)
-    else
-        lines[1] = string.sub(lines[1], cs)
-        lines[#lines] = string.sub(lines[#lines], 1, ce)
-    end
-
-    return table.concat(lines, "\n")
+    -- getregion handles reversed selections and single/multi-line slicing.
+    return table.concat(
+        vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = "v" }), "\n")
 end
 
 local find_project_root = require("utils.project_root").find

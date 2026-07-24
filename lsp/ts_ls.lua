@@ -19,7 +19,6 @@ return {
   cmd = { TSLS_BIN, '--stdio' },
   filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
   root_markers = { 'tsconfig.json', 'jsconfig.json', 'package.json', '.git' },
-  single_file_support = true,
   init_options = {
     hostInfo = 'neovim',
     preferences = {

@@ -22,11 +22,15 @@ function M.setup()
         H():list():add()
     end, { desc = "Harpoon add file" })
 
-    -- Quick access to harpooned files
+    -- Quick access to harpooned files.
+    -- Slot 2 is <C-g>, not the classic <C-t>: <C-t> is the built-in pop-tag
+    -- jump, the return leg of every ctags <C-]>/gd hop this config's C
+    -- workflow lives on. <C-g>'s built-in (echo file name) is already on the
+    -- statusline.
     vim.keymap.set("n", "<C-h>", function()
         H():list():select(1)
     end)
-    vim.keymap.set("n", "<C-t>", function()
+    vim.keymap.set("n", "<C-g>", function()
         H():list():select(2)
     end)
     vim.keymap.set("n", "<C-n>", function()

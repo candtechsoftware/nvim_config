@@ -1,7 +1,7 @@
 -- ctags-based navigation for C/C++ projects that have NOT opted in to clangd.
--- A project's tags file is generated automatically the first time one of its
--- C/C++ files is opened, refreshed (debounced) on every save afterwards, and
--- :Ctags forces a manual regenerate. Goto-definition itself is just the
+-- The project index is opt-in and manual: run :Ctags to (re)generate it —
+-- there is no open-time or save-time automatic generation (see the comments
+-- in setup() for why both were removed). Goto-definition itself is just the
 -- built-in tag jump — <C-]>, or `gd` set in after/ftplugin/c.lua.
 local M = {}
 

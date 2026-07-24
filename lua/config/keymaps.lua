@@ -38,10 +38,10 @@ vim.keymap.set("n", "<leader>tc", "<cmd>tabclose<CR>zz")
 -- Search and replace
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]]) -- Search and replace the word under the cursor
 
--- Undotree
+-- Undotree (mbbill/undotree, in vim.pack.add — this used to packadd a
+-- nonexistent "nvim.undotree", so the key errored every time it was pressed).
 vim.keymap.set("n", "<leader>u", function()
-    vim.cmd.packadd("nvim.undotree")
-    vim.cmd.Undotree()
+    vim.cmd.UndotreeToggle()
 end, { desc = "Toggle undotree" })
 
 -- Source file

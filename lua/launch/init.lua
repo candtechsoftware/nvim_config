@@ -14,6 +14,26 @@ local current_launch_root = nil
 
 local find_project_root = require("utils.project_root").find
 
+-- Root lookups cached per buffer directory. BufEnter fires on every buffer
+-- switch and find_project_root scandirs each ancestor directory — repeating
+-- that disk walk for a directory already resolved is pure waste. DirChanged
+-- and :LaunchReset/:LaunchReload clear the cache (a launch.json appearing in
+-- an already-visited dir needs the same :LaunchReload it always did).
+local root_by_dir = {}
+
+local function buffer_root()
+  local name = vim.api.nvim_buf_get_name(0)
+  local dir = name ~= "" and vim.fs.dirname(name) or vim.fs.normalize(vim.uv.cwd())
+  local root = root_by_dir[dir]
+  if root == nil then
+    root = find_project_root()
+    root_by_dir[dir] = root
+  end
+  return root
+end
+
+local reported_bad_json = {}
+
 ---Read and parse <root>/launch.json.
 ---
 ---pcall'd: this is reached from a BufEnter autocmd, and a malformed file would
@@ -23,7 +43,6 @@ local find_project_root = require("utils.project_root").find
 ---per root rather than on every BufEnter.
 ---@param root string
 ---@return table?
-local reported_bad_json = {}
 local function load_launch_json(root)
   local path = root .. "/launch.json"
   if vim.fn.filereadable(path) ~= 1 then return nil end
@@ -165,6 +184,7 @@ end
 
 function M.reset_cache()
   current_launch_root = nil
+  root_by_dir = {}
   vim.notify("Launch root cache cleared", vim.log.levels.INFO)
 end
 
@@ -176,11 +196,23 @@ end
 function M.setup()
   apply_launch(find_project_root())
 
-  -- Re-evaluate keymaps when project context changes
-  vim.api.nvim_create_autocmd({ 'BufEnter', 'DirChanged' }, {
-    group = vim.api.nvim_create_augroup('launch_auto', { clear = true }),
+  local group = vim.api.nvim_create_augroup('launch_auto', { clear = true })
+
+  -- Re-evaluate keymaps when project context changes (cached per directory).
+  vim.api.nvim_create_autocmd('BufEnter', {
+    group = group,
     callback = function()
-      apply_launch(find_project_root())
+      apply_launch(buffer_root())
+    end,
+  })
+
+  -- A cwd change invalidates every unnamed-buffer entry and any root that
+  -- fell back to cwd, so drop the whole cache — DirChanged is rare.
+  vim.api.nvim_create_autocmd('DirChanged', {
+    group = group,
+    callback = function()
+      root_by_dir = {}
+      apply_launch(buffer_root())
     end,
   })
 

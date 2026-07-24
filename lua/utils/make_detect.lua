@@ -76,23 +76,48 @@ local errorformats = {
   }, ","),
 }
 
+-- Per-build-system resolvers, shared by the .project_type switch, the
+-- filetype quick wins, and the repo-level heuristics below — each command
+-- string and marker-file ladder exists in exactly one place, so the three
+-- call sites cannot drift apart. Each returns nil when its markers are
+-- absent so callers can fall through.
+
+local function node_build()
+  if exists("pnpm-lock.yaml") then return "pnpm run build" end
+  if exists("yarn.lock") then return "yarn build" end
+  if exists("package.json") then return "npm run build" end
+end
+
+local function c_build()
+  if exists("Makefile") or exists("makefile") then return "make -j" end
+  if exists("CMakeLists.txt") then
+    -- prefer build dir if present
+    if dexists("build") then
+      return "cmake --build build --config Debug"
+    end
+    return "cmake -S . -B build && cmake --build build --config Debug"
+  end
+end
+
+-- Jai (macOS): a build.jai entrypoint, else compile the current file
+-- (% expands to the buffer's file; use `jai-macos -x %` to build & run).
+local function jai_build()
+  if exists("build.jai") then return "jai-macos build.jai" end
+  return "jai-macos %"
+end
+
 -- Detect the best build command for the current project
 local function detect_makeprg(buf_ft)
-  -- Highest priority: explicit project hint
+  -- Highest priority: explicit project hint. The hint means "treat this as
+  -- an X project" even when marker files are missing, hence the extra
+  -- fallbacks node_build/c_build alone would not give.
   if exists(".project_type") then
     local t = vim.fn.trim(vim.fn.readfile(".project_type")[1] or "")
     if t == "zig" then return "zig build" end
-    if t == "node" then
-      if exists("pnpm-lock.yaml") then return "pnpm run build" end
-      if exists("yarn.lock") then return "yarn build" end
-      return "npm run build"
-    end
+    if t == "node" then return node_build() or "npm run build" end
     if t == "rust" then return "cargo build" end
     if t == "c" or t == "cpp" then return "make -j" end
-    if t == "jai" then
-      if exists("build.jai") then return "jai-macos build.jai" end
-      return "jai-macos %"
-    end
+    if t == "jai" then return jai_build() end
     if t == "odin" then return "odin build ." end
   end
 
@@ -101,56 +126,23 @@ local function detect_makeprg(buf_ft)
   if buf_ft == "rust" then return "cargo build" end
 
   if buf_ft == "javascript" or buf_ft == "typescript" or buf_ft == "typescriptreact" or buf_ft == "javascriptreact" then
-    if exists("pnpm-lock.yaml") then return "pnpm run build" end
-    if exists("yarn.lock") then return "yarn build" end
-    if exists("package.json") then return "npm run build" end
+    local cmd = node_build()
+    if cmd then return cmd end
   end
 
   if buf_ft == "c" or buf_ft == "cpp" then
-    if exists("Makefile") or exists("makefile") then return "make -j" end
-    if exists("CMakeLists.txt") then
-      -- prefer build dir if present
-      if dexists("build") then
-        return "cmake --build build --config Debug"
-      else
-        return "cmake -S . -B build && cmake --build build --config Debug"
-      end
-    end
+    local cmd = c_build()
+    if cmd then return cmd end
   end
 
-  -- Jai support (macOS)
-  if buf_ft == "jai" then
-    -- common patterns:
-    --   - project has a build.jai entrypoint
-    --   - otherwise compile current file
-    if exists("build.jai") then
-      return "jai-macos build.jai"
-    else
-      -- % expands to the buffer's file; add -x to run if desired (commented)
-      -- return "jai-macos -x %"  -- build & run
-      return "jai-macos %"
-    end
-  end
-
-  -- Odin support
-  if buf_ft == "odin" then
-    return "odin build ."
-  end
+  if buf_ft == "jai" then return jai_build() end
+  if buf_ft == "odin" then return "odin build ." end
 
   -- Repo-level heuristics regardless of filetype
   if exists("build.zig") then return "zig build" end
   if exists("Cargo.toml") then return "cargo build" end
-  if exists("pnpm-lock.yaml") then return "pnpm run build" end
-  if exists("yarn.lock") then return "yarn build" end
-  if exists("package.json") then return "npm run build" end
-  if exists("Makefile") or exists("makefile") then return "make -j" end
-  if exists("CMakeLists.txt") then
-    if dexists("build") then
-      return "cmake --build build --config Debug"
-    else
-      return "cmake -S . -B build && cmake --build build --config Debug"
-    end
-  end
+  local cmd = node_build() or c_build()
+  if cmd then return cmd end
   if exists("build.jai") then return "jai-macos build.jai" end
 
   -- Fallback: plain make

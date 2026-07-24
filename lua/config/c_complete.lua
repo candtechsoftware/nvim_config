@@ -69,7 +69,7 @@ local function find_start()
 end
 
 ---Record identifier captures under `node`, keeping each word's best (lowest)
----rank. `cap` bounds the walk; nil = unbounded.
+---rank.
 ---@param node TSNode
 ---@param query vim.treesitter.Query
 ---@param buf integer
@@ -77,15 +77,61 @@ end
 ---@param base string
 ---@param blow string
 ---@param found table<string, integer>
----@param cap integer?
-local function collect(node, query, buf, rank, base, blow, found, cap)
-  local n = 0
+local function collect(node, query, buf, rank, base, blow, found)
   for _, idnode in query:iter_captures(node, buf) do
-    n = n + 1
-    if cap and n > cap then break end
     local text = vim.treesitter.get_node_text(idnode, buf)
     if matches(text, base, blow) and (found[text] == nil or rank < found[text]) then
       found[text] = rank
+    end
+  end
+end
+
+-- Full-tree identifier sets cached per buffer, keyed by changedtick. Each
+-- <Tab> used to re-run the whole-tree capture walk for the current buffer AND
+-- every other open C buffer — get_node_text allocates a fresh string per
+-- capture, so a many-file session paid thousands of allocations per keypress.
+-- The word SET is independent of the typed prefix, so it is collected once
+-- per edit and only the cheap prefix filter runs per completion. Entries for
+-- unloaded buffers are pruned in M.complete.
+local ident_cache = {}
+
+---Unfiltered identifier words in `buf`'s full tree, cached by changedtick.
+---@param buf integer
+---@param cap integer  max captures walked when (re)collecting
+---@return table<string, true>
+local function cached_identifiers(buf, cap)
+  local tick = vim.api.nvim_buf_get_changedtick(buf)
+  local entry = ident_cache[buf]
+  if entry and entry.tick == tick and entry.cap == cap then return entry.words end
+
+  local words = {}
+  local ok, parser = pcall(vim.treesitter.get_parser, buf)
+  if ok and parser then
+    local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), ID_QUERY)
+    local tree = ok_q and (parser:parse() or {})[1] or nil
+    if tree and query then
+      local n = 0
+      for _, idnode in query:iter_captures(tree:root(), buf) do
+        n = n + 1
+        if n > cap then break end
+        words[vim.treesitter.get_node_text(idnode, buf)] = true
+      end
+    end
+  end
+  ident_cache[buf] = { tick = tick, cap = cap, words = words }
+  return words
+end
+
+---Merge a cached word set into `found`, keeping each word's best rank.
+---@param words table<string, true>
+---@param rank integer
+---@param base string
+---@param blow string
+---@param found table<string, integer>
+local function merge_words(words, rank, base, blow, found)
+  for word in pairs(words) do
+    if matches(word, base, blow) and (found[word] == nil or rank < found[word]) then
+      found[word] = rank
     end
   end
 end
@@ -105,9 +151,10 @@ local function buffer_identifiers(base, blow)
   if not tree then return found end
   local root = tree:root()
 
-  -- The function enclosing the cursor is walked in full (it is small), so
-  -- the [local] rank is always correct; only the file-wide walk is capped,
-  -- so a huge buffer loses some [file] suggestions but never [local] ones.
+  -- The function enclosing the cursor is walked in full and uncached (it is
+  -- small and cursor-dependent), so the [local] rank is always correct; only
+  -- the file-wide set is capped, so a huge buffer loses some [file]
+  -- suggestions but never [local] ones.
   local crow, ccol = unpack(vim.api.nvim_win_get_cursor(0))
   local node = root:named_descendant_for_range(crow - 1, ccol, crow - 1, ccol)
   while node and not SCOPE_NODES[node:type()] do
@@ -116,13 +163,13 @@ local function buffer_identifiers(base, blow)
   if node then
     collect(node, query, buf, RANK_LOCAL, base, blow, found)
   end
-  collect(root, query, buf, RANK_FILE, base, blow, found, MAX_IDENTS)
+  merge_words(cached_identifiers(buf, MAX_IDENTS), RANK_FILE, base, blow, found)
   return found
 end
 
 ---Merge identifiers from the OTHER loaded, listed C-family buffers into
 ---`found` at RANK_OBUF. This is what lets <Tab> complete across the files you
----have open with `:e`/`:vs`, with no project-wide index — `collect` only
+---have open with `:e`/`:vs`, with no project-wide index — merging only
 ---lowers a word's rank, so an identifier already seen in the current buffer
 ---([local]/[file]) keeps its better rank and is not demoted to [open].
 ---@param base string
@@ -136,14 +183,7 @@ local function open_buffer_identifiers(base, blow, found)
       and vim.bo[buf].buflisted
       and OBUF_FILETYPES[vim.bo[buf].filetype]
     then
-      local ok, parser = pcall(vim.treesitter.get_parser, buf)
-      if ok and parser then
-        local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), ID_QUERY)
-        local tree = ok_q and (parser:parse() or {})[1] or nil
-        if tree and query then
-          collect(tree:root(), query, buf, RANK_OBUF, base, blow, found, MAX_OBUF_IDENTS)
-        end
-      end
+      merge_words(cached_identifiers(buf, MAX_OBUF_IDENTS), RANK_OBUF, base, blow, found)
     end
   end
 end
@@ -167,6 +207,11 @@ function M.complete(findstart, base)
   end
   base = base or ''
   local blow = base:lower()
+
+  -- Drop cached word sets whose buffer has been unloaded.
+  for buf in pairs(ident_cache) do
+    if not vim.api.nvim_buf_is_loaded(buf) then ident_cache[buf] = nil end
+  end
 
   local found = buffer_identifiers(base, blow)
   open_buffer_identifiers(base, blow, found)
@@ -494,7 +539,10 @@ local function resolve_var_type(buf, var, crow)
   end
 
   local best, best_row, best_local = nil, -1, false
-  for _, node in query:iter_captures(tree:root(), buf) do
+  -- Bound the walk to rows at or above the cursor: a declaration below can
+  -- never bind the name the cursor sees, and in a 17k-line unity file the
+  -- unbounded full-tree walk ran on every member-completion <Tab>.
+  for _, node in query:iter_captures(tree:root(), buf, 0, crow) do
     local srow = node:range()
     if srow <= crow - 1 then
       local fn = enclosing_fn(node)

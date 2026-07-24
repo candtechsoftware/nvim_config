@@ -33,9 +33,12 @@ M.ensure_installed = {
     "glsl", "hlsl", "objc",
 }
 
+-- Existence is checked by file lookup on the runtimepath (the same place
+-- vim.treesitter.language.add searches), NOT by calling add() — add() dlopens
+-- the parser library, so the startup ensure_installed sweep was loading all
+-- 13 parsers into the process on every launch just to see whether they exist.
 local function parser_exists(lang)
-    local ok = pcall(vim.treesitter.language.add, lang)
-    return ok
+    return #vim.api.nvim_get_runtime_file("parser/" .. lang .. ".*", false) > 0
 end
 
 local function parser_names()

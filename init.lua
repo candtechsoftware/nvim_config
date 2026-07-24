@@ -44,6 +44,7 @@ vim.pack.add({
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
     { src = 'https://github.com/ThePrimeagen/harpoon', version = 'harpoon2' },
     'https://github.com/MeanderingProgrammer/render-markdown.nvim',
+    'https://github.com/mbbill/undotree',
 })
 
 -- Core
@@ -57,7 +58,11 @@ require("config.clangd_setup").setup()
 
 -- Treesitter
 require("config.treesitter").setup()
-require("config.c_keywords").setup()
+-- config.c_keywords (matchadd keyword highlighting) is gone: it worked around
+-- anonymous-node treesitter highlights not rendering on old builds. Verified
+-- on this build that @keyword.* captures render fine, including inside
+-- ERROR-recovered unity-macro functions, and colors/handmade.lua links them
+-- to the same groups the matchadd patterns forced.
 
 -- Telescope + Harpoon
 require("config.telescope").setup()

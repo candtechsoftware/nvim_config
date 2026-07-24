@@ -50,7 +50,7 @@ end
 
 local function command_targets(name)
   if name ~= '' then return { name } end
-  return vim.deepcopy(servers)
+  return servers
 end
 
 local function attached_clients(bufnr, name)
@@ -65,12 +65,6 @@ local function stop_clients(bufnr, name)
     vim.lsp.stop_client(client.id)
   end
   return clients
-end
-
-local function enable_targets(targets)
-  for _, name in ipairs(targets) do
-    vim.lsp.enable(name)
-  end
 end
 
 ---Get LSP capabilities: the deltas from Neovim's defaults, and nothing else.
@@ -392,7 +386,7 @@ function M.setup()
 
   vim.api.nvim_create_user_command('LspStart', function(cmd)
     local targets = command_targets(cmd.args)
-    enable_targets(targets)
+    vim.lsp.enable(targets)
     vim.notify(('Started/enabled LSP: %s'):format(table.concat(targets, ', ')), vim.log.levels.INFO)
   end, {
     nargs = '?',
@@ -405,7 +399,7 @@ function M.setup()
     local targets = command_targets(cmd.args)
     local stopped = stop_clients(bufnr, cmd.args)
     vim.defer_fn(function()
-      enable_targets(targets)
+      vim.lsp.enable(targets)
       vim.notify(('Restarted LSP: %s (%d stopped)'):format(table.concat(targets, ', '), #stopped),
         vim.log.levels.INFO)
     end, 200)

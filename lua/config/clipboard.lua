@@ -164,7 +164,4 @@ function ClipboardWatcher:clear()
   self.last_clip = nil
 end
 
--- Expose for customization
-M.watcher = ClipboardWatcher
-
 return M

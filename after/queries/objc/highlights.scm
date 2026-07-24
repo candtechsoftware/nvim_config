@@ -3,7 +3,8 @@
 ; Treat arc_*/ark_*/yg_* macros as macros (sky-blue, like 4coder index_macro)
 ((identifier) @function.macro
   (#any-of? @function.macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -11,7 +12,8 @@
 
 ((type_identifier) @function.macro
   (#any-of? @function.macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")
@@ -54,7 +56,8 @@
   type: (type_identifier) @_macro
   declarator: (identifier) @type
   (#any-of? @_macro
-    "internal" "inline" "global" "local_persist" "function" "static"
+    "internal" "inline" "global" "local_persist" "function" "static" "thread_local"
+    "force_inline" "no_inline" "read_only" "write_only" "shared" "exported"
     "arc_internal" "arc_inline" "arc_global" "arc_local_persist"
     "ark_internal" "ark_inline" "ark_global" "ark_local_persist"
     "yg_internal" "yg_inline" "yg_global" "yg_local_persist")

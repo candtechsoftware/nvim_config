@@ -1,11 +1,15 @@
--- HLSL (High-Level Shading Language) file type detection
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-  pattern = { "*.hlsl", "*.hlsli", "*.fx", "*.fxh", "*.vsh", "*.psh", "*.cginc", "*.compute", "*.shader" },
-  callback = function()
-    vim.bo.filetype = "hlsl"
-    vim.bo.commentstring = "// %s"
-    vim.bo.shiftwidth = 4
-    vim.bo.tabstop = 4
-    vim.bo.expandtab = true
-  end,
+-- HLSL (High-Level Shading Language) file type detection.
+-- See ftdetect/glsl.lua for why vim.filetype.add and who owns `.vsh` (glsl).
+-- Buffer-local settings (commentstring) live in after/ftplugin/hlsl.lua.
+vim.filetype.add({
+  extension = {
+    hlsl = "hlsl",
+    hlsli = "hlsl",
+    fx = "hlsl",
+    fxh = "hlsl",
+    psh = "hlsl",
+    cginc = "hlsl",
+    compute = "hlsl",
+    shader = "hlsl",
+  },
 })

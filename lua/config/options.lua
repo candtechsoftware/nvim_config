@@ -121,10 +121,22 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 -- This only ever visits groups that exist AT THAT MOMENT. Telescope and
 -- render-markdown define their groups lazily, on first use, so their italics
 -- and underlines were never stripped. Re-run once after startup and after any
--- plugin is sourced.
-vim.api.nvim_create_autocmd({ "VimEnter", "SourcePost" }, {
+-- plugin is sourced — but NOT for files inside this config: re-:so'ing a
+-- config file (<leader><leader>) defines no new plugin groups (colorscheme
+-- files fire the ColorScheme arm), and this arm otherwise re-swept all ~450
+-- groups on every such :so for the whole session.
+vim.api.nvim_create_autocmd("VimEnter", {
     group = strip_group,
     callback = strip_decorations_soon,
+})
+
+local config_dir = vim.fn.stdpath("config")
+vim.api.nvim_create_autocmd("SourcePost", {
+    group = strip_group,
+    callback = function(args)
+        if vim.startswith(vim.fs.normalize(args.match), config_dir) then return end
+        strip_decorations_soon()
+    end,
 })
 
 vim.o.winborder = 'rounded'

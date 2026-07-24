@@ -67,5 +67,9 @@ return {
   cmd = cmd,
   filetypes = { 'jai' },
   root_markers = { 'build.jai', 'first.jai', '.git' },
-  single_file_support = false,  -- Jai LSP needs a project root
+  -- Jai LSP needs a project root. This was `single_file_support = false` — an
+  -- nvim-lspconfig key nothing in native vim.lsp reads, so the intent was
+  -- silently unenforced. workspace_required is the native equivalent (same
+  -- key lsp/clangd.lua uses).
+  workspace_required = true,
 }
