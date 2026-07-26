@@ -7,6 +7,25 @@ local M = {}
 
 local root_util = require("utils.project_root")
 
+-- Root markers for the tags index, deliberately NOT the shared default list.
+--
+-- `vim.fs.root` returns the NEAREST ancestor holding any marker, so putting
+-- the clangd markers alongside the generic ones makes a C subproject win over
+-- the repo it lives in — which is the point. In a monorepo the default list
+-- (first match walking up: `.git`) resolved every file in
+-- ~/projects/notes/renderer to ~/projects/notes, so `&tags` pointed at a 12MB
+-- index built from all four subprojects while clangd was correctly rooted at
+-- renderer/. Completion paid ~10ms per <Tab> reading symbols from projects the
+-- buffer cannot even reference.
+--
+-- Scoped to this module on purpose: `utils.project_root` is also what
+-- telescope and lua/launch use to pick a search/launch root, and those should
+-- keep resolving to the whole repo unless that is changed deliberately.
+local TAG_MARKERS = vim.list_extend(
+  { ".clangd", "compile_commands.json", "compile_flags.txt" },
+  root_util.markers
+)
+
 -- Saves of these filetypes trigger a background tags refresh.
 local TAG_FILETYPES = {
   c = true, cpp = true, objc = true, objcpp = true,
@@ -33,7 +52,7 @@ end
 ---@return string? tags
 local function resolve(buf)
   if not TAG_FILETYPES[vim.bo[buf].filetype] then return end
-  local root = root_util.find({ buf = buf })
+  local root = root_util.find({ buf = buf, markers = TAG_MARKERS })
   return root, tags_path(root)
 end
 
@@ -115,8 +134,17 @@ local function generate(root, notify)
   -- adds the typeref (t) and signature (S) fields the built-in `ccomplete`
   -- omnifunc needs for member completion; pinned so a user .ctags.d can't
   -- drop them.
+  -- Excludes mirror SKIP_DIRS in lua/config/clangd_setup.lua, for the same
+  -- reason: `-R` otherwise walks the whole tree, and in a monorepo like
+  -- ~/projects/notes (1.7G) most of that is build output and vendored code.
+  -- The tag COUNT barely moves (1673 of 44379 came from these dirs) — the win
+  -- is the scan itself not stat-ing its way through build trees full of object
+  -- files and multi-MB generated headers on every :Ctags.
   local cmd = {
     "ctags", "-R", "--tag-relative=no", "--exclude=.git",
+    "--exclude=build", "--exclude=bin", "--exclude=out", "--exclude=dist",
+    "--exclude=third_party", "--exclude=thirdparty", "--exclude=vendor",
+    "--exclude=node_modules",
     "--fields=+St", "-f", tags, root,
   }
   generating[root] = true
@@ -175,7 +203,9 @@ function M.setup()
   -- :Ctags — regenerate the current project's tags file on demand. Works
   -- even before a tags file exists, so it also opts a new project in.
   vim.api.nvim_create_user_command("Ctags", function()
-    generate(root_util.find(), true)
+    -- Same markers as the FileType hook, so :Ctags always writes the index
+    -- that &tags is already pointing at.
+    generate(root_util.find({ markers = TAG_MARKERS }), true)
   end, { desc = "Regenerate the project tags file" })
 
   -- No BufWritePost auto-refresh. Saves used to re-run a full-tree `ctags -R`

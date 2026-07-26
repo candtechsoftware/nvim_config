@@ -17,6 +17,44 @@ end
 
 local find_project_root = require("utils.project_root").find
 
+-- Trees every picker skips, and the reason they have to be listed explicitly.
+--
+-- `--no-ignore-vcs` (kept on purpose, so gitignored build output stays
+-- searchable) means .gitignore does not filter anything, and vendored code is
+-- checked IN, so nothing filtered it at all. Measured in ~/projects/notes:
+-- `live_grep "render"` ran rg over the whole 1.7G tree on EVERY keystroke —
+-- 1060ms and 32679 results, of which the top four sources were all
+-- appgui/third_party/slang (a 9.9MB validusage.json alone contributed 3761
+-- matches, plus vulkan_structs.hpp, Metal.hpp and vk.xml). With these globs
+-- it is 67ms and 12229 results, and renderer's own hits are untouched
+-- (4847 -> 4842; the five lost are under renderer/build).
+--
+-- --max-filesize caps the pathological generated headers this codebase has a
+-- lot of (a 63MB slang-core-module-generated.h, 2.2MB fonts_embedded.h) —
+-- nothing hand-written here comes close to 1MB.
+local EXCLUDE_GLOBS = {
+    "--glob=!.git/",
+    "--glob=!node_modules/",
+    "--glob=!**/third_party/**",
+    "--glob=!**/thirdparty/**",
+    "--glob=!**/vendor/**",
+    "--glob=!**/external/**",
+    "--glob=!**/build/**",
+    "--glob=!**/out/**",
+    "--glob=!**/*.dSYM/**",
+    "--max-filesize=1M",
+}
+
+---rg argv with the exclusions appended, plus an optional tail that must come
+---after them (`--` and the pattern, which have to be last).
+---@param args string[]
+---@param tail string[]|nil
+---@return string[]
+local function with_excludes(args, tail)
+    local out = vim.list_extend(vim.deepcopy(args), EXCLUDE_GLOBS)
+    return tail and vim.list_extend(out, tail) or out
+end
+
 -- Configure telescope exactly once, on first use.
 local configured = false
 function M.ensure()
@@ -32,7 +70,7 @@ function M.ensure()
             prompt_prefix = "> ",
             selection_caret = "> ",
             borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
-            vimgrep_arguments = {
+            vimgrep_arguments = with_excludes({
                 "rg",
                 "--color=never",
                 "--no-heading",
@@ -43,9 +81,7 @@ function M.ensure()
                 "--hidden",
                 "--no-ignore-vcs",
                 "--no-require-git",
-                "--glob=!.git/",
-                "--glob=!node_modules/",
-            },
+            }),
             preview = {
                 treesitter = false,
             },
@@ -87,15 +123,13 @@ function M.ensure()
         pickers = {
             find_files = {
                 hidden = true,
-                find_command = {
+                find_command = with_excludes({
                     "rg",
                     "--files",
                     "--hidden",
                     "--no-ignore-vcs",
                     "--no-require-git",
-                    "--glob=!.git/",
-                    "--glob=!node_modules/",
-                },
+                }),
             },
         },
         extensions = {
@@ -171,8 +205,15 @@ function M.setup()
                 local search, glob = prompt:match("^(.-)%s+%*%*(.+)$")
                 if search and glob ~= "" then
                     return { prompt = search, updated_finder = require("telescope.finders").new_job(function(new_prompt)
-                        return vim.iter({ "rg", "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case", "--glob", "**" .. glob, "--", new_prompt }):flatten():totable()
-
+                        -- This finder builds its own argv, so it bypasses
+                        -- defaults.vimgrep_arguments and needs the exclusions
+                        -- applied explicitly — without them the **file filter
+                        -- was the one grep path still scanning third_party.
+                        return vim.iter(with_excludes({
+                            "rg", "--color=never", "--no-heading", "--with-filename",
+                            "--line-number", "--column", "--smart-case",
+                            "--glob", "**" .. glob,
+                        }, { "--", new_prompt })):flatten():totable()
                     end, require("telescope.make_entry").gen_from_vimgrep({ cwd = root }), nil, root) }
                 end
                 return { prompt = prompt }
@@ -194,7 +235,11 @@ function M.setup()
         builtin().live_grep({
             cwd = root,
             prompt_title = "Grep (strict, .gitignore) in " .. vim.fn.fnamemodify(root, ":t"),
-            vimgrep_arguments = {
+            -- No --no-ignore-vcs here: this picker's whole purpose is the
+            -- .gitignore-honoring search. It still gets the vendored-tree
+            -- globs, because third_party is checked in and .gitignore never
+            -- excluded it.
+            vimgrep_arguments = with_excludes({
                 "rg",
                 "--color=never",
                 "--no-heading",
@@ -203,8 +248,7 @@ function M.setup()
                 "--column",
                 "--smart-case",
                 "--hidden",
-                "--glob=!.git/",
-            },
+            }),
         })
     end, { desc = "Live grep (strict, honors .gitignore)" })
 

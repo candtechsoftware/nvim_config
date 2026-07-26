@@ -75,6 +75,7 @@ require("notes").setup()
 require("config.clipboard").setup()
 require("divider_comments").setup()
 require("config.comment_tags").setup()
+require("config.perf").setup()
 
 -- render-markdown.nvim self-initializes via its plugin/render-markdown.lua
 -- (sourced by vim.pack), so no explicit setup() call is needed here.

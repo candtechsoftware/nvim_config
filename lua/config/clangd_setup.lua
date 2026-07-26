@@ -159,6 +159,50 @@ local function relpath(root, abs)
   return abs
 end
 
+-- Optional per-project file naming include roots OUTSIDE the project tree.
+-- INCLUDE_BASES only probes dirs under the root, which is right for a
+-- self-contained project and wrong for one that builds against a checkout
+-- elsewhere: ~/projects/notes/renderer includes "base/base_inc.h" and
+-- "os/os_inc.h", and its build.sh resolves those with
+-- `-I$STD_DIR/src` where STD_DIR defaults to $HOME/projects/the_std. Nothing
+-- under renderer/ can resolve them, so 36 of its -include entries came out
+-- unresolved. There is no reliable way to infer this — build.sh sets it from
+-- an env var — so it is declared, one path per line:
+--
+--   # renderer/.clangd-include-dirs
+--   $HOME/projects/the_std/src
+--   $HOME/projects/the_std
+--
+-- Blank lines and `#` comments are ignored; `~`, `$VAR` and `${VAR}` expand;
+-- relative paths resolve against the project root. Listed dirs join the -I
+-- probe set, so the ones that actually resolve an include become -I flags in
+-- the generated .clangd (the ones that don't cost nothing).
+local INCLUDE_DIRS_FILE = '.clangd-include-dirs'
+
+---Read the project's declared external include roots.
+---@param root string
+---@return string[] dirs  absolute paths that exist
+local function extra_include_dirs(root)
+  local path = root .. '/' .. INCLUDE_DIRS_FILE
+  if not vim.uv.fs_stat(path) then return {} end
+  local ok, lines = pcall(vim.fn.readfile, path)
+  if not ok then return {} end
+  local dirs, seen = {}, {}
+  for _, line in ipairs(lines) do
+    local s = line:gsub('%s*#.*$', ''):gsub('^%s+', ''):gsub('%s+$', '')
+    if s ~= '' then
+      s = vim.fn.expand(s)
+      if not s:match('^/') then s = root .. '/' .. s end
+      s = vim.fs.normalize(s)
+      if not seen[s] and vim.uv.fs_stat(s) then
+        seen[s] = true
+        dirs[#dirs + 1] = s
+      end
+    end
+  end
+  return dirs
+end
+
 ---Build the project model: scan sources, resolve includes, find unity TUs.
 ---@param root string
 ---@return table|nil model, string|nil err
@@ -171,6 +215,9 @@ local function scan(root)
     local dir = b == '' and root or (root .. '/' .. b)
     if vim.uv.fs_stat(dir) then bases[#bases + 1] = dir end
   end
+  -- Declared external roots come last, so an in-project header always wins
+  -- over a same-named one in a sibling checkout.
+  vim.list_extend(bases, extra_include_dirs(root))
   local used_bases = {}
 
   -- Last-resort resolver: index every header in the project by basename and
@@ -503,6 +550,33 @@ local function render(model)
     '  Background: Build',
   })
 
+  -- Keep the background index off the trees the TU scan already refuses to
+  -- look at. `Background: Build` above is what makes cross-file navigation
+  -- work, but it is applied per-file over the WHOLE root — so in a monorepo it
+  -- also indexes every vendored and generated source under SKIP_DIRS. That is
+  -- not a marginal cost: in ~/projects/notes it is 4735 of 6282 C/C++/headers
+  -- (75%), including a 63MB slang-core-module-generated.h and three copies of
+  -- a 1.7MB kb_text_shape.h, and clangd re-walks it in background threads
+  -- while you type. Nothing in the model refers to these files — scan() skips
+  -- SKIP_DIRS when finding TUs — so indexing them buys no completion or
+  -- goto-def that the project actually uses.
+  --
+  -- Emitted as the FIRST conditional fragment, after the global block: clangd
+  -- merges fragments in order, so a later `Skip` is what overrides the global
+  -- `Build` for these paths. Headers under GENERATED_BASES that a real TU
+  -- includes still resolve — the -I dirs and -include chains are unaffected;
+  -- only the unprompted indexing of the subtree stops.
+  local skip_alts = table.concat(SKIP_DIRS, '|')
+  vim.list_extend(out, {
+    '---',
+    '# Vendored/build trees: excluded from the TU scan, so exclude them from',
+    '# the background index too (see SKIP_DIRS in lua/config/clangd_setup.lua).',
+    'If:',
+    "  PathMatch: ['(.*/)?(" .. skip_alts .. ")/.*']",
+    'Index:',
+    '  Background: Skip',
+  })
+
   ---Append an `If: PathMatch -> CompileFlags: Add` fragment.
   local function flags_fragment(pathmatch, flags)
     vim.list_extend(out, {
@@ -569,6 +643,30 @@ local function render(model)
     end
   end
 
+  ---Headers declared in `dir` and each of its parents, nearest-root first.
+  ---Used as the module-local part of a preamble when a TU's own include chain
+  ---supplies no headers (see the `gained == 0` fallback below and the
+  ---orphan-dir pass further down).
+  ---@param dir string  project-relative dir
+  ---@return string[]  absolute header paths
+  local function local_headers(dir)
+    local headers, seen, parts = {}, {}, {}
+    if dir ~= '.' then
+      for p in dir:gmatch('[^/]+') do parts[#parts + 1] = p end
+    end
+    for i = 1, #parts do
+      local parent = table.concat(parts, '/', 1, i)
+      for _, h in ipairs((model.headers_by_dir and model.headers_by_dir[parent]) or {}) do
+        if not seen[h] then
+          seen[h] = true
+          headers[#headers + 1] = h
+        end
+      end
+    end
+    table.sort(headers)
+    return headers
+  end
+
   for i = 1, #model.tus do
     local tu = model.tus[i]
     local frag_dirs = {}
@@ -585,8 +683,39 @@ local function render(model)
       chain, from = vim.deepcopy(primary.chain), primary.rel .. ' + ' .. tu.rel
       local have = {}
       for _, h in ipairs(chain) do have[h.path] = true end
+      local gained = 0
       for _, h in ipairs(tu.chain) do
-        if not have[h.path] then chain[#chain + 1] = h end
+        if not have[h.path] then
+          have[h.path] = true
+          chain[#chain + 1] = h
+          gained = gained + 1
+        end
+      end
+      -- An aggregate TU that pulls in only .c files contributes no headers of
+      -- its own, so the merge above leaves the PRIMARY TU's preamble as the
+      -- entire chain — and the fragment still claims this TU's dirs. In
+      -- ~/projects/notes that is renderer/src/render/render_inc.c, whose body
+      -- is `#include "render/render.c"` and two more sources: every file under
+      -- renderer/src/render was force-included with all 19 headers of the
+      -- unrelated research/ash/phase-4 shell (lexer, parser, eval, repl, ...)
+      -- and none of renderer's own. 21 of 106 fragments were built this way,
+      -- concentrated in renderer/ and appgui/ — clangd parsed a foreign
+      -- project into the preamble of every file in them, and resolved the
+      -- module's real types not at all.
+      --
+      -- Keep the primary base (those aggregates genuinely do need it — that is
+      -- what base_hdr detects) and append the module's own local/parent
+      -- headers, the same set the orphan-dir pass below uses.
+      if gained == 0 then
+        for _, d in ipairs(frag_dirs) do
+          for _, h in ipairs(local_headers(d)) do
+            if not have[h] then
+              have[h] = true
+              chain[#chain + 1] = { path = h }
+            end
+          end
+        end
+        from = from .. ' + local headers'
       end
     end
 
@@ -614,25 +743,8 @@ local function render(model)
     end
     table.sort(orphans)
     local no_local_headers = {}
-    local function orphan_headers(dir)
-      local headers, seen, parts = {}, {}, {}
-      if dir ~= '.' then
-        for p in dir:gmatch('[^/]+') do parts[#parts + 1] = p end
-      end
-      for i = 1, #parts do
-        local parent = table.concat(parts, '/', 1, i)
-        for _, h in ipairs((model.headers_by_dir and model.headers_by_dir[parent]) or {}) do
-          if not seen[h] then
-            seen[h] = true
-            headers[#headers + 1] = h
-          end
-        end
-      end
-      table.sort(headers)
-      return headers
-    end
     for _, d in ipairs(orphans) do
-      local headers = orphan_headers(d)
+      local headers = local_headers(d)
       if #headers > 0 then
         local chain, seen = vim.deepcopy(primary.chain), {}
         for _, h in ipairs(chain) do seen[h.path] = true end
@@ -689,10 +801,33 @@ local function render(model)
   }
 end
 
----@param opts? {force?: boolean}
+---@param opts? {force?: boolean, dir?: string}
 function M.generate(opts)
   opts = opts or {}
-  local root = vim.fs.root(0, '.git') or vim.fs.normalize(vim.fn.getcwd())
+  -- Default: the git root, which is the right answer for a single-project
+  -- repo. It is the wrong answer for a monorepo — ~/projects/notes holds
+  -- renderer/, appgui/, some-engine-some/ and research/, each its own unity
+  -- build with its own src/ include base. Rooted at the git dir, scan() picks
+  -- ONE primary TU for all four (it chose research/ash/phase-4/main.c),
+  -- prefixes that shell project's preamble onto every other subtree, fails to
+  -- resolve `base/base_inc.h` from an example because it only probes
+  -- root-relative include bases, and hands clangd 6282 files to background
+  -- index instead of the 52 that renderer/ actually contains.
+  --
+  -- So allow an explicit dir: `:ClangdSetup renderer` writes renderer/.clangd.
+  -- clangd's root_markers list `.clangd` (see lsp/clangd.lua) and vim.fs.root
+  -- takes the NEAREST match, so that file also becomes the LSP root — which is
+  -- what scopes the background index to the subproject.
+  local root
+  if opts.dir and opts.dir ~= '' then
+    root = vim.fn.fnamemodify(vim.fs.normalize(opts.dir), ':p'):gsub('/$', '')
+    if not vim.uv.fs_stat(root) then
+      vim.notify('ClangdSetup: no such directory: ' .. root, vim.log.levels.ERROR)
+      return
+    end
+  else
+    root = vim.fs.root(0, '.git') or vim.fn.getcwd()
+  end
   root = vim.fs.normalize(root)
   local target = root .. '/.clangd'
 
@@ -730,10 +865,12 @@ end
 
 function M.setup()
   vim.api.nvim_create_user_command('ClangdSetup', function(cmd)
-    M.generate({ force = cmd.bang })
+    M.generate({ force = cmd.bang, dir = cmd.args })
   end, {
     bang = true,
-    desc = 'Generate a unity-build .clangd at the project root (! overwrites)',
+    nargs = '?',
+    complete = 'dir',
+    desc = 'Generate a unity-build .clangd (arg: subproject dir; default git root; ! overwrites)',
   })
 end
 
