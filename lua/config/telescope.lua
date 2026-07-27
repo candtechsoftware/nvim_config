@@ -196,6 +196,17 @@ function M.setup()
         })
     end, { desc = "Find files" })
 
+    -- Buffer/recent-file jumping. These replace harpoon: it was the only
+    -- "hop between the N files I'm working in" mechanism, and neither picker
+    -- was bound anywhere before it was removed.
+    vim.keymap.set("n", "<leader>fb", function()
+        builtin().buffers({ sort_mru = true, ignore_current_buffer = true })
+    end, { desc = "Find buffers" })
+
+    vim.keymap.set("n", "<leader>fo", function()
+        builtin().oldfiles({ cwd_only = true })
+    end, { desc = "Find recent files (this project)" })
+
     vim.keymap.set("n", "<leader>/", function()
         local root = find_project_root()
         builtin().live_grep({

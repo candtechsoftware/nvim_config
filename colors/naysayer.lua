@@ -1,8 +1,16 @@
 -- naysayer: dark green-blue scheme with tan text.
 -- Ported from Nick Aversano's Emacs naysayer-theme.el, itself inspired by
--- Jonathan Blow's compiler livestreams. Unlike hmin this keeps naysayer's
--- distinct palette (white keywords/functions, green types/punctuation, tan
--- text, bluish variables, teal literals) rather than collapsing to monochrome.
+-- Jonathan Blow's compiler livestreams. Keeps naysayer's distinct palette
+-- (white keywords/functions, green types/punctuation, tan text, bluish
+-- variables, teal literals) rather than collapsing toward monochrome.
+--
+-- Two variants live in this one file. `colors/naysayer_black.lua` sets
+-- `vim.g.naysayer_black` and sources this; that variant swaps the background
+-- family (editor, floats, gutter, cursorline), the background-tinted greys
+-- (non-text, indent guides) and the diff washes for neutral dark grey. Every
+-- foreground hue is identical, which is exactly why they were one 359-line
+-- copy of each other before — the two files diverged by 10 palette entries
+-- and a name.
 
 vim.cmd("hi clear")
 if vim.fn.exists("syntax_on") then
@@ -10,16 +18,43 @@ if vim.fn.exists("syntax_on") then
 end
 vim.o.background = "dark"
 vim.o.termguicolors = true
-vim.g.colors_name = "naysayer"
+
+local black = vim.g.naysayer_black == 1 or vim.g.naysayer_black == true
+vim.g.colors_name = black and "naysayer_black" or "naysayer"
 
 local hl = vim.api.nvim_set_hl
 
--- Palette -----------------------------------------------------------------
-local c = {
+-- Background family. The only axis the two variants differ on.
+local bg = black and {
+  back     = "#1a1a1a", -- editor background (soft neutral dark grey)
+  float    = "#242424", -- floats / popups (slightly lifted)
+  line_bg  = "#1a1a1a", -- gutter background (same as editor)
+  cur_line = "#2a2a2a", -- cursorline / current-line highlight
+  line_fg  = "#1a7075", -- line numbers / non-current (lifted for black bg)
+  ghost    = "#3d3d3d", -- non-text, whitespace, indent guides (neutral grey)
+  diff_add = "#17301d",
+  diff_chg = "#162834",
+  diff_del = "#33141a",
+  diff_txt = "#1b3d57",
+} or {
   back     = "#062329", -- editor background
   float    = "#0a2e34", -- floats / popups (slightly lifted)
   line_bg  = "#062329", -- gutter background (same as editor in naysayer)
   cur_line = "#0b3335", -- cursorline / current-line highlight
+  line_fg  = "#126367", -- line numbers / non-current
+  ghost    = "#0f4145", -- non-text, whitespace, indent guides
+  diff_add = "#0a2a1a",
+  diff_chg = "#0a2330",
+  diff_del = "#2a0a12",
+  diff_txt = "#103a55",
+}
+
+-- Palette -----------------------------------------------------------------
+local c = {
+  back     = bg.back,
+  float    = bg.float,
+  line_bg  = bg.line_bg,
+  cur_line = bg.cur_line,
 
   fg       = "#d0b892", -- default text (warm tan)
   comment  = "#53d549", -- comments (green)
@@ -29,8 +64,8 @@ local c = {
   string   = "#3ad0b5", -- strings (teal)
   constant = "#87ffde", -- constants, numbers, escapes (light teal)
 
-  line_fg  = "#126367", -- line numbers / non-current
-  ghost    = "#0f4145", -- non-text, whitespace, indent guides
+  line_fg  = bg.line_fg,
+  ghost    = bg.ghost,
   sel      = "#0000ff", -- visual selection (authentic naysayer region)
   sel_soft = "#103a55", -- menu selection / search (softer blue)
   cursor   = "#ffffff",
@@ -319,10 +354,10 @@ hl(0, "DiagnosticSignHint",  { fg = c.comment, bg = c.line_bg })
 hl(0, "GitSignsAdd",    { fg = c.ok, bg = c.line_bg })
 hl(0, "GitSignsChange", { fg = c.warning, bg = c.line_bg })
 hl(0, "GitSignsDelete", { fg = c.error, bg = c.line_bg })
-hl(0, "DiffAdd",    { bg = "#0a2a1a" })
-hl(0, "DiffChange", { bg = "#0a2330" })
-hl(0, "DiffDelete", { fg = c.error, bg = "#2a0a12" })
-hl(0, "DiffText",   { bg = "#103a55", bold = true })
+hl(0, "DiffAdd",    { bg = bg.diff_add })
+hl(0, "DiffChange", { bg = bg.diff_chg })
+hl(0, "DiffDelete", { fg = c.error, bg = bg.diff_del })
+hl(0, "DiffText",   { bg = bg.diff_txt, bold = true })
 
 -- Rainbow delimiters (Monokai accents, matching the original) -------------
 local rainbow = { c.violet, c.blue, c.green, c.yellow, c.orange, c.red }
@@ -347,13 +382,5 @@ hl(0, "TelescopePreviewBorder",  { fg = c.line_fg, bg = c.back })
 hl(0, "TelescopeSelection",      { fg = c.white, bg = c.sel_soft })
 hl(0, "TelescopeSelectionCaret", { fg = c.white, bg = c.sel_soft })
 hl(0, "TelescopeMatching",       { fg = c.constant, bold = true })
-
--- Indent / misc -----------------------------------------------------------
-hl(0, "IblIndent", { fg = c.ghost })
-hl(0, "IblScope",  { fg = c.line_fg })
-hl(0, "WhichKey",      { fg = c.white })
-hl(0, "WhichKeyGroup", { fg = c.punct })
-hl(0, "WhichKeyDesc",  { fg = c.fg })
-hl(0, "WhichKeyFloat", { bg = c.float })
 
 return c

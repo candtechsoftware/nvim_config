@@ -332,17 +332,6 @@ hl(0, "TelescopeSelectionCaret", { fg = c.cursor, bg = c.list_cursor })
 hl(0, "TelescopeMultiSelection", { fg = c.string, bg = c.list_hover })
 hl(0, "TelescopeMatching", { fg = c.keyword, bold = true })
 
-hl(0, "HarpoonBorder", { fg = c.splitter })
-hl(0, "HarpoonWindow", { fg = c.text })
-hl(0, "IblIndent", { fg = c.soft_highlight })
-hl(0, "IblScope", { fg = c.ui_neutral })
-hl(0, "WhichKey", { fg = c.macro })
-hl(0, "WhichKeyGroup", { fg = c.type })
-hl(0, "WhichKeyDesc", { fg = c.text })
-hl(0, "WhichKeySeperator", { fg = c.ui_neutral })
-hl(0, "WhichKeyFloat", { bg = c.panel })
-hl(0, "WhichKeyValue", { fg = c.value })
-
 -- Back-cycle for nested scopes. hh.lua indexes these mod #back_cycle (6), so six
 -- entries is the full cycle. Upstream leaves region_scope_* flat at #161616; this
 -- lifts each nesting level slightly warmer off that base, toward the tan text.

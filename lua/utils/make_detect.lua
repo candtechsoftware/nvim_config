@@ -203,25 +203,23 @@ function M.setup()
     print("makeprg → " .. vim.o.makeprg)
   end, {})
 
-  -- ultra-convenient :Make wrapper (detect → :make → auto-open quickfix)
+  -- :Make [args] — detect makeprg, build, open quickfix on failure.
+  --
+  -- Runs through launch.run rather than `:make`. Builtin `:make` is
+  -- synchronous: it freezes the UI for the entire compile, which on anything
+  -- larger than a toy project means the editor is simply gone for a while.
+  -- launch.run.run_build is the same errorformat → quickfix → inline
+  -- diagnostics path, off the main loop.
   vim.api.nvim_create_user_command("Make", function(opts)
     M.apply()
-    -- pass user args to :make (e.g., :Make --release)
+    local cmd = vim.bo.makeprg
     local args = table.concat(opts.fargs, " ")
-    if args ~= "" then
-      vim.cmd("make " .. args)
-    else
-      vim.cmd("make")
-    end
-
-    -- Auto-open quickfix list if there are errors
-    vim.defer_fn(function()
-      local qf_list = vim.fn.getqflist()
-      if #qf_list > 0 then
-        vim.cmd("copen")
-      end
-    end, 100)
-  end, { nargs = "*" })
+    if args ~= "" then cmd = cmd .. " " .. args end
+    -- makeprg may contain % (jai builds the current file); :make expands it,
+    -- so expand it here too or the shell gets a literal percent.
+    cmd = cmd:gsub("%%", vim.fn.expand("%"))
+    require("launch.run").run_build({ name = "make", cmd = cmd }, vim.uv.cwd())
+  end, { nargs = "*", desc = "Async build via detected makeprg" })
 
   -- Quickfix navigation keybindings
   vim.keymap.set("n", "]q", "<cmd>cnext<cr>", { desc = "Next quickfix item" })

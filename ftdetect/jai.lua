@@ -36,7 +36,10 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.bo.smartindent = false
     vim.bo.cindent = false
     vim.bo.indentexpr = 'v:lua._jai_indentexpr()'
-    vim.bo.errorformat = "%f:%l\\,%c:%m"
+    -- No errorformat here. This used to set "%f:%l\,%c:%m", which raced the
+    -- richer jai errorformat in utils/make_detect.lua from a second FileType
+    -- autocmd — whichever ran last won, so which one you got depended on
+    -- autocmd registration order. make_detect owns errorformat.
     vim.bo.define = "^\\s*\\w\\+\\s*:.*:.*\\s*[({]"
   end,
 })

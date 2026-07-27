@@ -64,6 +64,8 @@ Leader: `<Space>`
 | Key | Mode | Action |
 |-----|------|--------|
 | `<leader>ff` | n | Find files |
+| `<leader>fb` | n | Buffers (most-recent first) |
+| `<leader>fo` | n | Recent files, this project |
 | `<leader>/` | n | Live grep (use `**glob` to filter files) |
 | `<leader>.` | n | Live grep (current dir) |
 | `<leader>pws` | n | Grep word under cursor |
@@ -87,17 +89,40 @@ Leader: `<Space>`
 | `<C-q>` | i,n | Send to quickfix |
 | `<Esc>` / `q` | i/n | Close |
 
-## Harpoon (harpoon.lua)
+## Build & run (launch/)
+
+Targets come from `<root>/launch.json` — see the README for the schema, or run
+`:LaunchInit` to drop a commented starter file into the current project.
+
+A count picks the target: `<leader>b` builds target 1, `2<leader>b` builds
+target 2. (Counts rather than `<leader>b1`/`<leader>b2`, so a bare `<leader>b`
+fires immediately instead of waiting out `timeoutlen` to see if a digit is
+coming.)
 
 | Key | Mode | Action |
 |-----|------|--------|
-| `<leader>ha` | n | Add file |
-| `<C-h>` | n | File 1 |
-| `<C-t>` | n | File 2 |
-| `<C-n>` | n | File 3 |
-| `<C-s>` | n | File 4 |
-| `<leader>hp` / `<leader>hn` | n | Prev/next file |
-| `<C-e>` | n | Toggle menu |
+| `<leader>b` | n | Build target 1 (quickfix + inline diagnostics) |
+| `N<leader>b` | n | Build target N |
+| `<leader>r` | n | Run target 1 (streaming terminal pane) |
+| `N<leader>r` | n | Run target N |
+| `<leader>o` | n | Toggle the output pane (job keeps running) |
+| `<leader>x` | n | Stop running jobs |
+| `<leader>ft` | n | Pick a target |
+| `q` | n | *(in the output pane)* hide the pane, leave the job running |
+| `<C-c>` | n | *(in the output pane)* stop this job |
+
+With no `launch.json`, `<leader>b` falls back to the makeprg detected by
+`utils/make_detect.lua`, so it still builds any Makefile/Cargo/zig project.
+
+| Command | Action |
+|---|---|
+| `:Launch [name\|index]` | Run a target |
+| `:LaunchStop [name]` | Stop one job, or all |
+| `:LaunchList` | Targets + running state |
+| `:LaunchQF` | Push the output pane through `errorformat` into quickfix |
+| `:LaunchInit` | Write a starter `launch.json` |
+| `:LaunchReload` | Re-read `launch.json` after editing it |
+| `:Make [args]` | Async build via the detected makeprg |
 
 ## Clipboard (clipboard.lua)
 

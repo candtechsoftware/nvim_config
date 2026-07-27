@@ -186,12 +186,19 @@ end
 ---keystroke in insert mode, stop()ing the superseded one but never close()ing
 ---it — so handles piled up until luv's __gc got around to them.
 ---@param bufnr integer
-local function schedule_highlight(bufnr)
+---@param force boolean|nil  skip the fingerprint check when the timer fires
+local function schedule_highlight(bufnr, force)
   local st = state[bufnr]
   if not st then return end
+  -- Coalescing must not downgrade a forced request: if a forced and a plain
+  -- one land in the same debounce window, only one highlight() call survives,
+  -- and it has to be the stronger of the two.
+  st.pending_force = st.pending_force or force or false
   st.timer:stop()
   st.timer:start(DEBOUNCE_MS, 0, vim.schedule_wrap(function()
-    M.highlight(bufnr, false)
+    local f = st.pending_force
+    st.pending_force = false
+    M.highlight(bufnr, f)
   end))
 end
 
@@ -216,11 +223,25 @@ function M.attach(bufnr)
     callback = function() schedule_highlight(bufnr) end,
   })
 
-  -- WinScrolled/WinResized were missing entirely. Extmarks are only painted for
-  -- the visible band, so <C-e>, <C-y>, zz, zt — which move the viewport without
-  -- moving the cursor — scrolled unpainted lines into view and left them that
-  -- way until the cursor happened to move.
-  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "WinScrolled", "WinResized" }, {
+  -- Viewport events. Extmarks are only painted for the visible band, so
+  -- <C-e>, <C-y>, zz, zt — which move the viewport without moving the cursor —
+  -- scrolled unpainted lines into view and left them that way until the cursor
+  -- happened to move.
+  --
+  -- These are split by frequency. WinScrolled fires once per scroll STEP, so a
+  -- held <C-e> ran the full containing_scopes() treesitter query per step with
+  -- no rate limit at all — the CursorMoved arm above has been debounced since
+  -- forever, this one never was. It goes through the same timer now.
+  vim.api.nvim_create_autocmd("WinScrolled", {
+    group = group,
+    buffer = bufnr,
+    callback = function() schedule_highlight(bufnr, true) end,
+  })
+
+  -- BufEnter/WinEnter/WinResized fire once per switch or resize, not per step.
+  -- Debouncing these would buy nothing and cost a visible 50ms of unpainted
+  -- scope every time you change buffer, so they stay immediate.
+  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "WinResized" }, {
     group = group,
     buffer = bufnr,
     callback = function() M.highlight(bufnr, true) end,

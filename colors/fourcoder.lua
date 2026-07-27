@@ -388,19 +388,6 @@ hl(0, "TelescopeSelectionCaret", { fg = c.cursor, bg = c.margin_active })
 hl(0, "TelescopeMultiSelection", { fg = c.constant, bg = c.margin_hover })
 hl(0, "TelescopeMatching",       { fg = c.keyword, bold = true })
 
-hl(0, "HarpoonBorder", { fg = c.margin_active })
-hl(0, "HarpoonWindow", { fg = c.text })
-
--- Indent / misc -----------------------------------------------------------
-hl(0, "IblIndent", { fg = c.margin_active })
-hl(0, "IblScope",  { fg = c.line_nr_text })
-hl(0, "WhichKey",         { fg = c.keyword })
-hl(0, "WhichKeyGroup",    { fg = c.text })
-hl(0, "WhichKeyDesc",     { fg = c.text })
-hl(0, "WhichKeySeperator", { fg = c.line_nr_text })
-hl(0, "WhichKeyFloat",    { bg = c.margin })
-hl(0, "WhichKeyValue",    { fg = c.constant })
-
 -- Nested-scope backgrounds (defcolor_back_cycle) --------------------------
 -- Upstream these are ARGB with a low alpha, composited over defcolor_back:
 --   0x10A00000 0x0C00A000 0x0C0000A0 0x0CA0A000 over #0c0c0c. Neovim has no

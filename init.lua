@@ -42,9 +42,27 @@ vim.pack.add({
     'https://github.com/nvim-lua/plenary.nvim',
     'https://github.com/nvim-telescope/telescope.nvim',
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
-    { src = 'https://github.com/ThePrimeagen/harpoon', version = 'harpoon2' },
-    'https://github.com/MeanderingProgrammer/render-markdown.nvim',
     'https://github.com/mbbill/undotree',
+})
+
+-- render-markdown is markdown-only but cost ~4ms of a ~40ms startup: its
+-- plugin/render-markdown.lua pulls in ~20 modules, and it self-initializes
+-- with no setup() call (which is why nothing here configures it).
+--
+-- `load = false` is NOT enough to defer it. That is already the default while
+-- init.lua is sourcing — it means `:packadd!`, which still puts the plugin on
+-- 'runtimepath', and the normal post-init rtp scan then sources plugin/ anyway.
+-- A no-op `load` keeps it off the rtp entirely until the packadd below.
+vim.pack.add({ 'https://github.com/MeanderingProgrammer/render-markdown.nvim' },
+    { load = function() end })
+
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = 'markdown',
+    once = true,
+    desc = 'Load render-markdown.nvim on first markdown buffer',
+    callback = function()
+        vim.cmd.packadd('render-markdown.nvim')
+    end,
 })
 
 -- Core
@@ -64,9 +82,8 @@ require("config.treesitter").setup()
 -- ERROR-recovered unity-macro functions, and colors/handmade.lua links them
 -- to the same groups the matchadd patterns forced.
 
--- Telescope + Harpoon
+-- Telescope
 require("config.telescope").setup()
-require("config.harpoon").setup()
 
 -- Utilities
 require("utils.make_detect").setup()

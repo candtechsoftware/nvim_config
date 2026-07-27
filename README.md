@@ -26,8 +26,14 @@ Declared in `init.lua` via `vim.pack.add`:
 
 - **plenary.nvim** — dependency of telescope
 - **telescope.nvim** + **telescope-fzf-native.nvim** — fuzzy finding
-- **harpoon** (`harpoon2` branch) — file marks
-- **render-markdown.nvim** — markdown rendering
+- **undotree** — undo history browser (`<leader>u`)
+- **render-markdown.nvim** — markdown rendering. Loaded with a no-op `load`
+  handler and `:packadd`ed from a one-shot `FileType markdown` autocmd. Its
+  `plugin/` file pulls in ~20 modules and cost ~4ms of a ~38ms startup for
+  something only markdown buffers use. Note `load = false` would NOT have been
+  enough: that is already the default while `init.lua` is sourcing, and it only
+  means `:packadd!` — the plugin still lands on `runtimepath` and the normal
+  post-init rtp scan sources it anyway.
 
 Managing them:
 
@@ -92,6 +98,52 @@ than config.
 
 Leader is `<Space>`.
 
+## Building and running (`launch.json`)
+
+Drop a `launch.json` at the project root — or run `:LaunchInit` to write a
+commented starter. `<leader>b` builds, `<leader>r` runs, and a count picks the
+target: `2<leader>r` runs the second one.
+
+```jsonc
+{
+  // Comments and trailing commas are fine — this is parsed as JSONC.
+  "build": ["make -j", "make -j RELEASE=1"],
+
+  "run": [
+    "./bin/tool --verbose",
+
+    // Long form, when a target needs options:
+    //   depends  build target to run first; only launches on exit 0
+    //   height   output pane height in lines
+    { "name": "game", "cmd": "./build/game", "depends": "build", "height": 20 }
+  ]
+
+  // Any of the above may be platform-keyed:
+  //   "run": { "mac": ["./build/app"], "linux": ["./build/app"] }
+}
+```
+
+The two kinds behave differently on purpose:
+
+- **build** runs buffered, parses output through the `errorformat` that
+  `utils/make_detect.lua` detected for the project, and gives you a quickfix
+  list plus inline diagnostics. You don't want to watch a compile scroll past;
+  you want the errors.
+- **run** gets a **PTY terminal pane**, streaming. The PTY matters: a program
+  whose stdout is a pipe gets libc's block buffering, so a long-running app
+  produces nothing observable until it exits. On a tty it line-buffers, so
+  output appears as it happens — and you also get ANSI colour and a working
+  stdin for an interactive CLI.
+
+Re-running a target kills its previous instance first, so a GUI app started
+twice can't leave an unreachable orphan, and `VimLeavePre` stops everything so
+nothing outlives the editor. `:LaunchQF` pushes the output pane through
+`errorformat` into quickfix, for a run that prints compiler-style errors.
+
+With no `launch.json`, `<leader>b` still builds: it falls back to the detected
+makeprg. The older `{"key_map": {"<F5>": "make"}}` form is still honored, and
+still restores any mapping it shadows when you switch projects.
+
 ## Layout
 
 ```
@@ -100,10 +152,12 @@ lua/config/           options, keymaps, lsp, ctags, completion, treesitter
 lua/hh/               scope shading + project macro highlighting (loaded BY the
                       colorschemes, not by init.lua)
 lua/notes/            notes browser
-lua/launch/           run/build helpers
+lua/launch/           build/run targets from launch.json
+                      init.lua  config + target resolution + keymaps
+                      run.lua   job registry + terminal output pane
 lua/utils/            project root, makeprg detection
 lsp/                  per-server LSP configs
-colors/               8 colorschemes (`handmade` is the default)
+colors/               handmade (default), fourcoder, naysayer, naysayer_black
 after/ftplugin/       filetype overrides (c, cpp, objc, objcpp, markdown)
 after/queries/        treesitter query overrides
 queries/jai/          Jai treesitter queries
