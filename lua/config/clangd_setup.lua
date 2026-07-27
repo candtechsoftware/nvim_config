@@ -149,6 +149,71 @@ local function parse_includes(path)
   return incs
 end
 
+-- Root-level build files consulted for the ARC signal (see arc_required).
+-- Anything matching `*.mk` counts too.
+local BUILD_FILES = {
+  ['build.sh'] = true, ['build.zsh'] = true, ['build.command'] = true,
+  ['Makefile'] = true, ['makefile'] = true, ['GNUmakefile'] = true,
+  ['CMakeLists.txt'] = true, ['build.ninja'] = true,
+  ['Justfile'] = true, ['justfile'] = true,
+}
+
+---Read up to `nlines` of a file and test it against Lua patterns.
+---@param path string
+---@param nlines integer
+---@param pats string[]
+---@return boolean[] one flag per pattern, true when some line matched it
+local function file_matches(path, nlines, pats)
+  local hits = {}
+  for i = 1, #pats do hits[i] = false end
+  local ok, lines = pcall(vim.fn.readfile, path, '', nlines)
+  if not ok then return hits end
+  for _, line in ipairs(lines) do
+    for i, p in ipairs(pats) do
+      if not hits[i] and line:find(p) then hits[i] = true end
+    end
+  end
+  return hits
+end
+
+---Does the real build compile Objective-C with ARC?
+---
+---This is DETECTED, never assumed, because both answers are wrong for the
+---other kind of project. An ARC backend usually hard-guards itself
+---(`#if !__has_feature(objc_arc)` / `#error ... requires ARC`, e.g.
+---the_std's src/render/metal/render_metal.h) and that #error is a REAL
+---diagnostic, not a unity false positive — no SUPPRESS entry can silence it,
+---so every member file of the TU that pulls in the backend reports it until
+----fobjc-arc is passed. Feed -fobjc-arc to a manual-retain/release project
+---instead and you get the mirror image: an error on every [obj retain].
+---
+---Two signals, either suffices: the root build script naming -fobjc-arc (or
+---Xcode's CLANG_ENABLE_OBJC_ARC), or an ObjC source whose sibling header
+---carries the __has_feature(objc_arc) + #error guard.
+---@param root string
+---@param objc_srcs string[] absolute paths of scanned .m/.mm files
+---@return boolean
+local function arc_required(root, objc_srcs)
+  for name, typ in vim.fs.dir(root) do
+    if typ == 'file' and (BUILD_FILES[name] or name:match('%.mk$')) then
+      local hits = file_matches(root .. '/' .. name, 500,
+        { '%-fobjc%-arc', 'CLANG_ENABLE_OBJC_ARC' })
+      if hits[1] or hits[2] then return true end
+    end
+  end
+  for _, src in ipairs(objc_srcs) do
+    local hdr = src:gsub('%.mm?$', '.h')
+    if vim.uv.fs_stat(hdr) then
+      -- Both, so a merely ARC-AWARE file (`#if defined(__OBJC__) &&
+      -- __has_feature(objc_arc)` around an optional branch) isn't read as a
+      -- requirement — only a guard that hard-errors without ARC is.
+      local hits = file_matches(hdr, 300, { '__has_feature%s*%(%s*objc_arc', '^%s*#%s*error' })
+      if hits[1] and hits[2] then return true end
+    end
+  end
+  return false
+end
+
 ---@param root string
 ---@param abs string
 ---@return string path relative to root when under it, else the absolute path
@@ -355,21 +420,29 @@ local function scan(root)
   -- Does a C/C++ file pull a .m/.mm into the unity build? Then the real
   -- build compiles those TUs as Objective-C (the_std passes -ObjC on mac)
   -- and clangd must match, or `#error requires Objective-C` guards fire.
-  local objc_unity = false
+  local objc_unity, objc_srcs = false, {}
   for _, abs in ipairs(files) do
     local e, self_ext = info[abs], ext_of(abs)
-    if e and self_ext ~= 'm' and self_ext ~= 'mm' then
+    if self_ext == 'm' or self_ext == 'mm' then
+      objc_srcs[#objc_srcs + 1] = abs
+    elseif e then
       for _, inc in ipairs(e.incs) do
         local ie = inc.is_src and ext_of(inc.raw) or nil
         if ie == 'm' or ie == 'mm' then objc_unity = true end
       end
     end
   end
+  -- ...and does that build use ARC? (see arc_required — it decides whether
+  -- -fobjc-arc goes in the ObjC fragments below).
+  local objc_arc = objc_unity and arc_required(root, objc_srcs)
 
   -- Per-TU: transitive coverage (which dirs its build touches, depth<=4) and
   -- the -include chain (the TU's own ordered quoted headers — exactly the
   -- preamble its member files are compiled under).
-  local model = { root = root, tus = {}, used_bases = used_bases, objc_unity = objc_unity }
+  local model = {
+    root = root, tus = {}, used_bases = used_bases,
+    objc_unity = objc_unity, objc_arc = objc_arc,
+  }
   for _, tu in ipairs(tus) do
     local seen, dirs = {}, {}
     local function walk(abs, depth)
@@ -596,18 +669,25 @@ local function render(model)
   -- as plain C/C++.
   local sysname = vim.uv.os_uname().sysname
   local objc = model.objc_unity and sysname == 'Darwin'
-  flags_fragment('[.*\\.c, .*\\.m]', objc and '[-xobjective-c, -std=c99]' or '[-std=c99]')
-  flags_fragment('[.*\\.(cpp|cc|cxx|mm)]', objc and '[-xobjective-c++, -std=c++17]' or '[-std=c++17]')
+  -- Memory model must match the real build too, not just the language: an ARC
+  -- backend's `#error ... requires ARC` guard is a genuine diagnostic that no
+  -- Suppress entry can hide, so without this flag it fires on every member of
+  -- the TU that includes it. Detected, not assumed — see arc_required.
+  local arc = (objc and model.objc_arc) and ', -fobjc-arc' or ''
+  flags_fragment('[.*\\.c, .*\\.m]', objc and '[-xobjective-c, -std=c99' .. arc .. ']' or '[-std=c99]')
+  flags_fragment('[.*\\.(cpp|cc|cxx|mm)]',
+    objc and '[-xobjective-c++, -std=c++17' .. arc .. ']' or '[-std=c++17]')
   if n_c >= n_cpp then
     -- C project: force headers to C (ObjC when the unity build is ObjC),
     -- else clangd's ObjC++ header mode rejects C-isms (and a C std would
     -- be an invalid argument).
     local hdr_lang = objc and '-xobjective-c-header' or '-xc-header'
-    flags_fragment('[.*\\.h]', '[' .. hdr_lang .. ', -std=c99]')
+    flags_fragment('[.*\\.h]', '[' .. hdr_lang .. ', -std=c99' .. arc .. ']')
   else
     -- C++ project: headers follow the source language. If the mac unity build
     -- is ObjC++, headers need __OBJC__ too (e.g. AppKit-backed platform code).
-    flags_fragment('[.*\\.(h|hh|hpp)]', objc and '[-xobjective-c++-header, -std=c++17]' or '[-std=c++17]')
+    flags_fragment('[.*\\.(h|hh|hpp)]',
+      objc and '[-xobjective-c++-header, -std=c++17' .. arc .. ']' or '[-std=c++17]')
   end
 
   local foreign = FOREIGN_PLATFORM[sysname] or FOREIGN_PLATFORM.Windows_NT
