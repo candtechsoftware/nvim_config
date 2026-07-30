@@ -269,14 +269,18 @@ function M.get_indent(lnum)
   -- become siblings of the error rather than children, reach no captured block,
   -- and land on 0. Widen the test to the whole top-level declaration -- one bad
   -- procedure declines to reindent, the rest of the file still does.
-  local probe, outermost = node, node
+  -- Only a real ERROR node counts. A *missing* node is the parser saying it
+  -- knows exactly what is absent and carried on -- the surrounding blocks are
+  -- still there, so the indent is still computable. That distinction is not
+  -- academic here: tree-sitter-jai wants `defer` to be followed by a second
+  -- `;` it never gets, so every `defer free(x);` -- ordinary, idiomatic Jai --
+  -- leaves a zero-width missing node behind. Treating those as broken would
+  -- refuse to reindent most procedures anyone actually writes.
+  local probe = node
   while probe do
-    if probe:type() == 'ERROR' or probe:missing() then return bail(lnum, blank) end
-    local parent = probe:parent()
-    if parent then outermost = probe end
-    probe = parent
+    if probe:type() == 'ERROR' then return bail(lnum, blank) end
+    probe = probe:parent()
   end
-  if outermost:has_error() then return bail(lnum, blank) end
 
   local indent_size = vim.fn.shiftwidth()
   local indent = 0
@@ -289,6 +293,9 @@ function M.get_indent(lnum)
 
   -- One indent step per *row*, however many captured nodes start on it.
   local processed_rows = {}
+  -- Did any captured node actually contribute? Distinguishes "0 is the answer"
+  -- from "we found nothing to measure against" -- see the guard after the walk.
+  local touched = false
 
   while node do
     local id = node:id()
@@ -385,17 +392,22 @@ function M.get_indent(lnum)
     end
 
     processed_rows[srow] = processed_rows[srow] or is_processed
+    touched = touched or is_processed
     node = node:parent()
   end
 
-  -- Last net, for the failure the two guards above cannot see. When the
-  -- grammar chokes, the ERROR node swallows the enclosing `{`, and the lines
-  -- beneath it reparse as top-level declarations hanging straight off
-  -- `source_file` -- every ancestor reports has_error=false, and the walk
-  -- honestly finds nothing to indent against. The tell is the combination:
-  -- the file did not fully parse, and we are about to flush a line the author
-  -- indented out to column 0. That is never an improvement, so decline.
-  if indent <= 0 and root:has_error() and (blank or indent_cols(lnum) > 0) then
+  -- Last net, for the failure the guard above cannot see. When the grammar
+  -- chokes, the ERROR node swallows the enclosing `{`, and the lines beneath
+  -- it reparse as top-level declarations hanging straight off `source_file` --
+  -- every ancestor reports has_error=false, and the walk honestly finds
+  -- nothing to indent against.
+  --
+  -- `touched` is what makes this safe to apply: it separates "nothing was
+  -- captured, so 0 is just the absence of an answer" from "0 is the answer",
+  -- which is the correct indent for every closing brace of a top-level
+  -- procedure. Without it this guard pinned any such `}` wherever it sat, in
+  -- any file with a parse error anywhere in it.
+  if not touched and indent <= 0 and root:has_error() and (blank or indent_cols(lnum) > 0) then
     return bail(lnum, blank)
   end
 
