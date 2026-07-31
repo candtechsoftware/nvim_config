@@ -200,7 +200,7 @@ local function setup_diagnostics()
     update_in_insert = false,
     severity_sort = true,
     float = {
-      border = 'rounded',
+      -- no `border` here: floats inherit 'winborder' (rounded, options.lua)
       header = '',
       prefix = '',
       focusable = false,

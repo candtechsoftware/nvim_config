@@ -1,21 +1,10 @@
 -- Neovim 0.12 configuration
 -- Using vim.pack, native LSP, treesitter
 
--- Set up netrw before anything else
-vim.g.netrw_banner = 0
-vim.g.netrw_liststyle = 0
-vim.g.netrw_browse_split = 0
-vim.g.netrw_altv = 0
-vim.g.netrw_winsize = 25
-vim.g.netrw_keepdir = 0
-vim.g.netrw_special_syntax = 1
-vim.g.netrw_list_hide = [[^\.$]]
-vim.g.netrw_hide = 1
-vim.g.netrw_use_errorwindow = 0
-vim.g.netrw_retmap = 1
-vim.g.netrw_sort_by = "name"
-vim.g.netrw_sort_direction = "normal"
-vim.g.netrw_sort_options = "i"
+-- Directory browsing uses the 0.13 builtin browser (:h dir), so netrw is not
+-- loaded at all. Delete this line to get :Ex/netrw back (its old g:netrw_*
+-- settings are in git history).
+vim.g.loaded_netrwPlugin = 1
 
 -- Post-install/update build hooks (must register before vim.pack.add)
 vim.api.nvim_create_autocmd('PackChanged', {
@@ -42,7 +31,6 @@ vim.pack.add({
     'https://github.com/nvim-lua/plenary.nvim',
     'https://github.com/nvim-telescope/telescope.nvim',
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
-    'https://github.com/mbbill/undotree',
 })
 
 -- render-markdown is markdown-only but cost ~4ms of a ~40ms startup: its

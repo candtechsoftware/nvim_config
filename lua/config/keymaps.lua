@@ -1,6 +1,63 @@
 vim.g.mapleader = " "
 
-vim.keymap.set("n", "<leader>pv", vim.cmd.Ex) -- Take you to netrw (file explorer)
+-- Take you to the builtin directory browser (:h dir) at the current file's dir
+vim.keymap.set("n", "<leader>pv", function()
+    local dir = vim.fn.expand("%:p:h")
+    vim.cmd.edit(dir ~= "" and dir or ".")
+end, { desc = "Open directory browser" })
+
+-- The builtin browser is navigation-only (`<CR>` open, `-` up, `R` reload);
+-- it cannot touch the filesystem. Add netrw's create keys on top.
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "directory",
+    callback = function(ev)
+        local function dirpath()
+            return vim.api.nvim_buf_get_name(ev.buf)
+        end
+        vim.keymap.set("n", "%", function()
+            local name = vim.fn.input("New file: ")
+            if name ~= "" then
+                vim.cmd.edit(vim.fs.joinpath(dirpath(), name))
+            end
+        end, { buffer = ev.buf, desc = "New file in this directory (:w to create)" })
+        vim.keymap.set("n", "d", function()
+            local name = vim.fn.input("New directory: ")
+            if name ~= "" then
+                vim.fn.mkdir(vim.fs.joinpath(dirpath(), name), "p")
+                vim.cmd.edit() -- re-edit triggers the listing's reload
+            end
+        end, { buffer = ev.buf, desc = "New directory here" })
+        vim.keymap.set("n", "D", function()
+            local line = vim.api.nvim_get_current_line()
+            if line == "" then return end
+            local isdir = line:sub(-1) == "/"
+            local name = isdir and line:sub(1, -2) or line
+            local what = isdir and ("directory " .. name .. " and its contents") or name
+            if vim.fn.confirm("Delete " .. what .. "?", "&Yes\n&No", 2) ~= 1 then
+                return
+            end
+            local path = vim.fs.joinpath(dirpath(), name)
+            if vim.fn.delete(path, isdir and "rf" or "") ~= 0 then
+                vim.notify("Failed to delete " .. path, vim.log.levels.ERROR)
+            end
+            vim.cmd.edit()
+        end, { buffer = ev.buf, desc = "Delete entry under cursor" })
+        vim.keymap.set("n", "r", function()
+            local line = vim.api.nvim_get_current_line()
+            if line == "" then return end
+            local isdir = line:sub(-1) == "/"
+            local name = isdir and line:sub(1, -2) or line
+            local newname = vim.fn.input({ prompt = "Rename to: ", default = name })
+            if newname == "" or newname == name then return end
+            local from = vim.fs.joinpath(dirpath(), name)
+            local to = vim.fs.joinpath(dirpath(), newname)
+            if vim.fn.rename(from, to) ~= 0 then
+                vim.notify("Failed to rename " .. from, vim.log.levels.ERROR)
+            end
+            vim.cmd.edit()
+        end, { buffer = ev.buf, desc = "Rename entry under cursor" })
+    end,
+})
 
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv")
@@ -38,10 +95,11 @@ vim.keymap.set("n", "<leader>tc", "<cmd>tabclose<CR>zz")
 -- Search and replace
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]]) -- Search and replace the word under the cursor
 
--- Undotree (mbbill/undotree, in vim.pack.add — this used to packadd a
--- nonexistent "nvim.undotree", so the key errored every time it was pressed).
+-- Undotree: the builtin nvim.undotree pack (0.13, replaces mbbill/undotree).
+-- open() toggles; inside the window, moving the cursor changes the undo state.
 vim.keymap.set("n", "<leader>u", function()
-    vim.cmd.UndotreeToggle()
+    vim.cmd.packadd("nvim.undotree")
+    require("undotree").open()
 end, { desc = "Toggle undotree" })
 
 -- Source file
