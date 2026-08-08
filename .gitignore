@@ -1,2 +1,11 @@
 .DS_Store
 **/.DS_Store
+
+# ai-anno annotations are per-checkout commentary, never committed
+.anno.json
+# ...except the extension's test fixture, which must ship
+!vscode-anno/example/.anno.json
+
+# vscode-anno packaging output
+vscode-anno/*.vsix
+vscode-anno/node_modules/

@@ -1,0 +1,313 @@
+{
+  "name": "ai-anno",
+  "displayName": "ai-anno",
+  "description": "Visualize line-anchored .anno.json annotations inline: gutter marks, end-of-line summaries, CodeLens, hovers, and a sidebar tree.",
+  "version": "0.1.0",
+  "publisher": "candtechsoftware",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "annotations",
+    "code review",
+    "comments"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiAnno",
+          "title": "Annotations",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "aiAnno": [
+        {
+          "id": "aiAnno.tree",
+          "name": "Annotations",
+          "contextualTitle": "ai-anno",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "aiAnno.tree",
+        "contents": "No .anno.json found.\n\nAnnotations live in a gitignored .anno.json at the repo root. Create one to get started.\n\n[Create .anno.json](command:aiAnno.createFile)\n[Rescan workspace](command:aiAnno.reload)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "aiAnno.toggle",
+        "title": "Toggle Annotations",
+        "category": "ai-anno",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "aiAnno.cycleMode",
+        "title": "Cycle Display Mode",
+        "category": "ai-anno"
+      },
+      {
+        "command": "aiAnno.reload",
+        "title": "Reload Annotations",
+        "category": "ai-anno",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aiAnno.next",
+        "title": "Go to Next Annotation",
+        "category": "ai-anno"
+      },
+      {
+        "command": "aiAnno.prev",
+        "title": "Go to Previous Annotation",
+        "category": "ai-anno"
+      },
+      {
+        "command": "aiAnno.show",
+        "title": "Show Annotation Detail",
+        "category": "ai-anno",
+        "icon": "$(book)"
+      },
+      {
+        "command": "aiAnno.list",
+        "title": "List All Annotations",
+        "category": "ai-anno",
+        "icon": "$(search)"
+      },
+      {
+        "command": "aiAnno.copy",
+        "title": "Copy Message",
+        "category": "ai-anno"
+      },
+      {
+        "command": "aiAnno.delete",
+        "title": "Delete Annotation",
+        "category": "ai-anno",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aiAnno.openFile",
+        "title": "Open .anno.json",
+        "category": "ai-anno",
+        "icon": "$(json)"
+      },
+      {
+        "command": "aiAnno.createFile",
+        "title": "Create .anno.json",
+        "category": "ai-anno"
+      },
+      {
+        "command": "aiAnno.showOutput",
+        "title": "Show Log",
+        "category": "ai-anno"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiAnno.list",
+          "when": "view == aiAnno.tree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aiAnno.toggle",
+          "when": "view == aiAnno.tree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aiAnno.reload",
+          "when": "view == aiAnno.tree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "aiAnno.openFile",
+          "when": "view == aiAnno.tree",
+          "group": "1_file@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "aiAnno.show",
+          "when": "view == aiAnno.tree && viewItem == annotation",
+          "group": "inline@1"
+        },
+        {
+          "command": "aiAnno.copy",
+          "when": "view == aiAnno.tree && viewItem == annotation",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "aiAnno.delete",
+          "when": "view == aiAnno.tree && viewItem == annotation",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ai-anno",
+      "properties": {
+        "aiAnno.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render annotations in the editor. Toggle at runtime with \"ai-anno: Toggle Annotations\"."
+        },
+        "aiAnno.displayMode": {
+          "type": "string",
+          "enum": [
+            "eol",
+            "codelens",
+            "both",
+            "gutter"
+          ],
+          "enumDescriptions": [
+            "Summary text at the end of the anchored line.",
+            "A CodeLens line above the anchored line.",
+            "Both end-of-line text and a CodeLens.",
+            "Gutter mark and hover only — no inline text."
+          ],
+          "default": "both",
+          "description": "How annotations appear inline. Gutter marks, the overview ruler, and hovers are always on."
+        },
+        "aiAnno.eolContent": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "message"
+          ],
+          "enumDescriptions": [
+            "First line of the message only.",
+            "The whole message, newlines collapsed to \" · \"."
+          ],
+          "default": "summary",
+          "description": "How much of the message to show as end-of-line text. VS Code cannot render multi-line virtual text, so the full markdown lives in the hover and detail view."
+        },
+        "aiAnno.eolMaxLength": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "description": "Truncate end-of-line text to this many characters. 0 disables truncation."
+        },
+        "aiAnno.kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "why",
+              "explain",
+              "warning",
+              "review",
+              "todo"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "why",
+            "explain",
+            "warning",
+            "review",
+            "todo"
+          ],
+          "description": "Which annotation kinds to render."
+        },
+        "aiAnno.showStale": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show annotations whose snippet no longer matches any line, dimmed and marked [stale]. Turning this off hides them from the editor but not from the tree."
+        },
+        "aiAnno.diffOriginalSide": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also render annotations on read-only versions of a file — the left side of a diff, or a file opened from git history. The working-tree side of a diff always renders. Only annotations whose snippet still matches the older text are shown, since a note about newly added code has no place in the \"before\" side. Note: VS Code hides CodeLens inside diff editors unless \"diffEditor.codeLens\" is enabled."
+        },
+        "aiAnno.diagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also publish annotations to the Problems panel as Information diagnostics."
+        },
+        "aiAnno.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an annotation count for the active file in the status bar."
+        },
+        "aiAnno.scanDepth": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 12,
+          "description": "How many directory levels below each workspace folder to scan for .anno.json files. Annotation files are gitignored, so they cannot be found via workspace search."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "aiAnno.why",
+        "description": "Color for \"why\" annotations.",
+        "defaults": {
+          "dark": "#5aa9f8",
+          "light": "#0b62c4",
+          "highContrast": "#7cc0ff"
+        }
+      },
+      {
+        "id": "aiAnno.explain",
+        "description": "Color for \"explain\" annotations.",
+        "defaults": {
+          "dark": "#b184f0",
+          "light": "#6b32c9",
+          "highContrast": "#c9a6ff"
+        }
+      },
+      {
+        "id": "aiAnno.warning",
+        "description": "Color for \"warning\" annotations.",
+        "defaults": {
+          "dark": "#e0c168",
+          "light": "#8a6a00",
+          "highContrast": "#ffd873"
+        }
+      },
+      {
+        "id": "aiAnno.review",
+        "description": "Color for \"review\" annotations.",
+        "defaults": {
+          "dark": "#ef9a4a",
+          "light": "#a4530a",
+          "highContrast": "#ffb066"
+        }
+      },
+      {
+        "id": "aiAnno.todo",
+        "description": "Color for \"todo\" annotations.",
+        "defaults": {
+          "dark": "#6fbf73",
+          "light": "#1f7a2e",
+          "highContrast": "#8ede92"
+        }
+      },
+      {
+        "id": "aiAnno.stale",
+        "description": "Color for stale annotations whose snippet no longer matches.",
+        "defaults": {
+          "dark": "#7f8590",
+          "light": "#767676",
+          "highContrast": "#9aa0aa"
+        }
+      }
+    ]
+  }
+}

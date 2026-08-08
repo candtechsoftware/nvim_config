@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "annotations": [
+    {
+      "id": "8f3a2b",
+      "file": "src/auth.ts",
+      "line": 3,
+      "snippet": "const SECRET = process.env.SESSION_SECRET ?? 'dev-only';",
+      "kind": "warning",
+      "message": "The `'dev-only'` fallback ships to production if the env var is unset\n\nNothing here fails loudly when `SESSION_SECRET` is missing, so a misconfigured deploy silently signs every session with a publicly-known string. Either throw at module load in production, or move the default behind an explicit `NODE_ENV !== 'production'` check.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    },
+    {
+      "id": "a3f19c",
+      "file": "src/auth.ts",
+      "line": 11,
+      "snippet": "  return jwt.sign(payload, SECRET, { algorithm: 'HS256' });",
+      "kind": "why",
+      "message": "HS256 over RS256 because we own both ends of this token\n\nRS256 only earns its keep when a third party has to verify without being able to mint. Issuer and verifier are the same process here, so the asymmetric key management is pure overhead.\n\nIf we ever hand verification to an external service, this is the line that has to change first.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    },
+    {
+      "id": "5c7e10",
+      "file": "src/auth.ts",
+      "line": 14,
+      "endLine": 20,
+      "snippet": "export function verifyToken(token: string): Session | null {",
+      "kind": "explain",
+      "message": "Returns `null` for every failure mode rather than distinguishing them\n\n`jwt.verify` throws for expired, malformed, and bad-signature tokens alike. Callers only ever branch on \"is there a session\", so collapsing them keeps the call sites simple — and avoids leaking to a caller (and eventually a client) *why* a token was rejected.\n\nThe cost: an expired token and a forged one are indistinguishable in logs. If we ever need that split, widen the return type instead of throwing.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    },
+    {
+      "id": "b21d84",
+      "file": "src/auth.ts",
+      "line": 20,
+      "snippet": "  if (session.scopes.includes('admin')) {",
+      "kind": "review",
+      "message": "Wildcard admin bypass — confirm this is intended for every scope check\n\n`admin` short-circuits *all* scope checks, including any future destructive ones. That is a reasonable product decision but it should be a deliberate one, so flagging for a human.\n\nThis entry also demonstrates re-anchoring: `line` says 20, the snippet actually lives at 23, and the renderer follows the snippet.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    },
+    {
+      "id": "e4a0f7",
+      "file": "src/auth.ts",
+      "line": 29,
+      "snippet": "export function refresh(token: string): string | null {",
+      "kind": "todo",
+      "message": "No rotation or replay window yet\n\n`refresh` re-issues from a still-valid token, so a leaked token can be refreshed indefinitely. Needs a `jti` and a revocation check before this is used for long-lived sessions. Out of scope for this change.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    },
+    {
+      "id": "9db3c6",
+      "file": "src/auth.ts",
+      "line": 40,
+      "snippet": "const rateLimiter = new TokenBucket(60, 'minute');",
+      "kind": "explain",
+      "message": "Intentionally stale fixture entry\n\nThis snippet does not exist in `auth.ts`, so the renderer cannot re-anchor it. Per the spec it must be shown dimmed and marked `[stale]` at the clamped stored line rather than silently dropped — that is what this entry is here to prove.",
+      "author": "claude-opus-5",
+      "created": "2026-08-05T16:00:00Z"
+    }
+  ]
+}
