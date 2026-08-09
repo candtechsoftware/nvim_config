@@ -56,13 +56,17 @@ local c = {
   line_bg  = bg.line_bg,
   cur_line = bg.cur_line,
 
-  fg       = "#d0b892", -- default text (warm tan)
-  comment  = "#53d549", -- comments (green)
-  punct    = "#8cde94", -- punctuation, operators, types, preproc (light green)
-  white    = "#ffffff", -- keywords, functions, builtins
-  variable = "#d0b892", -- variables, members, properties (tan, matching naysayer.nvim)
-  string   = "#3ad0b5", -- strings (teal)
-  constant = "#87ffde", -- constants, numbers, escapes (light teal)
+  -- Values are naysayer-theme.el's `let` block verbatim. Commit 5bba461 nudged
+  -- six of them toward a different nvim port and left the header comment above
+  -- describing the originals, so the file documented colours it no longer had.
+  fg       = "#d1b897", -- `text`: default text, and every identifier Emacs
+                        -- gives no face to -- function calls included
+  comment  = "#44b340", -- `comments`
+  punct    = "#8cde94", -- `punctuation`: types, operators, preproc, delimiters
+  white    = "#ffffff", -- `keywords` / `functions` / `builtin`
+  variable = "#c1d1e3", -- `variables`: declarations, members, properties
+  string   = "#2ec09c", -- `strings`
+  constant = "#7ad0c6", -- `constants` / `numbers`
 
   line_fg  = bg.line_fg,
   ghost    = bg.ghost,
@@ -181,6 +185,9 @@ hl(0, "Boolean",      { fg = c.constant })
 hl(0, "Constant",     { fg = c.constant })
 
 hl(0, "Identifier",   { fg = c.fg })
+-- Definitions and calls both render as plain text. White is reserved for
+-- keywords alone: on a reference frame, `for` and `if` are the only runs that
+-- come back near-#ffffff, while every name around them sits at the tan tone.
 hl(0, "Function",     { fg = c.fg })
 
 hl(0, "Statement",    { fg = c.white })
@@ -189,7 +196,13 @@ hl(0, "Repeat",       { fg = c.white })
 hl(0, "Label",        { fg = c.punct })
 hl(0, "Keyword",      { fg = c.white })
 hl(0, "Exception",    { fg = c.white })
-hl(0, "Operator",     { fg = c.punct })
+-- Emacs has no face for operators or brackets, so `* < > = == != := ; , { } ( )`
+-- are unfaced and render as `text`. The `punctuation` binding in the .el is a
+-- misleading name -- it is only ever applied to font-lock-type-face and the
+-- preprocessor face, never to actual punctuation. Measuring a reference frame
+-- agrees: on `for instant: section.instants {` the `:` and `{` come back the
+-- same tan as the identifiers, while `for` is a much brighter white.
+hl(0, "Operator",     { fg = c.fg })
 hl(0, "StorageClass", { fg = c.punct })
 
 hl(0, "Type",         { fg = c.punct })
@@ -204,7 +217,7 @@ hl(0, "PreCondit",    { fg = c.punct })
 
 hl(0, "Special",      { fg = c.constant })
 hl(0, "SpecialChar",  { fg = c.constant })
-hl(0, "Delimiter",    { fg = c.punct })
+hl(0, "Delimiter",    { fg = c.fg })
 hl(0, "Tag",          { fg = c.punct })
 hl(0, "Debug",        { fg = c.error })
 hl(0, "Underlined",   { fg = c.blue, underline = true })
@@ -244,11 +257,10 @@ local links = {
 
   ["@function"]              = "Function",
   ["@function.builtin"]      = "Function",
-  ["@function.call"]         = "Function",
   ["@function.macro"]        = "PreProc",
   ["@function.method"]       = "Function",
-  ["@function.method.call"]  = "Function",
   ["@constructor"]           = "Function",
+  -- @function.call / @function.method.call are set to tan after this table.
 
   ["@type"]                  = "Type",
   ["@type.builtin"]          = "Type",
@@ -288,8 +300,15 @@ local links = {
   ["@lsp.type.namespace"]     = "Type",
   ["@lsp.type.type"]          = "Type",
   ["@lsp.type.typeParameter"] = "Type",
-  ["@lsp.type.function"]      = "Function",
-  ["@lsp.type.method"]        = "Function",
+  -- Semantic tokens tag a function the same at its definition and at every
+  -- call, so the bare type has to be the common case (tan calls); the
+  -- declaration/definition modifiers are what earn white.
+  ["@lsp.type.function"]      = "Identifier",
+  ["@lsp.type.method"]        = "Identifier",
+  ["@lsp.typemod.function.declaration"] = "Function",
+  ["@lsp.typemod.method.declaration"]   = "Function",
+  ["@lsp.typemod.function.definition"]  = "Function",
+  ["@lsp.typemod.method.definition"]    = "Function",
   ["@lsp.type.macro"]         = "PreProc",
   ["@lsp.type.parameter"]     = "Identifier",
   ["@lsp.type.property"]      = "@variable",
@@ -323,13 +342,32 @@ local links = {
   ["@markup.list"]           = "Delimiter",
   ["@markup.quote"]          = "Comment",
 }
--- @variable carries naysayer's cool grey-blue; everything else links to base.
-hl(0, "@variable", { fg = c.variable })
+-- Variable *references* are plain text, same reasoning as the call sites below:
+-- font-lock-variable-name-face marks a declaration (`int x;`), and every later
+-- mention of `x` is unfaced, so it renders as `text`. Treesitter tags all of
+-- them, and pointing @variable at the grey-blue put it on 20% of the buffer --
+-- members and properties inherit from here, so nearly every token in Jai went
+-- near-white. The grey-blue survives only on the LSP declaration modifiers.
+hl(0, "@variable", { fg = c.fg })
+hl(0, "@lsp.typemod.variable.declaration",  { fg = c.variable })
+hl(0, "@lsp.typemod.parameter.declaration", { fg = c.variable })
 for group, target in pairs(links) do
   if group ~= "@variable" then
     hl(0, group, { link = target })
   end
 end
+
+-- Call sites are plain text. Emacs only faces a function where it is *defined*
+-- (font-lock-function-name-face); `array_add(...)` or `append(...)` in the body
+-- of some other function is unfaced and renders as `text`. Treesitter is
+-- happy to tag both, so the call captures are pinned back to tan by hand.
+hl(0, "@function.call",        { fg = c.fg })
+hl(0, "@function.method.call", { fg = c.fg })
+
+-- `cast` and `xx` stay green. @keyword.operator rides on Operator, which just
+-- went tan for `* < > == :=`, so it needs pinning separately to keep looking
+-- the way it already did.
+hl(0, "@keyword.operator", { fg = c.punct })
 
 -- Diagnostics -------------------------------------------------------------
 hl(0, "DiagnosticError", { fg = c.error })
