@@ -175,7 +175,23 @@ local function set_keymaps(bufnr)
   end, opts)
 end
 
----Configure diagnostics display
+---Configure diagnostics display.
+---
+---Diagnostics are OFF. This config wants exactly three things from the LSP —
+---completion, member/struct completion, and signature help — and diagnostics
+---are the part that costs the most for the least: every display mode here
+---(virtual_text, signs, underline) is drawn per redrawn line, so on a unity
+---build like ~/projects/tick, where clangd reports a steady stream of
+---unity-build false positives, they were repainted on every scroll step and
+---every keystroke.
+---
+---`vim.diagnostic.enable(false)` at the end is the ONLY switch: it stops every
+---extmark and sign being placed, whatever the display modes below say. Those
+---modes are therefore left fully configured rather than set to `false` — a
+---second, redundant off switch would have made `:lua vim.diagnostic.enable(true)`
+---turn diagnostics back on and still render nothing, which is a worse place to
+---land than either state. Diagnostics are still received and stored, so
+---`<leader>vd` (open_float) and the qf/loclist commands below work untouched.
 local function setup_diagnostics()
   vim.diagnostic.config({
     virtual_text = {
@@ -209,6 +225,9 @@ local function setup_diagnostics()
       source = true,
     },
   })
+  -- The single off switch. Everything configured above is what you get back
+  -- from `:lua vim.diagnostic.enable(true)`.
+  vim.diagnostic.enable(false)
 end
 
 -- Some servers return textEdit.range starting AT the cursor (insert-only,

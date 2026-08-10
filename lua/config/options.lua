@@ -13,7 +13,12 @@
 -- Remove tildes (~) on empty lines
 vim.opt.fillchars:append({ eob = " " })
 
-vim.o.statusline = ' %f %l:%c %{%v:lua.vim.diagnostic.status()%} %{%v:lua.vim.ui.progress_status()%}'
+-- Statusline expressions are re-evaluated on EVERY redraw — every keystroke and
+-- every scroll step. `vim.diagnostic.status()` is gone from here because
+-- diagnostics are disabled (see setup_diagnostics in config/lsp.lua), so it
+-- walked the diagnostic cache each redraw only ever to render nothing.
+-- `progress_status` stays: it is what tells you clangd is still indexing.
+vim.o.statusline = ' %f %l:%c %{%v:lua.vim.ui.progress_status()%}'
 
 -- Indentation
 vim.opt.tabstop = 4 -- Number of spaces that a <Tab> in the file counts for

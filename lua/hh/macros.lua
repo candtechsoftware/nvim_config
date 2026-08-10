@@ -40,6 +40,19 @@ local match_ids = {}
 
 local SOURCE_GLOBS = { "*.h", "*.c", "*.hpp", "*.cpp", "*.cc", "*.hh", "*.m", "*.mm" }
 
+-- Excluding vendored trees from the #define scan is a PERFORMANCE fix, not a
+-- tidiness one: every name found becomes part of a matchadd() alternation, and
+-- matchadd patterns are re-run by Vim's regex engine on every displayed line of
+-- every redraw. Letting SDL in cost 131ms per redraw. See lua/utils/skip_dirs.lua.
+local skip_dirs = require("utils.skip_dirs")
+
+-- Backstop, not the fix. The skip list is a hand-maintained enumeration that can
+-- never be proven complete — the next project vendors under `deps/` or `libs/`
+-- and the count is back in the tens of thousands. Above this many names the
+-- alternation patterns cost more per redraw than the highlighting is worth, so
+-- the index is dropped LOUDLY rather than silently making the editor stutter.
+local MAX_MACROS = 4000
+
 ---@param buf integer
 ---@return string?
 local function project_root(buf)
@@ -71,6 +84,10 @@ local function scan_cmd(root)
       cmd[#cmd + 1] = "-g"
       cmd[#cmd + 1] = g
     end
+    -- Negative globs come after the positive ones; rg applies last-match-wins,
+    -- so these override the `*.h`/`*.c` includes for anything under a skipped
+    -- directory rather than being overridden by them.
+    vim.list_extend(cmd, skip_dirs.rg_glob_args())
     cmd[#cmd + 1] = root
     return cmd
   end
@@ -79,6 +96,7 @@ local function scan_cmd(root)
   for _, g in ipairs(SOURCE_GLOBS) do
     cmd[#cmd + 1] = "--include=" .. g
   end
+  vim.list_extend(cmd, skip_dirs.flags("--exclude-dir=%s"))
   cmd[#cmd + 1] = root
   return cmd
 end
@@ -107,6 +125,16 @@ local function scan_macros(root, done)
     scan_waiters[root] = nil
     -- rg exits 1 when it finds nothing; that is a legitimate empty result.
     local names = parse_defines(res.stdout or "")
+    if #names > MAX_MACROS then
+      vim.notify(
+        ("hh.macros: %d #define names under %s — over the %d limit, so project macro\n"
+          .. "highlighting is OFF here (it would cost more per redraw than it is worth).\n"
+          .. "A count this high usually means a vendored tree is missing from\n"
+          .. "lua/utils/skip_dirs.lua. :HHMacroDump shows what was found."
+        ):format(#names, root, MAX_MACROS),
+        vim.log.levels.WARN)
+      names = {}
+    end
     macro_cache[root] = names
     for _, cb in ipairs(callbacks) do
       cb(names)

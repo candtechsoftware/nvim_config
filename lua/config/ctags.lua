@@ -6,6 +6,7 @@
 local M = {}
 
 local root_util = require("utils.project_root")
+local skip_dirs = require("utils.skip_dirs")
 
 -- Root markers for the tags index, deliberately NOT the shared default list.
 --
@@ -134,19 +135,21 @@ local function generate(root, notify)
   -- adds the typeref (t) and signature (S) fields the built-in `ccomplete`
   -- omnifunc needs for member completion; pinned so a user .ctags.d can't
   -- drop them.
-  -- Excludes mirror SKIP_DIRS in lua/config/clangd_setup.lua, for the same
-  -- reason: `-R` otherwise walks the whole tree, and in a monorepo like
-  -- ~/projects/notes (1.7G) most of that is build output and vendored code.
-  -- The tag COUNT barely moves (1673 of 44379 came from these dirs) — the win
-  -- is the scan itself not stat-ing its way through build trees full of object
-  -- files and multi-MB generated headers on every :Ctags.
-  local cmd = {
-    "ctags", "-R", "--tag-relative=no", "--exclude=.git",
-    "--exclude=build", "--exclude=bin", "--exclude=out", "--exclude=dist",
-    "--exclude=third_party", "--exclude=thirdparty", "--exclude=vendor",
-    "--exclude=node_modules",
-    "--fields=+St", "-f", tags, root,
-  }
+  -- Excludes come from the shared list in lua/utils/skip_dirs.lua, because `-R`
+  -- otherwise walks the whole tree, and in a monorepo like ~/projects/notes
+  -- (1.7G) most of that is build output and vendored code. The tag COUNT barely
+  -- moves (1673 of 44379 came from these dirs) — the win is the scan itself not
+  -- stat-ing its way through build trees full of object files and multi-MB
+  -- generated headers on every :Ctags.
+  --
+  -- This list used to be typed out here, and was the fourth hand-maintained
+  -- copy of the same names. When `3rd_party` was added to the other three it
+  -- was missed here, so `:Ctags` kept indexing vendored trees the rest of the
+  -- config had already learned to skip. Hence the shared module.
+  local cmd = vim.list_extend(
+    { "ctags", "-R", "--tag-relative=no", "--exclude=.git" },
+    skip_dirs.flags("--exclude=%s"))
+  vim.list_extend(cmd, { "--fields=+St", "-f", tags, root })
   generating[root] = true
   vim.system(cmd, { text = true }, function(obj)
     vim.schedule(function()

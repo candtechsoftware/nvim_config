@@ -32,18 +32,25 @@ local find_project_root = require("utils.project_root").find
 -- --max-filesize caps the pathological generated headers this codebase has a
 -- lot of (a 63MB slang-core-module-generated.h, 2.2MB fonts_embedded.h) —
 -- nothing hand-written here comes close to 1MB.
-local EXCLUDE_GLOBS = {
+--
+-- The vendored/build directory names come from lua/utils/skip_dirs.lua, shared
+-- with clangd_setup, ctags and hh.macros — one miss there silently disables
+-- this whole optimization (it did: 2320 files and 15070 grep hits per keystroke
+-- for a 30-file project). The entries below are the ones telescope needs on top
+-- of that shared list:
+--
+--   .git/, *.dSYM/   never interesting to grep, not vendored code
+--   external/        deliberately NOT in the shared list — clangd_setup and
+--                    ctags both look INSIDE external/ for real include dirs
+--   .cache/          `--hidden` makes rg descend into it, and clangd puts its
+--                    background index there (binary .idx blobs in the tree)
+local EXCLUDE_GLOBS = vim.list_extend({
     "--glob=!.git/",
-    "--glob=!node_modules/",
-    "--glob=!**/third_party/**",
-    "--glob=!**/thirdparty/**",
-    "--glob=!**/vendor/**",
     "--glob=!**/external/**",
-    "--glob=!**/build/**",
-    "--glob=!**/out/**",
+    "--glob=!**/.cache/**",
     "--glob=!**/*.dSYM/**",
     "--max-filesize=1M",
-}
+}, require("utils.skip_dirs").flags("--glob=!**/%s/**"))
 
 ---rg argv with the exclusions appended, plus an optional tail that must come
 ---after them (`--` and the pattern, which have to be last).

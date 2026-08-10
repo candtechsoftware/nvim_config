@@ -15,10 +15,10 @@
 local M = {}
 
 local SRC_EXT = { c = true, cc = true, cpp = true, cxx = true, m = true, mm = true }
-local SKIP_DIRS = {
-  'build', 'bin', 'out', 'dist',
-  'third_party', 'thirdparty', 'vendor', 'node_modules',
-}
+-- Shared with ctags, telescope and hh.macros. One miss here does not just bloat
+-- the generated .clangd — it CORRUPTS it, by merging a vendored tree's unity TU
+-- into the project's own. See lua/utils/skip_dirs.lua for the measurements.
+local SKIP_DIRS = require('utils.skip_dirs').NAMES
 
 -- Candidate -I dirs tried (relative to root) when an include doesn't resolve
 -- against the includer's own dir. Only ones that resolve something are
