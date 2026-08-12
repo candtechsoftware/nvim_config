@@ -7,6 +7,8 @@ const vscode = require('vscode');
 
 const ANNO_FILE = '.anno.json';
 const KINDS = ['why', 'explain', 'warning', 'review', 'todo'];
+const SCAN_DEPTH = 3;
+const MAX_ANCHOR_BYTES = 4 * 1024 * 1024;
 const SKIP_DIRS = new Set([
     'node_modules', '.git', '.hg', '.svn', 'dist', 'build', 'out', 'target',
     'vendor', 'coverage', '.next', '.nuxt', '.venv', 'venv', '__pycache__',
@@ -15,29 +17,9 @@ const SKIP_DIRS = new Set([
 
 const CASE_INSENSITIVE = process.platform === 'darwin' || process.platform === 'win32';
 
-// Schemes whose `fsPath` never names a real source file, so annotation lookup
-// against them is meaningless.
-const OPAQUE_SCHEMES = new Set([
-    'anno', 'untitled', 'output', 'vscode', 'vscode-userdata', 'vscode-settings',
-    'walkThrough', 'walkThroughSnippet', 'search-editor', 'comment', 'debug',
-]);
-
 function normalize(p) {
     const abs = path.resolve(p);
     return CASE_INSENSITIVE ? abs.toLowerCase() : abs;
-}
-
-/**
- * The source path a document stands for, or null if it does not stand for one.
- * `git:`, `gitlens:` and similar read-only versions keep the real path and move
- * the ref into the query, so a diff side resolves to the same annotations as
- * the working-tree file.
- */
-function documentPath(uri) {
-    if (!uri || !uri.scheme || OPAQUE_SCHEMES.has(uri.scheme)) return null;
-    const fsPath = uri.fsPath;
-    if (!fsPath || !path.isAbsolute(fsPath)) return null;
-    return fsPath;
 }
 
 function clamp(value, min, max) {
@@ -160,6 +142,23 @@ function anchor(lines, anno) {
     return resolve(stored, true, false);
 }
 
+/** Re-anchor against the open buffer if there is one, else against disk. */
+function resolveAgainstSource(anno) {
+    const open = vscode.workspace.textDocuments.find(
+        (doc) => doc.uri.scheme === 'file' && normalize(doc.uri.fsPath) === normalize(anno.absPath),
+    );
+    if (open) return Object.assign({}, anno, anchor(open.getText().split(/\r?\n/), anno));
+
+    try {
+        const stat = fs.statSync(anno.absPath);
+        if (stat.size > MAX_ANCHOR_BYTES) return Object.assign({}, anno, { start: anno.line - 1, end: anno.line - 1 });
+        const lines = fs.readFileSync(anno.absPath, 'utf8').split(/\r?\n/);
+        return Object.assign({}, anno, anchor(lines, anno));
+    } catch (err) {
+        return Object.assign({}, anno, { start: anno.line - 1, end: anno.line - 1, missing: true });
+    }
+}
+
 class AnnoStore {
     constructor(output) {
         this.output = output;
@@ -243,21 +242,18 @@ class AnnoStore {
     }
 
     forDocument(document) {
-        const fsPath = documentPath(document.uri);
-        if (!fsPath) return [];
-        const annotations = this.forFile(fsPath);
+        // Only real files: `git:`, `anno:`, `untitled:` and friends either do not
+        // name a source file or are read-only versions of one.
+        if (document.uri.scheme !== 'file') return [];
+        const annotations = this.forFile(document.uri.fsPath);
         if (!annotations.length) return [];
         const lines = document.getText().split(/\r?\n/);
         return annotations.map((anno) => Object.assign({}, anno, anchor(lines, anno)));
     }
 
-    byId(annoPath, id) {
-        return this.load(path.dirname(path.resolve(annoPath))).find((anno) => anno.id === id) || null;
-    }
-
     /** Workspace-folder walk for .anno.json, memoized until something invalidates. */
-    scanWorkspace(maxDepth) {
-        if (this.discovered && this.discovered.maxDepth === maxDepth) return this.discovered.dirs;
+    scanWorkspace() {
+        if (this.discovered) return this.discovered;
 
         const dirs = [];
         const seen = new Set();
@@ -276,7 +272,7 @@ class AnnoStore {
                 return;
             }
             if (entries.some((e) => e.name === ANNO_FILE && !e.isDirectory())) add(dir);
-            if (depth >= maxDepth) return;
+            if (depth >= SCAN_DEPTH) return;
             for (const entry of entries) {
                 if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
                 if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
@@ -289,18 +285,17 @@ class AnnoStore {
             walk(folder.uri.fsPath, 0);
         }
 
-        this.discovered = { maxDepth, dirs };
+        this.discovered = dirs;
         return dirs;
     }
 
-    discover(maxDepth) {
-        const dirs = [...this.scanWorkspace(maxDepth)];
+    discover() {
+        const dirs = [...this.scanWorkspace()];
         const seen = new Set(dirs.map(normalize));
 
         for (const editor of vscode.window.visibleTextEditors) {
-            const fsPath = documentPath(editor.document.uri);
-            if (!fsPath) continue;
-            const annoDir = this.findAnnoDir(fsPath);
+            if (editor.document.uri.scheme !== 'file') continue;
+            const annoDir = this.findAnnoDir(editor.document.uri.fsPath);
             if (!annoDir) continue;
             const key = normalize(annoDir);
             if (seen.has(key)) continue;
@@ -311,31 +306,11 @@ class AnnoStore {
         return dirs;
     }
 
-    all(maxDepth) {
+    all() {
         const out = [];
-        for (const dir of this.discover(maxDepth)) out.push(...this.load(dir));
+        for (const dir of this.discover()) out.push(...this.load(dir));
         return out;
-    }
-
-    remove(annoPath, id) {
-        const resolved = path.resolve(annoPath);
-        const raw = fs.readFileSync(resolved, 'utf8');
-        const data = JSON.parse(raw);
-        if (!data || !Array.isArray(data.annotations)) {
-            throw new Error(`${resolved}: missing "annotations" array`);
-        }
-        const before = data.annotations.length;
-        data.annotations = data.annotations.filter((entry, index) => {
-            const entryId = entry && typeof entry.id === 'string' && entry.id
-                ? entry.id
-                : `${entry && entry.file}:${entry && entry.line}`;
-            return entryId !== id;
-        });
-        if (data.annotations.length === before) return false;
-        fs.writeFileSync(resolved, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-        this.invalidate(resolved);
-        return true;
     }
 }
 
-module.exports = { AnnoStore, ANNO_FILE, KINDS, anchor, normalize, summarize, documentPath };
+module.exports = { AnnoStore, ANNO_FILE, KINDS, anchor, normalize, summarize, resolveAgainstSource };

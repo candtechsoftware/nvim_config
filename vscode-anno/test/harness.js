@@ -50,64 +50,19 @@ class MarkdownString {
     }
 }
 
-class EventEmitter {
-    constructor() {
-        this.fireCount = 0;
-        this.event = () => ({ dispose() { } });
-    }
-
-    fire() {
-        this.fireCount += 1;
-    }
-
-    dispose() { }
-}
-
 const vscode = {
     Position,
     Range,
     Selection,
     MarkdownString,
-    EventEmitter,
     Uri: {
         file: (p) => ({ scheme: 'file', fsPath: p, toString: () => `file://${p}` }),
-        from: (o) => Object.assign({ toString: () => `${o.scheme}:${o.path}?${o.query}` }, o),
-        parse: (s) => ({ scheme: s.split(':')[0], path: s, toString: () => s }),
     },
     ThemeColor: class { constructor(id) { this.id = id; } },
-    ThemeIcon: Object.assign(
-        class { constructor(id, color) { this.id = id; this.color = color; } },
-        { File: { id: '__file' }, Folder: { id: '__folder' } },
-    ),
-    TreeItem: class {
-        constructor(label, collapsibleState) {
-            this.label = label;
-            this.collapsibleState = collapsibleState;
-        }
-    },
-    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-    CodeLens: class { constructor(range, command) { this.range = range; this.command = command; } },
-    Diagnostic: class {
-        constructor(range, message, severity) {
-            Object.assign(this, { range, message, severity });
-        }
-    },
-    DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
     DecorationRangeBehavior: { OpenOpen: 0, ClosedClosed: 1 },
     OverviewRulerLane: { Left: 1, Center: 2, Right: 4, Full: 7 },
     ConfigurationTarget: { Global: 1, Workspace: 2 },
-    ViewColumn: { Beside: -2 },
     TextEditorRevealType: { InCenterIfOutsideViewport: 2 },
-    StatusBarAlignment: { Left: 1, Right: 2 },
-    languages: {
-        createDiagnosticCollection: () => ({
-            store: new Map(),
-            set(uri, value) { this.store.set(uri.fsPath, value); },
-            delete(uri) { this.store.delete(uri.fsPath); },
-            dispose() { this.store.clear(); },
-        }),
-        registerCodeLensProvider: () => ({ dispose() { } }),
-    },
     window: {
         get visibleTextEditors() { return state.visibleTextEditors; },
         createTextEditorDecorationType: (opts) => {
@@ -116,15 +71,11 @@ const vscode = {
             return type;
         },
         createOutputChannel: () => ({ lines: [], appendLine(l) { this.lines.push(l); }, show() { }, dispose() { } }),
-        createStatusBarItem: () => ({ show() { }, hide() { }, dispose() { } }),
-        createTreeView: () => ({ dispose() { } }),
         showInformationMessage: () => Promise.resolve(undefined),
-        showWarningMessage: () => Promise.resolve(undefined),
-        showErrorMessage: () => Promise.resolve(undefined),
+        showQuickPick: () => Promise.resolve(undefined),
         setStatusBarMessage: () => ({ dispose() { } }),
         onDidChangeActiveTextEditor: () => ({ dispose() { } }),
         onDidChangeVisibleTextEditors: () => ({ dispose() { } }),
-        onDidChangeTextEditorSelection: () => ({ dispose() { } }),
         onDidChangeWindowState: () => ({ dispose() { } }),
     },
     workspace: {
@@ -143,18 +94,14 @@ const vscode = {
             onDidDelete: () => ({ dispose() { } }),
             dispose() { },
         }),
-        registerTextDocumentContentProvider: () => ({ dispose() { } }),
         openTextDocument: () => Promise.resolve({}),
         onDidChangeTextDocument: () => ({ dispose() { } }),
-        onDidSaveTextDocument: () => ({ dispose() { } }),
         onDidChangeWorkspaceFolders: () => ({ dispose() { } }),
         onDidChangeConfiguration: () => ({ dispose() { } }),
     },
     commands: {
         registerCommand: () => ({ dispose() { } }),
-        executeCommand: () => Promise.resolve(),
     },
-    env: { clipboard: { writeText: () => Promise.resolve() } },
     RelativePattern: class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } },
 };
 

@@ -11,6 +11,8 @@ const KIND_ICON = {
     todo: 'checklist',
 };
 
+const EOL_MAX_LENGTH = 120;
+
 function flatten(message) {
     return message.replace(/\s*\r?\n+\s*/g, ' · ').replace(/[ \t]+/g, ' ').trim();
 }
@@ -20,18 +22,8 @@ function truncate(text, maxLength) {
     return `${text.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
 }
 
-function detailUri(anno) {
-    return vscode.Uri.from({
-        scheme: 'anno',
-        path: `/${anno.kind}-${anno.id.replace(/[^\w.-]/g, '_')}.md`,
-        query: JSON.stringify({ annoPath: anno.annoPath, id: anno.id }),
-    });
-}
-
 function buildHover(anno) {
     const md = new vscode.MarkdownString(undefined, true);
-    md.isTrusted = true;
-    md.supportHtml = false;
 
     const meta = [anno.author, anno.created ? anno.created.slice(0, 10) : ''].filter(Boolean).join(' · ');
     md.appendMarkdown(`$(${KIND_ICON[anno.kind] || 'comment'}) **${anno.kind}**`);
@@ -40,49 +32,8 @@ function buildHover(anno) {
     else if (anno.moved) md.appendMarkdown(`  —  re-anchored from line ${anno.line}`);
     md.appendMarkdown('\n\n');
     md.appendMarkdown(anno.message);
-    md.appendMarkdown('\n\n');
-
-    const args = encodeURIComponent(JSON.stringify([{ annoPath: anno.annoPath, id: anno.id }]));
-    md.appendMarkdown([
-        `[$(book) Detail](command:aiAnno.show?${args})`,
-        `[$(clippy) Copy](command:aiAnno.copy?${args})`,
-        `[$(json) .anno.json](command:aiAnno.openFile?${args})`,
-        `[$(trash) Delete](command:aiAnno.delete?${args})`,
-    ].join('  |  '));
 
     return md;
-}
-
-function buildDetail(anno) {
-    const meta = [
-        anno.author ? `**author** ${anno.author}` : '',
-        anno.created ? `**created** ${anno.created}` : '',
-        anno.commit ? `**commit** \`${anno.commit}\`` : '',
-    ].filter(Boolean).join(' · ');
-
-    const range = anno.endLine ? `${anno.line}–${anno.endLine}` : `${anno.line}`;
-
-    return [
-        `# ${anno.kind} — ${anno.summary}`,
-        '',
-        `\`${anno.file}:${range}\` · id \`${anno.id}\``,
-        meta,
-        '',
-        '---',
-        '',
-        anno.message,
-        '',
-        '---',
-        '',
-        '**Anchor snippet**',
-        '',
-        '```',
-        anno.snippet || '(none)',
-        '```',
-        '',
-        `Source: \`${anno.annoPath}\``,
-        '',
-    ].join('\n');
 }
 
 class Renderer {
@@ -90,25 +41,10 @@ class Renderer {
         this.store = store;
         this.mediaDir = mediaDir;
         this.types = new Map();
-        this.diagnostics = vscode.languages.createDiagnosticCollection('ai-anno');
-        this.codeLensChanged = new vscode.EventEmitter();
-        this.lastByEditor = new WeakMap();
     }
 
-    config() {
-        const cfg = vscode.workspace.getConfiguration('aiAnno');
-        return {
-            enabled: cfg.get('enabled', true),
-            displayMode: cfg.get('displayMode', 'both'),
-            eolContent: cfg.get('eolContent', 'summary'),
-            eolMaxLength: cfg.get('eolMaxLength', 120),
-            kinds: cfg.get('kinds', ['why', 'explain', 'warning', 'review', 'todo']),
-            showStale: cfg.get('showStale', true),
-            diffOriginalSide: cfg.get('diffOriginalSide', false),
-            diagnostics: cfg.get('diagnostics', false),
-            statusBar: cfg.get('statusBar', true),
-            scanDepth: cfg.get('scanDepth', 3),
-        };
+    enabled() {
+        return vscode.workspace.getConfiguration('aiAnno').get('enabled', true);
     }
 
     gutterType(kind, stale) {
@@ -142,42 +78,21 @@ class Renderer {
         return this.types.get(key);
     }
 
-    /** Annotations for a document, filtered by config and re-anchored. */
+    /** Annotations for a document, re-anchored. Empty when disabled. */
     visible(document) {
-        const cfg = this.config();
-        if (!cfg.enabled) return { cfg, items: [] };
-
-        // A non-file scheme means a read-only version of the file: the left side
-        // of a diff, or something opened from git history. Annotations describe
-        // the working tree, so these are opt-in, and only ones that still anchor
-        // in the older text are shown — a stale marker there says nothing except
-        // "this note is about code that did not exist yet".
-        const readOnlyVersion = document.uri.scheme !== 'file';
-        if (readOnlyVersion && !cfg.diffOriginalSide) return { cfg, items: [] };
-
-        const items = this.store.forDocument(document).filter((anno) => {
-            if (!cfg.kinds.includes(anno.kind)) return false;
-            if (anno.stale && (readOnlyVersion || !cfg.showStale)) return false;
-            return true;
-        });
-        return { cfg, items };
-    }
-
-    clear(editor) {
-        for (const type of this.types.values()) editor.setDecorations(type, []);
+        if (!this.enabled()) return [];
+        return this.store.forDocument(document);
     }
 
     refresh(editor) {
         if (!editor) return;
 
-        const { cfg, items } = this.visible(editor.document);
+        const items = this.visible(editor.document);
         const buckets = new Map();
         const push = (type, entry) => {
             if (!buckets.has(type)) buckets.set(type, []);
             buckets.get(type).push(entry);
         };
-
-        const showEol = cfg.displayMode === 'eol' || cfg.displayMode === 'both';
 
         for (const anno of items) {
             const hover = buildHover(anno);
@@ -188,15 +103,12 @@ class Renderer {
                 });
             }
 
-            if (!showEol) continue;
-
-            const raw = cfg.eolContent === 'message' ? flatten(anno.message) : anno.summary;
-            const label = `${anno.stale ? '[stale] ' : ''}${anno.kind} · ${flatten(raw)}`;
+            const label = `${anno.stale ? '[stale] ' : ''}${anno.kind} · ${flatten(anno.summary)}`;
             const endOfLine = editor.document.lineAt(anno.start).range.end;
             push(this.eolType(anno.kind, anno.stale), {
                 range: new vscode.Range(endOfLine, endOfLine),
                 renderOptions: {
-                    after: { contentText: truncate(label, cfg.eolMaxLength) },
+                    after: { contentText: truncate(label, EOL_MAX_LENGTH) },
                 },
             });
         }
@@ -204,60 +116,16 @@ class Renderer {
         for (const type of this.types.values()) {
             editor.setDecorations(type, buckets.get(type) || []);
         }
-
-        this.publishDiagnostics(editor.document, cfg, items);
-        this.codeLensChanged.fire();
-    }
-
-    publishDiagnostics(document, cfg, items) {
-        // Diagnostics are keyed by uri, so publishing for a diff side would
-        // duplicate every entry in the Problems panel under a git: path.
-        if (!cfg.diagnostics || document.uri.scheme !== 'file') {
-            this.diagnostics.delete(document.uri);
-            return;
-        }
-        const list = items.map((anno) => {
-            const range = new vscode.Range(
-                new vscode.Position(anno.start, 0),
-                document.lineAt(anno.end).range.end,
-            );
-            const prefix = anno.stale ? '[stale] ' : '';
-            const diagnostic = new vscode.Diagnostic(
-                range,
-                `${prefix}${anno.kind}: ${anno.summary}`,
-                vscode.DiagnosticSeverity.Information,
-            );
-            diagnostic.source = 'anno';
-            diagnostic.code = anno.id;
-            return diagnostic;
-        });
-        this.diagnostics.set(document.uri, list);
     }
 
     refreshAll() {
         for (const editor of vscode.window.visibleTextEditors) this.refresh(editor);
     }
 
-    provideCodeLenses(document) {
-        const { cfg, items } = this.visible(document);
-        if (cfg.displayMode !== 'codelens' && cfg.displayMode !== 'both') return [];
-        return items.map((anno) => new vscode.CodeLens(
-            new vscode.Range(anno.start, 0, anno.start, 0),
-            {
-                title: `$(${KIND_ICON[anno.kind] || 'comment'}) ${anno.stale ? '[stale] ' : ''}${anno.kind} · ${truncate(anno.summary, 90)}`,
-                command: 'aiAnno.show',
-                arguments: [{ annoPath: anno.annoPath, id: anno.id }],
-                tooltip: anno.message,
-            },
-        ));
-    }
-
     dispose() {
         for (const type of this.types.values()) type.dispose();
         this.types.clear();
-        this.diagnostics.dispose();
-        this.codeLensChanged.dispose();
     }
 }
 
-module.exports = { Renderer, buildDetail, buildHover, detailUri, KIND_ICON, flatten, truncate };
+module.exports = { Renderer, buildHover, KIND_ICON, flatten, truncate };

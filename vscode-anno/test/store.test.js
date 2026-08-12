@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 
 const { EXAMPLE, check, section, setConfig } = require('./harness');
-const { AnnoStore, anchor, summarize } = require('../src/store');
+const { AnnoStore, anchor, summarize, resolveAgainstSource } = require('../src/store');
 
 function run() {
     setConfig({});
@@ -15,7 +15,7 @@ function run() {
 
     section('discovery');
     check('findAnnoDir walks up from src/ to the example root', store.findAnnoDir(authPath), EXAMPLE);
-    check('discover finds the example dir', store.discover(3), [EXAMPLE]);
+    check('discover finds the example dir', store.discover(), [EXAMPLE]);
 
     section('parsing');
     const all = store.load(EXAMPLE);
@@ -65,6 +65,12 @@ function run() {
     check('forFile on an unannotated sibling returns none',
         store.forFile(path.join(EXAMPLE, 'src/nope.ts')).length, 0);
 
+    section('resolveAgainstSource (disk-backed, no open buffer)');
+    const drifted = resolveAgainstSource(all.find((a) => a.id === 'b21d84'));
+    check('re-anchors against the file on disk', { start: drifted.start, moved: drifted.moved }, { start: 22, moved: true });
+    const gone = resolveAgainstSource(Object.assign({}, all[0], { absPath: path.join(EXAMPLE, 'src/gone.ts') }));
+    check('a missing source file is flagged, not thrown', gone.missing, true);
+
     section('malformed input is skipped, not fatal');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'anno-test-'));
     const tmpFile = path.join(tmp, '.anno.json');
@@ -109,12 +115,6 @@ function run() {
         ],
     });
     check('a rewrite busts the cache', store.load(tmp).map((a) => a.id), ['v2', 'v2b']);
-
-    section('deletion rewrites .anno.json');
-    check('remove drops the entry and reports success', store.remove(tmpFile, 'v2'), true);
-    check('the other entry survives', store.load(tmp).map((a) => a.id), ['v2b']);
-    check('removing an unknown id is a no-op', store.remove(tmpFile, 'ghost'), false);
-    check('rewrite preserves the version field', JSON.parse(fs.readFileSync(tmpFile, 'utf8')).version, 1);
 
     fs.rmSync(tmp, { recursive: true, force: true });
     check('a deleted .anno.json yields no annotations', store.load(tmp).length, 0);

@@ -1,94 +1,22 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 
-const { AnnoStore, ANNO_FILE, normalize } = require('./store');
-const { Renderer, buildDetail, detailUri, KIND_ICON, truncate } = require('./render');
-const { AnnoTreeProvider, resolveAgainstSource } = require('./tree');
-
-const MODES = ['both', 'eol', 'codelens', 'gutter'];
+const { AnnoStore, ANNO_FILE, normalize, resolveAgainstSource } = require('./store');
+const { Renderer, KIND_ICON, truncate } = require('./render');
 
 function activate(context) {
     const output = vscode.window.createOutputChannel('ai-anno');
     const store = new AnnoStore(output);
     const renderer = new Renderer(store, path.join(context.extensionPath, 'media'));
-    const tree = new AnnoTreeProvider(store, renderer);
 
-    context.subscriptions.push(output, renderer, tree);
-
-    const treeView = vscode.window.createTreeView('aiAnno.tree', {
-        treeDataProvider: tree,
-        showCollapseAll: true,
-    });
-    context.subscriptions.push(treeView);
-
-    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBar.command = 'aiAnno.list';
-    context.subscriptions.push(statusBar);
-
-    // ---------------------------------------------------------------- helpers
-
-    const refreshEverything = () => {
-        renderer.refreshAll();
-        tree.refresh();
-        updateStatusBar();
-        updateBadge();
-    };
+    context.subscriptions.push(output, renderer);
 
     const reload = () => {
         store.reset();
-        refreshEverything();
+        renderer.refreshAll();
     };
-
-    function updateStatusBar() {
-        const cfg = renderer.config();
-        const editor = vscode.window.activeTextEditor;
-        if (!cfg.statusBar || !editor || editor.document.uri.scheme !== 'file') {
-            statusBar.hide();
-            return;
-        }
-
-        const { items } = renderer.visible(editor.document);
-        if (!items.length) {
-            statusBar.hide();
-            return;
-        }
-
-        const counts = new Map();
-        let stale = 0;
-        for (const anno of items) {
-            counts.set(anno.kind, (counts.get(anno.kind) || 0) + 1);
-            if (anno.stale) stale += 1;
-        }
-
-        statusBar.text = `$(comment-discussion) ${items.length}${stale ? ` $(warning) ${stale}` : ''}`;
-        statusBar.tooltip = [...counts.entries()].map(([kind, n]) => `${n} ${kind}`).join(' · ')
-            + (stale ? `\n${stale} stale` : '')
-            + '\n\nClick to list all annotations.';
-        statusBar.show();
-    }
-
-    function updateBadge() {
-        const total = store.all(renderer.config().scanDepth).length;
-        treeView.badge = total ? { value: total, tooltip: `${total} annotation${total === 1 ? '' : 's'}` } : undefined;
-    }
-
-    function resolveArg(arg) {
-        if (arg && arg.annoPath && arg.id) return store.byId(arg.annoPath, arg.id);
-        if (arg && arg.anno) return arg.anno;
-
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) return null;
-        const items = renderer.visible(editor.document).items;
-        if (!items.length) return null;
-        const cursor = editor.selection.active.line;
-        return items.find((a) => cursor >= a.start && cursor <= a.end)
-            || items.reduce((best, a) => (
-                Math.abs(a.start - cursor) < Math.abs(best.start - cursor) ? a : best
-            ), items[0]);
-    }
 
     async function reveal(target) {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target.absPath));
@@ -103,7 +31,7 @@ function activate(context) {
     function jump(direction) {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
-        const items = renderer.visible(editor.document).items;
+        const items = renderer.visible(editor.document);
         if (!items.length) {
             vscode.window.setStatusBarMessage('$(info) ai-anno: no annotations in this file', 2500);
             return;
@@ -121,34 +49,6 @@ function activate(context) {
         vscode.window.setStatusBarMessage(`$(${KIND_ICON[next.kind] || 'comment'}) ${next.kind}: ${truncate(next.summary, 80)}`, 4000);
     }
 
-    // ------------------------------------------------------- detail documents
-
-    const detailProvider = {
-        provideTextDocumentContent(uri) {
-            let ref;
-            try {
-                ref = JSON.parse(uri.query);
-            } catch (err) {
-                return `# ai-anno\n\nUnreadable annotation reference.\n`;
-            }
-            const anno = store.byId(ref.annoPath, ref.id);
-            if (!anno) return `# ai-anno\n\nAnnotation \`${ref.id}\` is no longer in \`${ref.annoPath}\`.\n`;
-            return buildDetail(resolveAgainstSource(anno));
-        },
-    };
-    context.subscriptions.push(
-        vscode.workspace.registerTextDocumentContentProvider('anno', detailProvider),
-    );
-
-    // -------------------------------------------------------------- providers
-
-    context.subscriptions.push(
-        vscode.languages.registerCodeLensProvider({ language: '*' }, {
-            onDidChangeCodeLenses: renderer.codeLensChanged.event,
-            provideCodeLenses: (document) => renderer.provideCodeLenses(document),
-        }),
-    );
-
     // --------------------------------------------------------------- commands
 
     const register = (id, handler) => {
@@ -160,8 +60,6 @@ function activate(context) {
         vscode.window.setStatusBarMessage('$(check) ai-anno: reloaded', 2000);
     });
 
-    register('aiAnno.showOutput', () => output.show(true));
-
     register('aiAnno.toggle', async () => {
         const cfg = vscode.workspace.getConfiguration('aiAnno');
         const next = !cfg.get('enabled', true);
@@ -169,125 +67,13 @@ function activate(context) {
         vscode.window.setStatusBarMessage(`$(eye) ai-anno: ${next ? 'on' : 'off'}`, 2000);
     });
 
-    register('aiAnno.cycleMode', async () => {
-        const cfg = vscode.workspace.getConfiguration('aiAnno');
-        const current = cfg.get('displayMode', 'both');
-        const next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
-        await cfg.update('displayMode', next, vscode.ConfigurationTarget.Global);
-        vscode.window.setStatusBarMessage(`$(list-selection) ai-anno mode: ${next}`, 2000);
-    });
-
     register('aiAnno.next', () => jump(1));
     register('aiAnno.prev', () => jump(-1));
 
-    register('aiAnno.reveal', (target) => reveal(target));
-
-    register('aiAnno.show', async (arg) => {
-        const anno = resolveArg(arg);
-        if (!anno) {
-            vscode.window.showInformationMessage('ai-anno: no annotation at the cursor.');
-            return;
-        }
-        const uri = detailUri(anno);
-        try {
-            await vscode.commands.executeCommand('markdown.showPreviewToSide', uri);
-        } catch (err) {
-            const doc = await vscode.workspace.openTextDocument(uri);
-            await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-        }
-    });
-
-    register('aiAnno.copy', async (arg) => {
-        const anno = resolveArg(arg);
-        if (!anno) {
-            vscode.window.showInformationMessage('ai-anno: no annotation at the cursor.');
-            return;
-        }
-        await vscode.env.clipboard.writeText(anno.message);
-        vscode.window.setStatusBarMessage('$(clippy) ai-anno: message copied', 2000);
-    });
-
-    register('aiAnno.openFile', async (arg) => {
-        const anno = resolveArg(arg);
-        let target = anno && anno.annoPath;
-
-        if (!target) {
-            const dirs = store.discover(renderer.config().scanDepth);
-            if (!dirs.length) {
-                vscode.window.showInformationMessage(`ai-anno: no ${ANNO_FILE} found.`);
-                return;
-            }
-            if (dirs.length === 1) {
-                target = path.join(dirs[0], ANNO_FILE);
-            } else {
-                const pick = await vscode.window.showQuickPick(
-                    dirs.map((dir) => ({ label: path.basename(dir), description: dir, dir })),
-                    { title: `Which ${ANNO_FILE}?` },
-                );
-                if (!pick) return;
-                target = path.join(pick.dir, ANNO_FILE);
-            }
-        }
-
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-        await vscode.window.showTextDocument(doc);
-    });
-
-    register('aiAnno.createFile', async () => {
-        const folders = vscode.workspace.workspaceFolders || [];
-        if (!folders.length) {
-            vscode.window.showWarningMessage('ai-anno: open a folder first.');
-            return;
-        }
-        let root = folders[0].uri.fsPath;
-        if (folders.length > 1) {
-            const pick = await vscode.window.showQuickPick(
-                folders.map((f) => ({ label: f.name, description: f.uri.fsPath, fsPath: f.uri.fsPath })),
-                { title: `Create ${ANNO_FILE} in which folder?` },
-            );
-            if (!pick) return;
-            root = pick.fsPath;
-        }
-
-        const target = path.join(root, ANNO_FILE);
-        if (!fs.existsSync(target)) {
-            fs.writeFileSync(target, `${JSON.stringify({ version: 1, annotations: [] }, null, 2)}\n`, 'utf8');
-        }
-        reload();
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-        await vscode.window.showTextDocument(doc);
-    });
-
-    register('aiAnno.delete', async (arg) => {
-        const anno = resolveArg(arg);
-        if (!anno) {
-            vscode.window.showInformationMessage('ai-anno: no annotation at the cursor.');
-            return;
-        }
-        const choice = await vscode.window.showWarningMessage(
-            `Delete this annotation from ${ANNO_FILE}?`,
-            { modal: true, detail: `${anno.kind} · ${anno.file}:${anno.line}\n\n${anno.summary}` },
-            'Delete',
-        );
-        if (choice !== 'Delete') return;
-
-        try {
-            const removed = store.remove(anno.annoPath, anno.id);
-            if (!removed) {
-                vscode.window.showWarningMessage(`ai-anno: ${anno.id} was not found in ${anno.annoPath}.`);
-            }
-        } catch (err) {
-            vscode.window.showErrorMessage(`ai-anno: could not update ${anno.annoPath} — ${err.message}`);
-            return;
-        }
-        refreshEverything();
-    });
-
     register('aiAnno.list', async () => {
-        const cfg = renderer.config();
-        const all = store.all(cfg.scanDepth).filter((anno) => cfg.kinds.includes(anno.kind));
+        const all = store.all();
         if (!all.length) {
-            vscode.window.showInformationMessage(`ai-anno: no annotations found. Scanned ${cfg.scanDepth} levels deep.`);
+            vscode.window.showInformationMessage(`ai-anno: no ${ANNO_FILE} annotations found.`);
             return;
         }
 
@@ -333,7 +119,7 @@ function activate(context) {
             );
             const onChange = (uri) => {
                 store.invalidate(uri.fsPath);
-                refreshEverything();
+                renderer.refreshAll();
             };
             watcher.onDidCreate(onChange);
             watcher.onDidChange(onChange);
@@ -347,32 +133,28 @@ function activate(context) {
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor((editor) => {
             if (editor) renderer.refresh(editor);
-            updateStatusBar();
         }),
-        vscode.window.onDidChangeVisibleTextEditors(() => refreshEverything()),
-        vscode.window.onDidChangeTextEditorSelection(() => updateStatusBar()),
+        vscode.window.onDidChangeVisibleTextEditors(() => renderer.refreshAll()),
         vscode.workspace.onDidChangeTextDocument((event) => {
             for (const editor of vscode.window.visibleTextEditors) {
                 if (editor.document === event.document) renderer.refresh(editor);
             }
-        }),
-        vscode.workspace.onDidSaveTextDocument(() => {
-            tree.refresh();
-            updateStatusBar();
         }),
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
             setupWatchers();
             reload();
         }),
         vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('aiAnno')) refreshEverything();
+            if (event.affectsConfiguration('aiAnno')) renderer.refreshAll();
         }),
+        // Annotation files are usually edited by an agent outside the editor;
+        // a refocus re-reads them even when they live outside the workspace.
         vscode.window.onDidChangeWindowState((state) => {
             if (state.focused) reload();
         }),
     );
 
-    refreshEverything();
+    renderer.refreshAll();
     output.appendLine('ai-anno activated.');
 }
 
