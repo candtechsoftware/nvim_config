@@ -94,4 +94,4 @@ pcall(function()
 end)
 
 -- Colorscheme
-vim.cmd.colorscheme("handmade")
+vim.cmd.colorscheme("ddd")
