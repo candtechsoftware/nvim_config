@@ -11,10 +11,10 @@ vim.g.colors_name = "ddd"
 local hl = vim.api.nvim_set_hl
 
 local c = {
-  background = "#141414",
+  background = "#0a0a0a",
   foreground = "burlywood3",
 
-  border = "#070707",
+  border = "#030303",
 
   cursor = "#50ffa0",
   -- Replace-mode cursor only; the palette has no red of its own.
@@ -24,10 +24,10 @@ local c = {
   prompt = "#759fbf",
 
   -- Both stay below the darkened background so the mode line still reads as a
-  -- separate strip; the inactive one used to sit at #131313, which is level
-  -- with the new #141414.
-  mode_line = "#070707",
-  mode_line_inactive = "#0e0e0e",
+  -- separate strip; the inactive one tracks the background down, staying one
+  -- step under the current #0a0a0a.
+  mode_line = "#000000",
+  mode_line_inactive = "#050505",
 
   paren = "#536058",
 
@@ -43,7 +43,11 @@ local c = {
   -- project #define with the Macro group at priority 200.
   macro = "#2895c7",
 
-  type = "burlywood3",
+  -- handmade's defcolor_keyword gold (0xFFcd950c). It sits in the same warm
+  -- family as burlywood3, so it reads as one palette, but it's saturated enough
+  -- that types stop being indistinguishable from every other identifier.
+  type = "#cd950c",
+
   constant = "burlywood3",
   function_name = "burlywood3",
   variable = "burlywood3",
@@ -439,7 +443,7 @@ local links = {
   ["@keyword.conditional"] = "Conditional",
   ["@keyword.exception"] = "Exception",
   ["@keyword.modifier"] = "StorageClass",
-  ["@keyword.type"] = "Type",
+  ["@keyword.type"] = "Keyword",
   ["@keyword.directive"] = "PreProc",
 
   ["@operator"] = "Operator",
@@ -461,8 +465,10 @@ end
 
 
 -- Back-cycle for nested scopes, same idea as handmade: each nesting level lifts
--- slightly warmer off the background, toward the burlywood text. hh/scope.lua
--- indexes these mod cycle_len, so six entries is the full cycle.
+-- slightly warmer off the background, toward the burlywood text. These do NOT
+-- track the background down -- level 0 sits above the #0a0a0a background on
+-- purpose, so even the outermost scope reads as a lift. hh/scope.lua indexes
+-- these mod cycle_len, so six entries is the full cycle.
 local scope_bgs = {
   "#141414",
   "#181716",

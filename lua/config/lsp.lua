@@ -103,13 +103,104 @@ local function get_capabilities()
   return caps
 end
 
+---Jump to a quickfix-style item, leaving a jumplist entry behind.
+---@param item {filename:string, lnum:integer, col:integer}
+local function jump_to(item)
+  vim.cmd("normal! m'")
+  vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
+  vim.api.nvim_win_set_cursor(0, { item.lnum, math.max(item.col - 1, 0) })
+end
+
+---One item: jump. Several: quickfix, the same as vim.lsp.buf.definition's
+---default on_list.
+---@param items table[]
+---@param title string
+local function show_items(items, title)
+  if #items == 1 then
+    jump_to(items[1])
+    return
+  end
+  vim.fn.setqflist({}, ' ', { title = title, items = items })
+  vim.cmd('copen')
+end
+
+---Find `word` through the server's workspace index and go there.
+---@param bufnr integer
+---@param word string
+local function index_definition(bufnr, word)
+  vim.lsp.buf_request(bufnr, 'workspace/symbol', { query = word }, function(_, result)
+    local items = {}
+    for _, sym in ipairs(result or {}) do
+      -- The query is fuzzy; keep exact names only.
+      local loc = sym.location
+      if sym.name == word and loc and loc.range then
+        items[#items + 1] = {
+          filename = vim.uri_to_fname(loc.uri),
+          lnum = loc.range.start.line + 1,
+          col = loc.range.start.character + 1,
+          text = sym.containerName and (sym.containerName .. '::' .. sym.name) or sym.name,
+        }
+      end
+    end
+    if #items == 0 then
+      vim.notify('no definition of ' .. word .. ' (LSP or index)', vim.log.levels.WARN)
+      return
+    end
+    show_items(items, 'Definition: ' .. word)
+  end)
+end
+
+---Go to definition, with a fallback for the unity-build blind spot.
+---
+---A function that is only DEFINED in another unity member — no prototype in
+---any header, which raddebugger-style code does freely because include order
+---makes prototypes unnecessary — is a C99 implicit declaration in the open
+---file's standalone parse, and clangd answers goto-definition with that
+---implicit declaration: the call site itself, so `gd` visibly does nothing.
+---The background index does know the real definition (workspace/symbol finds
+---it; see :ClangdSetup for why the index exists at all), so when the reply is
+---empty or is the identifier under the cursor, ask the index by name instead.
+---The self-reply check is exact (line, identifier start, and the identifier
+---must be a call), so `gd` on a variable's own declaration, or on a local
+---declared earlier in the same line, behaves as before.
+function M.goto_definition()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  local cur = vim.api.nvim_win_get_cursor(0)
+  local line = vim.api.nvim_get_current_line()
+  local before = line:sub(1, cur[2] + 1)
+  local word_start = cur[2] + 2 - #before:match('[%w_]*$')
+  local after = line:sub(cur[2] + 2)
+  local is_call = after:match('^[%w_]*%s*%(') ~= nil
+  local word = vim.fn.expand('<cword>')
+  vim.lsp.buf.definition({
+    on_list = function(list)
+      local items = list.items or {}
+      local self_only = #items == 1
+        and is_call
+        and items[1].filename == name
+        and items[1].lnum == cur[1]
+        and items[1].col == word_start
+      if #items == 0 or self_only then
+        if word == '' then
+          vim.notify('no definition found', vim.log.levels.WARN)
+          return
+        end
+        index_definition(bufnr, word)
+        return
+      end
+      show_items(items, list.title)
+    end,
+  })
+end
+
 ---Set LSP keymaps for a buffer
 ---@param bufnr integer
 local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
 
   -- Navigation
-  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+  vim.keymap.set('n', 'gd', M.goto_definition, opts)
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
   vim.keymap.set('n', 'gv', function()
     local cur_win = vim.api.nvim_get_current_win()
@@ -150,20 +241,24 @@ local function set_keymaps(bufnr)
   -- Actions (grn/grr/gra are 0.12 defaults for rename/references/code_action)
   vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
 
-  -- Formatting (manual): TS/JS via eslint LSP only.
+  -- Formatting (manual): Odin via odinfmt, TS/JS via Prettier then eslint.
   -- Everything else (incl. unity-build C/C++, Lua, Rust, Jai) is a no-op.
   vim.keymap.set('n', '<leader>f', function()
+    -- Both formatters are plain binaries, not LSP formatting, and their
+    -- ftplugins (after/ftplugin/odin.lua, javascript.lua) map the same key to
+    -- the same functions so <leader>f does not depend on a server attaching.
+    -- The two paths must not disagree about what the key does.
+    if vim.bo.filetype == 'odin' then
+      require('config.odinfmt').format(0)
+      return
+    end
     local js = {
       typescript = true, typescriptreact = true,
       javascript = true, javascriptreact = true,
     }
-    if not js[vim.bo.filetype] then return end
-    local clients = vim.lsp.get_clients({ bufnr = 0, name = 'eslint' })
-    if #clients == 0 then return end
-    vim.lsp.buf.code_action({
-      context = { only = { 'source.fixAll.eslint' }, diagnostics = {} },
-      apply = true,
-    })
+    if js[vim.bo.filetype] then
+      require('config.prettier').format_buffer(0)
+    end
   end, opts)
 
   -- Diagnostics to quickfix/loclist

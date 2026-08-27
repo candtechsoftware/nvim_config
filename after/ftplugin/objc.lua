@@ -1,2 +1,2 @@
--- Reuse Objective-C++ ftplugin (same indentexpr handles id<Protocol> patterns)
+-- Reuse Objective-C++ ftplugin (which reuses the C one)
 dofile(vim.fn.stdpath("config") .. "/after/ftplugin/objcpp.lua")

@@ -73,11 +73,8 @@ local function highlight_cost(buf)
   return screen, whole
 end
 
----Cost of one `==` at the cursor. This is the custom cindent-wrapper in
----config.c_indent, which rewrites storage-class macros to `static` via
----setline() and restores them — every one of those writes fires the buffer
----change path (treesitter reparse + LSP didChange), so it is measured as a
----real indent, not as a bare function call.
+---Cost of one `==` at the cursor, measured as a real indent (the indentexpr in
+---config.c_indent runs cindent plus a few getline() calls).
 ---@return number?
 local function indent_cost()
   if vim.bo.indentexpr == '' then return end
@@ -152,9 +149,7 @@ function M.probe()
   end
   local ind = indent_cost()
   if ind then
-    local ok_ci, ci = pcall(require, 'config.c_indent')
-    local win = ok_ci and (vim.fn.line('.') - ci.scan_start(vim.fn.line('.'))) or -1
-    add('indent   one `==`          %7.2f ms   (rewrite window %d lines)', ind, win)
+    add('indent   one `==`          %7.2f ms', ind)
   end
 
   -- tags: the completion path reads this on every <Tab>

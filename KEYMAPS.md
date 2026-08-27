@@ -38,14 +38,14 @@ Leader: `<Space>`
 
 | Key | Mode | Action |
 |-----|------|--------|
-| `gd` | n | Go to definition (ctags fallback for C/C++) |
+| `gd` | n | Go to definition (LSP; falls back to the workspace index by name when clangd only sees an implicit declaration; ctags when no LSP) |
 | `gD` | n | Go to declaration |
 | `gv` | n | Go to definition in vsplit |
 | `<leader>gi` | n | Jump via ctags |
 | `<leader>vws` | n | Workspace symbols (LSP or ctags) |
 | `<leader>vd` | n | Diagnostic float |
 | `<leader>vi` | n | Incoming calls |
-| `<leader>f` | n | Format (jai-format for .jai, LSP otherwise) |
+| `<leader>f` | n | Format (odinfmt for .odin; Prettier then eslint `source.fixAll` for TS/JS; no-op otherwise) |
 
 ### Built-in 0.12 Defaults (no config needed)
 

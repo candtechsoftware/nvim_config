@@ -167,8 +167,7 @@ end
 --
 -- Only nodes that touch the target row can affect it: the target's ancestors
 -- all span it by definition. Restricting the row range makes a call cost
--- O(depth) instead of O(file). Same lesson as the scan window in
--- config.c_indent, one layer up.
+-- O(depth) instead of O(file).
 local get_indents = memoize(function(bufnr, root, lang, srow, erow)
   local map = {
     ['indent.auto'] = {},

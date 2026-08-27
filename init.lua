@@ -1,6 +1,24 @@
 -- Neovim 0.12 configuration
 -- Using vim.pack, native LSP, treesitter
 
+-- If nvim was started from a directory that no longer exists (rm -rf'd while
+-- the shell was still sitting in it), vim.uv.cwd() returns nil and every
+-- vim.fs.abspath/vim.fs.root call — ours, and nvim's own :h dir startup hook
+-- on VimEnter — asserts. Move to a real directory before anything looks.
+if not vim.uv.cwd() then
+    local fallback = vim.uv.os_homedir() or '/'
+    vim.uv.chdir(fallback)
+    vim.api.nvim_create_autocmd('VimEnter', {
+        once = true,
+        callback = function()
+            vim.notify(
+                'Working directory no longer exists; changed to ' .. fallback,
+                vim.log.levels.WARN
+            )
+        end,
+    })
+end
+
 -- Directory browsing uses the 0.13 builtin browser (:h dir), so netrw is not
 -- loaded at all. Delete this line to get :Ex/netrw back (its old g:netrw_*
 -- settings are in git history).

@@ -50,7 +50,22 @@ These are unity-build codebases, and the setup is built around that.
 
 **clangd is opt-in.** It attaches only in a project where `:ClangdSetup` has
 generated a `.clangd` describing the unity build (see
-`lua/config/clangd_setup.lua`). There is no `compile_commands.json`.
+`lua/config/clangd_setup.lua`). It also writes a bare `compile_commands.json`
+— no flags, `.clangd` owns those — because a compilation database is the only
+file list clangd's background indexer will take; without one nothing is ever
+indexed and `gd` stops at prototypes instead of reaching definitions in other
+unity members. Shards go to `<root>/.cache/clangd/`; gitignore that and
+`compile_commands.json`. A project set up before this needs one
+`:ClangdSetup!` to get its index. The preamble chain follows unity aggregates:
+engine's `src/main.cpp` includes `modules/base/base_inc.cpp`, which includes
+`third_party/xxhash/xxhash.h` before its own `.cpp` files, so every member
+compiles with that header and `gd` on `XXH3_64bits_withSeed` lands in
+`third_party/`. Foreign-platform headers (`win32/`, `linux/` on a Mac) are
+left out of the chain. One blind spot survives even with the index:
+a function with no prototype in any header (only a definition in another
+member) is an implicit declaration in the open file's standalone parse, and
+clangd's goto-definition answers with the call site. `gd` detects that reply
+and asks the index by name instead (`goto_definition` in `lua/config/lsp.lua`).
 
 **Everywhere else, ctags + treesitter do the work:**
 
@@ -63,9 +78,22 @@ generated a `.clangd` describing the unity build (see
   Plain identifiers are ranked local → file → project.
 
 The custom storage-class macros (`internal`, `global`, `local_persist`,
-`function`) are understood by neither `cindent` nor tree-sitter, so both the
-indent path (`lua/config/c_indent.lua`) and the completion path rewrite them to
-`static` before parsing.
+`function`) are not understood by tree-sitter, so the completion path rewrites
+them to `static` before parsing. Indentation is plain `cindent` (which copes
+with the macros) plus one fix in `lua/config/c_indent.lua`: a `{` on its own
+line after a `case X:` label sits at the label's indent, where cindent would
+push it right — and, after a `default: {}break;`, under that `{}`. An
+indentexpr runs under textlock, so it cannot rewrite the buffer; every fix
+there is a computed indent. `cinoptions` indents `case` one level under
+`switch` (`:s`), the raddebugger layout.
+
+**Indent width** (`after/ftplugin/c.lua`, inherited by C++/Obj-C) defaults to
+the raddebugger style — 2 spaces — but a file that already has an indent
+keeps it: the buffer's first indented line decides, then a sibling `.c`/`.h`
+in the same directory (a prototype-only header or a new file has no indent
+of its own), then 2. Only 2/4/8 count, so a `*` comment body or an aligned
+continuation line cannot set the width. An `.editorconfig` still wins over all
+of this, as it runs after the ftplugin.
 
 Requires `ctags` (`brew install universal-ctags`) and `rg`.
 
@@ -87,6 +115,30 @@ whichever you need:
 
 `:LspInfo` summarizes state for the current buffer, `:LspRestart` restarts, and
 `:checkhealth vim.lsp` is the deeper view.
+
+### Formatting
+
+`<leader>f` is manual and routed by filetype: Odin goes through `odinfmt`,
+TypeScript/JavaScript through Prettier and then eslint's `source.fixAll`,
+everything else is a no-op. `odinfmt` is built from the ols repo
+(`./odinfmt.sh`, binary lands next to `ols`) and takes its style from the
+nearest `odinfmt.json` above the file being formatted, not above nvim's cwd.
+Odin buffers also get `:Odinfmt`, plus format-on-save behind
+`vim.g.odinfmt_on_save = true` (off by default). A buffer that does not parse
+is reported and left untouched. See `lua/config/odinfmt.lua`.
+
+**Prettier** (`lua/config/prettier.lua`) is the project's own: the
+`node_modules/.bin/prettier` nearest the file, else one on PATH; nothing is
+installed globally. JS/TS buffers also take their indent options from the
+project's Prettier config — `tabWidth`/`useTabs` from the nearest
+`package.json` `"prettier"` key, `.prettierrc*` or `prettier.config.*`,
+`overrides` included, with Prettier's own defaults (2 spaces) when there is no
+config — so what you type indents the way `prettier --write` would leave it.
+An explicit `tabWidth` beats `.editorconfig`, as it does for Prettier itself.
+JSON configs are parsed properly; YAML/JS/TOML ones are scanned for the two
+keys, so a shared config referenced by name yields the defaults. `:Prettier`
+runs Prettier alone (no eslint pass). Prettier runs synchronously first, so in
+the eslint-plugin-prettier projects the eslint step only applies its own fixes.
 
 Other tools assumed present: **ripgrep** (telescope, project macro scanning).
 

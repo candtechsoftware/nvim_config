@@ -2,14 +2,24 @@
 
 local M = {}
 
+-- vim.uv.cwd() is nil once the working directory has been deleted under a
+-- running session (init.lua only guards startup). Treat that as "nothing
+-- here" rather than concatenating nil.
+local function cwd_key()
+  return vim.uv.cwd() or ""
+end
+
 -- small helper: does a file exist in CWD?
 local function exists(fname)
-  return vim.uv.fs_stat(vim.uv.cwd() .. "/" .. fname) ~= nil
+  local dir = vim.uv.cwd()
+  return dir ~= nil and vim.uv.fs_stat(dir .. "/" .. fname) ~= nil
 end
 
 -- tiny helper: does a dir exist?
 local function dexists(dname)
-  local st = vim.uv.fs_stat(vim.uv.cwd() .. "/" .. dname)
+  local dir = vim.uv.cwd()
+  if not dir then return false end
+  local st = vim.uv.fs_stat(dir .. "/" .. dname)
   return st ~= nil and st.type == "directory"
 end
 
@@ -176,7 +186,7 @@ local cache = {} -- [cwd] = { [ft] = { makeprg = ..., errorformat = ... } }
 
 function M.apply()
   local ft = vim.bo.filetype
-  local cwd = vim.uv.cwd()
+  local cwd = cwd_key()
   local by_ft = cache[cwd]
   local entry = by_ft and by_ft[ft]
   if not entry then
@@ -198,7 +208,7 @@ end
 function M.setup()
   -- command to force re-detect
   vim.api.nvim_create_user_command("MakeDetect", function()
-    cache[vim.uv.cwd()] = nil
+    cache[cwd_key()] = nil
     M.apply()
     print("makeprg → " .. vim.o.makeprg)
   end, {})

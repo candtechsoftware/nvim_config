@@ -39,7 +39,7 @@ local root_by_dir = {}
 
 local function buffer_root()
   local name = vim.api.nvim_buf_get_name(0)
-  local dir = name ~= '' and vim.fs.dirname(name) or vim.fs.normalize(vim.uv.cwd())
+  local dir = name ~= '' and vim.fs.dirname(name) or vim.fs.normalize(vim.uv.cwd() or '')
   local root = root_by_dir[dir]
   if root == nil then
     root = find_project_root()

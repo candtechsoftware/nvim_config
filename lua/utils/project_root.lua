@@ -17,17 +17,25 @@ M.markers = {
 function M.find(opts)
   opts = opts or {}
   local markers = opts.markers or M.markers
+  local buf = opts.buf or 0
+  local cwd = vim.uv.cwd()
 
-  local root = vim.fs.root(opts.buf or 0, function(name, path)
-    if vim.fs.normalize(path) == home then return false end
-    for _, marker in ipairs(markers) do
-      if name == marker then return true end
-    end
-    return false
-  end)
+  -- vim.fs.root resolves the buffer name against cwd and asserts when there
+  -- isn't one (the project was deleted out from under a running session).
+  -- An absolute buffer name never needs cwd, so only skip for unnamed ones.
+  local root
+  if cwd or vim.api.nvim_buf_get_name(buf):sub(1, 1) == '/' then
+    root = vim.fs.root(buf, function(name, path)
+      if vim.fs.normalize(path) == home then return false end
+      for _, marker in ipairs(markers) do
+        if name == marker then return true end
+      end
+      return false
+    end)
+  end
 
   if not root then
-    root = vim.fs.normalize(vim.uv.cwd())
+    root = vim.fs.normalize(cwd or home)
   end
 
   return root

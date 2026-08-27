@@ -1,19 +1,71 @@
--- Detect indent width from file content (2 vs 4 spaces)
-local function detect_indent()
-  local count = math.min(100, vim.api.nvim_buf_line_count(0))
-  for i = 0, count - 1 do
-    local line = vim.api.nvim_buf_get_lines(0, i, i + 1, false)[1]
+-- Indent width. The fallback is 2 spaces — the raddebugger style
+-- (~/gits/raddebugger: 2-space, no tabs) — but a file that already has an
+-- indent keeps it, so ~/projects/engine's 4-space files are left alone.
+--
+-- Three steps, first conclusive one wins:
+--   1. this buffer's first indented line;
+--   2. a sibling .c/.h in the same directory — a prototype-only header or a
+--      brand-new file has no indented line of its own, and this is what makes
+--      a new file in a 4-space project come out 4-wide and a raddebugger
+--      header come out 2-wide instead of both falling through to the default;
+--   3. 2.
+-- Only 2/4/8 count as an indent: the ` *` body of a block comment or an
+-- aligned continuation line says nothing about the project's width.
+local WIDTHS = { [2] = true, [4] = true, [8] = true }
+local SIBLING_EXTS = { c = true, h = true, cpp = true, cc = true, hpp = true, hh = true, m = true, mm = true }
+local HEAD_LINES = 100
+local MAX_SIBLINGS = 8
+
+---@param lines string[]
+---@return integer|nil
+local function sniff(lines)
+  for _, line in ipairs(lines) do
     local spaces = line:match('^( +)%S')
-    if spaces and #spaces <= 8 then return #spaces end
+    if spaces and WIDTHS[#spaces] then return #spaces end
   end
-  return vim.bo.shiftwidth
+end
+
+---@param path string
+---@return string[]
+local function head(path)
+  local f = io.open(path, 'r')
+  if not f then return {} end
+  local lines = {}
+  for line in f:lines() do
+    lines[#lines + 1] = line
+    if #lines >= HEAD_LINES then break end
+  end
+  f:close()
+  return lines
+end
+
+local function detect_indent()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local width = sniff(vim.api.nvim_buf_get_lines(bufnr, 0, HEAD_LINES, false))
+  if width then return width end
+
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name ~= '' then
+    local dir, self = vim.fs.dirname(name), vim.fs.basename(name)
+    local seen = 0
+    for entry, kind in vim.fs.dir(dir) do
+      if kind == 'file' and entry ~= self and SIBLING_EXTS[entry:match('%.(%w+)$') or ''] then
+        width = sniff(head(dir .. '/' .. entry))
+        if width then return width end
+        seen = seen + 1
+        if seen >= MAX_SIBLINGS then break end
+      end
+    end
+  end
+
+  return 2
 end
 
 local sw = detect_indent()
 vim.bo.shiftwidth = sw
 vim.bo.tabstop = sw
 vim.bo.softtabstop = sw
-vim.bo.cinoptions = 't0,:0,l1,(0,Ws'
+vim.bo.cinoptions = 't0,:s,l1,(0,Ws'
 
 -- Identifier completion for unity-build C/C++ with no LSP. <Tab> (see
 -- lua/config/keymaps.lua) routes completion by context:
@@ -35,14 +87,10 @@ vim.bo.completeopt = 'menu,menuone,noselect'
 -- (real symbols), then the current buffer.
 vim.bo.complete = 't,.'
 
--- Custom indentexpr: temporarily replace custom storage-class macros
--- (internal, global, local_persist) with 'static' so cindent understands them.
--- Combined with cinoptions=t0 for "return type on its own line" style.
--- The scan window and rewrite/restore dance live in config.c_indent, shared
--- with the Obj-C++ ftplugin.
-local c_indent = require('config.c_indent')
-
-_G._c_indentexpr = c_indent.make_indentexpr(c_indent.sub_macros)
+-- Custom indentexpr: cindent, with the `{`-after-case-label layout fixed up
+-- (see config.c_indent). Combined with cinoptions=t0 for "return type on its
+-- own line" style. Shared with the C++/Obj-C/Obj-C++ ftplugins.
+_G._c_indentexpr = require('config.c_indent').indent
 vim.bo.indentexpr = 'v:lua._c_indentexpr()'
 vim.bo.smartindent = false
 
