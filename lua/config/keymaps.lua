@@ -113,7 +113,9 @@ vim.keymap.set("n", "<leader>ih", function()
 end, { desc = "Toggle inlay hints" })
 
 -- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
--- No auto-triggers anywhere — Tab is the ONLY way to fire completion.
+-- Tab is the ONLY way to OPEN the popup; nothing auto-triggers it. (While it
+-- is open, lua/config/lsp.lua re-queries the server on each keystroke when
+-- the last reply was truncated — see the InsertCharPre autocmd there.)
 -- With an LSP: vim.lsp.completion.get() (native, textEdit ranges honored;
 --   `<C-x><C-o>` via an LSP omnifunc concatenates the prefix with some servers).
 -- Without an LSP (unity-build C/C++): route by context —

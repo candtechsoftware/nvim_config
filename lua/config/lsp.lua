@@ -325,6 +325,13 @@ local function setup_diagnostics()
   vim.diagnostic.enable(false)
 end
 
+-- Re-query context for a list the server marked incomplete. Same trigger kind
+-- Neovim's own autotrigger path uses, so clangd scores the reply as a refined
+-- filter rather than a fresh invocation.
+local INCOMPLETE_CTX = {
+  triggerKind = vim.lsp.protocol.CompletionTriggerKind.TriggerForIncompleteCompletions,
+}
+
 -- Some servers return textEdit.range starting AT the cursor (insert-only,
 -- no prefix replacement). Native LSP completion then anchors the popup at
 -- the cursor, so accepting `window` on `game.win<Tab>` appends and yields
@@ -435,7 +442,21 @@ function M.setup()
         callback = function() set_folding(bufnr) end,
       })
 
-      -- Signature help on '(' and ',' — one-line cmdline echo only, no popup.
+      -- Signature help on '(' and ',' — one-line cmdline echo only, no popup —
+      -- and a re-query whenever the open popup is showing a truncated list.
+      --
+      -- clangd caps a reply at 100 items and marks it isIncomplete, which in
+      -- ~/projects/MinusTable is every prefix short enough to be worth a <Tab>:
+      -- `a`, `ar`, `db`, `os_`, `r_`, `str_` all come back capped. Neovim does
+      -- re-query on the next keystroke after an incomplete reply, but installs
+      -- that hook only under `autotrigger` (see vim.lsp.completion.enable),
+      -- which this config deliberately does not use — so the popup went on
+      -- filtering the stale 100 client-side and the symbol being typed never
+      -- appeared, however far you typed it.
+      --
+      -- get() returns immediately while the popup is up unless the last reply
+      -- WAS incomplete, so a complete list still costs one function call, and
+      -- nothing auto-opens: the popup still only ever appears from <Tab>.
       vim.api.nvim_create_autocmd('InsertCharPre', {
         buffer = bufnr,
         group = buf_group,
@@ -444,6 +465,14 @@ function M.setup()
           if char == '(' or char == ',' then
             vim.schedule(function()
               vim.lsp.buf.signature_help({ silent = true })
+            end)
+          end
+          -- 'eval' is the mode a popup opened by vim.lsp.completion carries;
+          -- <C-n> reports 'keyword' and omni 'omni', so a manually opened
+          -- fallback popup is never replaced by an LSP list mid-word.
+          if vim.fn.complete_info({ 'mode' }).mode == 'eval' then
+            vim.schedule(function()
+              vim.lsp.completion.get({ ctx = INCOMPLETE_CTX })
             end)
           end
         end,
