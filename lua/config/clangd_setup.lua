@@ -22,7 +22,14 @@
 -- never on the definition in another unity member. Shards land in
 -- <root>/.cache/clangd/ (gitignore it, and compile_commands.json).
 --
--- :ClangdSetup! overwrites the existing files.
+-- A compile_commands.json a build system already writes is left alone. Its
+-- entries carry the real flags, which a bare one cannot supply: MinusTable's
+-- build_mac.sh rewrites the database on every build, and overwriting it took
+-- -Isrc and -Ithirdparty/libpq/include away from every file until the next
+-- build. Either database gives the indexer the same file list, so the build's
+-- wins.
+--
+-- :ClangdSetup! overwrites the .clangd, never a build system's database.
 
 local M = {}
 
@@ -1033,6 +1040,20 @@ local function render_cdb(model)
   return out, #entries
 end
 
+---A compile_commands.json this command did not write. Ours is always
+---`clang -c <file>`, so the first entry settles it; anything else came from a
+---build system and carries flags worth more than the ones we would replace
+---them with. A missing, empty or unparseable file is not one of those.
+---@param path string
+---@return boolean
+local function build_system_cdb(path)
+  if not vim.uv.fs_stat(path) then return false end
+  local ok, db = pcall(vim.json.decode, table.concat(vim.fn.readfile(path), '\n'))
+  if not ok or type(db) ~= 'table' or type(db[1]) ~= 'table' then return false end
+  local args = db[1].arguments
+  return not (type(args) == 'table' and #args == 3 and args[1] == 'clang' and args[2] == '-c')
+end
+
 ---@param opts? {force?: boolean, dir?: string}
 function M.generate(opts)
   opts = opts or {}
@@ -1077,8 +1098,16 @@ function M.generate(opts)
 
   local lines, summary = render(model)
   vim.fn.writefile(lines, target)
-  local cdb_lines, cdb_count = render_cdb(model)
-  vim.fn.writefile(cdb_lines, root .. '/compile_commands.json')
+
+  local cdb = root .. '/compile_commands.json'
+  local cdb_msg
+  if build_system_cdb(cdb) then
+    cdb_msg = '; kept the existing compile_commands.json (a build system writes it, with the real flags)'
+  else
+    local cdb_lines, cdb_count = render_cdb(model)
+    vim.fn.writefile(cdb_lines, cdb)
+    cdb_msg = ('; compile_commands.json lists %d source(s) for the background index'):format(cdb_count)
+  end
 
   -- A clangd already running here reloads .clangd on its own but has cached
   -- "no compilation database" for this root, so it never starts the index:
@@ -1104,7 +1133,7 @@ function M.generate(opts)
         summary.collisions > 0 and (', %d TU(s) need hand-tuning (see file comments)')
           :format(summary.collisions) or '')
   end
-  msg = msg .. ('; compile_commands.json lists %d source(s) for the background index'):format(cdb_count)
+  msg = msg .. cdb_msg
   vim.notify(msg, vim.log.levels.INFO)
 end
 

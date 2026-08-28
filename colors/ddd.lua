@@ -27,6 +27,7 @@ local c = {
   bar_nc = "#050505",
   sel = "#333333",    -- visual, search, popup
   sel_hi = "#4d4d4d", -- matching paren, popup selection
+  line = "#141414",   -- cursor line, on in the directory listing only
   rose = "#b55f75",   -- current search match, replace-mode cursor
   cursor = "#50ffa0",
 }
@@ -49,6 +50,8 @@ paint({ fg = c.gray, bg = c.bar }, { "StatusLine", "WinBar" })
 paint({ fg = c.gray, bg = c.bar_nc }, { "StatusLineNC", "WinBarNC" })
 paint({ bg = c.sel }, { "Visual", "VisualNOS" })
 paint({ bg = c.sel_hi }, { "MatchParen" })
+paint({ bg = c.line }, { "CursorLine" })
+paint({ fg = c.blue }, { "Directory" })
 
 
 -- Cursor. 'guicursor' is global and every scheme in colors/ owns it; the

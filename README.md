@@ -55,9 +55,15 @@ generated a `.clangd` describing the unity build (see
 file list clangd's background indexer will take; without one nothing is ever
 indexed and `gd` stops at prototypes instead of reaching definitions in other
 unity members. Shards go to `<root>/.cache/clangd/`; gitignore that and
-`compile_commands.json`. A project set up before this needs one
-`:ClangdSetup!` to get its index. The preamble chain follows unity aggregates:
-engine's `src/main.cpp` includes `modules/base/base_inc.cpp`, which includes
+`compile_commands.json`. A database a build system already writes is left
+alone — its entries carry the real flags a bare one cannot (MinusTable's
+`build_mac.sh` rewrites it on every build, `-Isrc -Ithirdparty/libpq/include`),
+and either file gives the indexer the same list. A project set up before this
+needs one `:ClangdSetup!` to get its index, and so does a new module dir: a
+dir no fragment matches gets no `-include` chain at all, which is what clangd
+going silent in a freshly created `src/draw/` means. The preamble chain
+follows unity aggregates: engine's `src/main.cpp` includes
+`modules/base/base_inc.cpp`, which includes
 `third_party/xxhash/xxhash.h` before its own `.cpp` files, so every member
 compiles with that header and `gd` on `XXH3_64bits_withSeed` lands in
 `third_party/`. Foreign-platform headers (`win32/`, `linux/` on a Mac) are
@@ -87,13 +93,16 @@ indentexpr runs under textlock, so it cannot rewrite the buffer; every fix
 there is a computed indent. `cinoptions` indents `case` one level under
 `switch` (`:s`), the raddebugger layout.
 
-**Indent width** (`after/ftplugin/c.lua`, inherited by C++/Obj-C) defaults to
-the raddebugger style — 2 spaces — but a file that already has an indent
-keeps it: the buffer's first indented line decides, then a sibling `.c`/`.h`
-in the same directory (a prototype-only header or a new file has no indent
-of its own), then 2. Only 2/4/8 count, so a `*` comment body or an aligned
-continuation line cannot set the width. An `.editorconfig` still wins over all
-of this, as it runs after the ftplugin.
+**Indent width** (`lua/config/c_width.lua`, wired in `after/ftplugin/c.lua`
+and inherited by C++/Obj-C) comes from the project, not the file: the most
+common first-level indent among up to 40 `.c`/`.h` under the project root
+(`utils.project_root`, skipping `utils.skip_dirs`) decides, so 4-space code
+pasted into a 2-space tree is a file to fix rather than a style to follow. A
+file with no project above it falls back to its own first indented line, then
+to 2 — the raddebugger style. Only 2/4/8 count, so a `*` comment body or an
+aligned continuation line cannot set the width, and ties go to the narrower
+one. The scan runs once per project root per session. An `.editorconfig` still
+wins over all of this, as it runs after the ftplugin.
 
 Requires `ctags` (`brew install universal-ctags`) and `rg`.
 

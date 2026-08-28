@@ -6,7 +6,7 @@ Leader: `<Space>`
 
 | Key | Mode | Action |
 |-----|------|--------|
-| `<leader>pv` | n | Open netrw |
+| `<leader>pv` | n | Open the directory browser at the current file's dir |
 | `J` / `K` | v | Move lines down/up |
 | `J` | n | Join lines (cursor stays) |
 | `<C-d>` / `<C-u>` | n | Half-page down/up (centered) |
@@ -21,6 +21,21 @@ Leader: `<Space>`
 | `<leader>s` | n | Search and replace word under cursor |
 | `<leader><leader>` | n | Source current file |
 | `]c` / `[c` | n | Next/prev comment |
+
+## Directory browser (after/ftplugin/directory.lua)
+
+The builtin 0.13 listing (`:h dir`, netrw is off). Navigation is upstream's;
+the filesystem keys are this config's.
+
+| Key | Mode | Action |
+|-----|------|--------|
+| `<CR>` | n | Open the entry under the cursor |
+| `-` | n | Up to the parent directory |
+| `R` | n | Reload the listing |
+| `%` | n | New file here (`:w` creates it) |
+| `d` | n | New directory here |
+| `D` | n | Delete the entry under the cursor (confirms) |
+| `r` | n | Rename the entry under the cursor |
 
 ## Quickfix & Location List
 
