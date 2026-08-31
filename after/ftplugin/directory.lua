@@ -73,3 +73,25 @@ vim.keymap.set("n", "r", function()
     end
     reload(buf)
 end, { buffer = buf, desc = "Rename entry under cursor" })
+
+-- The listing is a snapshot: nvim.dir renders it once and redraws only on `R`.
+-- Watch the directory with the OS filewatcher that backs 'autoread' so a file
+-- created outside this buffer shows up on its own. The keys above still redraw
+-- themselves: their feedback should not wait on the debounce.
+local ok, unwatch = pcall(vim._watch.watch, dirpath(), { debounce = 100 }, function()
+    vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(buf) then
+            reload(buf)
+        end
+    end)
+end)
+
+if ok then
+    vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+        buffer = buf,
+        desc = "Stop watching the directory behind the listing",
+        callback = function()
+            unwatch()
+        end,
+    })
+end

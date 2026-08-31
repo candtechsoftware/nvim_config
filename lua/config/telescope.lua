@@ -17,17 +17,39 @@ end
 
 local find_project_root = require("utils.project_root").find
 
+-- Search scope is the repo, not the nearest manifest. `vim.fs.root` stops at
+-- the NEAREST marker, so a buffer in ~/work/percipio-repo/percipio/packages/api
+-- resolved to `packages/api` and a grep never left that one package. Every
+-- checkout under ~/work is its own git repo and the directory holding them has
+-- no markers of its own, so `.git` is exactly one project: all of its packages,
+-- none of its 17 siblings. Outside a repo, fall back to the shared marker list.
+local function search_root()
+    local root = find_project_root({ markers = { ".git" } })
+    return vim.uv.fs_stat(root .. "/.git") and root or find_project_root()
+end
+
 -- Trees every picker skips, and the reason they have to be listed explicitly.
 --
--- `--no-ignore-vcs` (kept on purpose, so gitignored build output stays
--- searchable) means .gitignore does not filter anything, and vendored code is
--- checked IN, so nothing filtered it at all. Measured in ~/projects/notes:
--- `live_grep "render"` ran rg over the whole 1.7G tree on EVERY keystroke —
--- 1060ms and 32679 results, of which the top four sources were all
--- appgui/third_party/slang (a 9.9MB validusage.json alone contributed 3761
--- matches, plus vulkan_structs.hpp, Metal.hpp and vk.xml). With these globs
--- it is 67ms and 12229 results, and renderer's own hits are untouched
--- (4847 -> 4842; the five lost are under renderer/build).
+-- Vendored code is checked IN, so .gitignore does not filter it: these globs
+-- are what keeps it out. Measured in ~/projects/notes: `live_grep "render"`
+-- ran rg over the whole 1.7G tree on EVERY keystroke — 1060ms and 32679
+-- results, of which the top four sources were all appgui/third_party/slang (a
+-- 9.9MB validusage.json alone contributed 3761 matches, plus
+-- vulkan_structs.hpp, Metal.hpp and vk.xml). With these globs it is 67ms and
+-- 12229 results, and renderer's own hits are untouched (4847 -> 4842; the five
+-- lost are under renderer/build).
+--
+-- .gitignore is honoured (no `--no-ignore-vcs`): a glob list cannot keep up
+-- with what a JS/TS tree generates, and every project here already gitignores
+-- its build output. Measured, files per keystroke and `live_grep` wall time:
+--
+--   ~/work/app             40232 -> 4849,  919ms -> 77ms   (ios/Pods: 18719
+--                          .h + 7974 .hpp + 1998 .m, same 2913 real hits)
+--   ~/work/percipio-repo   78173 -> 46592, 1970ms -> 994ms (compiled lib/,
+--                          generated/, types/, and .claude/worktrees copies
+--                          that returned every hit a second time)
+--   ~/projects C trees     lose 1-2 files each (a stray .json, a .clangd);
+--                          raddebugger-mac loses none
 --
 -- --max-filesize caps the pathological generated headers this codebase has a
 -- lot of (a 63MB slang-core-module-generated.h, 2.2MB fonts_embedded.h) —
@@ -86,7 +108,6 @@ function M.ensure()
                 "--column",
                 "--smart-case",
                 "--hidden",
-                "--no-ignore-vcs",
                 "--no-require-git",
             }),
             preview = {
@@ -134,7 +155,6 @@ function M.ensure()
                     "rg",
                     "--files",
                     "--hidden",
-                    "--no-ignore-vcs",
                     "--no-require-git",
                 }),
             },
@@ -164,7 +184,7 @@ function M.setup()
     -- Keymaps only — setup() above is deferred to the first picker.
 
     vim.keymap.set("n", "<leader>pws", function()
-        local root = find_project_root()
+        local root = search_root()
         builtin().grep_string({
             search = vim.fn.expand("<cword>"),
             cwd = root,
@@ -175,7 +195,7 @@ function M.setup()
     end, { desc = "Grep word under cursor (exact)" })
 
     vim.keymap.set("n", "<leader>pWs", function()
-        local root = find_project_root()
+        local root = search_root()
         builtin().grep_string({
             search = vim.fn.expand("<cWORD>"),
             cwd = root,
@@ -185,7 +205,7 @@ function M.setup()
     end, { desc = "Grep WORD under cursor" })
 
     vim.keymap.set("v", "<leader>ps", function()
-        local root = find_project_root()
+        local root = search_root()
         local text = get_visual_selection()
         builtin().grep_string({
             search = text,
@@ -196,7 +216,7 @@ function M.setup()
     end, { desc = "Grep selected text" })
 
     vim.keymap.set("n", "<leader>ff", function()
-        local root = find_project_root()
+        local root = search_root()
         builtin().find_files({
             cwd = root,
             prompt_title = "Files in " .. vim.fn.fnamemodify(root, ":t")
@@ -215,7 +235,7 @@ function M.setup()
     end, { desc = "Find recent files (this project)" })
 
     vim.keymap.set("n", "<leader>/", function()
-        local root = find_project_root()
+        local root = search_root()
         builtin().live_grep({
             cwd = root,
             prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
@@ -249,14 +269,14 @@ function M.setup()
     end, { desc = "Live grep (current dir)" })
 
     vim.keymap.set("n", "<leader>pg", function()
-        local root = find_project_root()
+        local root = search_root()
         builtin().live_grep({
             cwd = root,
-            prompt_title = "Grep (strict, .gitignore) in " .. vim.fn.fnamemodify(root, ":t"),
-            -- No --no-ignore-vcs here: this picker's whole purpose is the
-            -- .gitignore-honoring search. It still gets the vendored-tree
-            -- globs, because third_party is checked in and .gitignore never
-            -- excluded it.
+            prompt_title = "Grep (+ignored) in " .. vim.fn.fnamemodify(root, ":t"),
+            -- The escape hatch, now that every other picker honours
+            -- .gitignore: `--no-ignore-vcs` puts build output, generated code
+            -- and vendored SDKs back in. Slow by construction — in ~/work/app
+            -- it is the difference between 4849 files and 40232.
             vimgrep_arguments = with_excludes({
                 "rg",
                 "--color=never",
@@ -266,9 +286,10 @@ function M.setup()
                 "--column",
                 "--smart-case",
                 "--hidden",
+                "--no-ignore-vcs",
             }),
         })
-    end, { desc = "Live grep (strict, honors .gitignore)" })
+    end, { desc = "Live grep (includes gitignored files)" })
 
     vim.keymap.set("n", "<leader>gf", function() builtin().git_files() end, { desc = "Git files" })
 
@@ -330,7 +351,7 @@ function M.setup()
     end, { desc = "Grep search in Jai modules" })
 
     vim.keymap.set("n", "<leader>fg", function()
-        local root = find_project_root()
+        local root = search_root()
         vim.ui.input({ prompt = "Search --- *.ext: " }, function(input)
             if not input or input == "" then return end
 

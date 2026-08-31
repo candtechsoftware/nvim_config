@@ -42,6 +42,7 @@ local c = {
   value = "#6b8e23",
   number = "#d699b5",
   macro = "#e0ad82",      -- code_macro / note / builtin_function
+  macro_define = "#2895c7", -- 4coder fleury_color_index_macro: indexed #define names
   modifier = "#e67d74",   -- code_modifier / attribute / directive / headers
   highlight = "#d89b75",
   warning = "#e4d97d",
@@ -90,7 +91,11 @@ hl(0, "Search", { bg = c.soft_highlight })
 hl(0, "IncSearch", { fg = c.at_cursor, bg = c.search_active })
 hl(0, "CurSearch", { fg = c.at_cursor, bg = c.search_active })
 hl(0, "Substitute", { fg = c.at_cursor, bg = c.highlight })
-hl(0, "MatchParen", { bg = c.soft_highlight, bold = true })
+hl(0, "MatchParen", { fg = c.highlight })
+
+hl(0, "LspReferenceText", { bg = c.soft_highlight })
+hl(0, "LspReferenceRead", { bg = c.soft_highlight })
+hl(0, "LspReferenceWrite", { bg = c.soft_highlight })
 
 hl(0, "LineNr", { fg = c.ui_neutral, bg = c.panel_deep })
 hl(0, "CursorLineNr", { fg = c.keyword, bg = c.panel_deep, bold = true })
@@ -162,7 +167,7 @@ hl(0, "Operator", { fg = c.text })
 hl(0, "PreProc", { fg = c.modifier })
 hl(0, "Include", { fg = c.modifier })
 hl(0, "Define", { fg = c.modifier })
-hl(0, "Macro", { fg = c.macro })
+hl(0, "Macro", { fg = c.macro_define })
 hl(0, "PreCondit", { fg = c.modifier })
 hl(0, "Type", { fg = c.type })
 hl(0, "StorageClass", { fg = c.modifier })
@@ -238,8 +243,16 @@ local links = {
   ["@tag.delimiter"] = "Delimiter",
   ["@markup"] = "Normal",
   ["@markup.heading"] = "Title",
+  ["@markup.heading.1"] = "Title",
+  ["@markup.heading.2"] = "Title",
+  ["@markup.heading.3"] = "Title",
+  ["@markup.strong"] = "Normal",
+  ["@markup.italic"] = "Normal",
   ["@markup.raw"] = "String",
+  ["@markup.raw.block"] = "String",
   ["@markup.link"] = "Underlined",
+  ["@markup.link.label"] = "Underlined",
+  ["@markup.link.url"] = "Normal",
   ["@markup.list"] = "Delimiter",
   ["@markup.quote"] = "Comment",
   ["@lsp.type.class"] = "Type",
@@ -335,13 +348,15 @@ hl(0, "TelescopeMatching", { fg = c.keyword, bold = true })
 -- Back-cycle for nested scopes. hh.lua indexes these mod #back_cycle (6), so six
 -- entries is the full cycle. Upstream leaves region_scope_* flat at #161616; this
 -- lifts each nesting level slightly warmer off that base, toward the tan text.
+-- The step is half what it was: the old ramp topped out at #2a271f, which read
+-- as banding on deeply nested code.
 local scope_bgs = {
   "#161616",
-  "#1a1917",
-  "#1e1c19",
-  "#22201b",
-  "#26231d",
-  "#2a271f",
+  "#181817",
+  "#1a1918",
+  "#1c1b19",
+  "#1e1d1a",
+  "#201f1b",
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

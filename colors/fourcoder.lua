@@ -391,12 +391,13 @@ hl(0, "TelescopeMatching",       { fg = c.keyword, bold = true })
 -- Nested-scope backgrounds (defcolor_back_cycle) --------------------------
 -- Upstream these are ARGB with a low alpha, composited over defcolor_back:
 --   0x10A00000 0x0C00A000 0x0C0000A0 0x0CA0A000 over #0c0c0c. Neovim has no
--- alpha, so the blends are precomputed here.
+-- alpha, so the blends are precomputed here, at alpha 8 rather than upstream's
+-- 16/12: the same hues, softened, and the red no longer stronger than the rest.
 local scope_bgs = {
-  "#150b0b", -- 0x10A00000 (red,   alpha 16)
-  "#0b130b", -- 0x0C00A000 (green, alpha 12)
-  "#0b0b13", -- 0x0C0000A0 (blue,  alpha 12)
-  "#13130b", -- 0x0CA0A000 (olive, alpha 12)
+  "#110c0c", -- 0xA00000 (red)
+  "#0c110c", -- 0x00A000 (green)
+  "#0c0c11", -- 0x0000A0 (blue)
+  "#11110c", -- 0xA0A000 (olive)
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

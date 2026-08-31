@@ -25,7 +25,8 @@ Leader: `<Space>`
 ## Directory browser (after/ftplugin/directory.lua)
 
 The builtin 0.13 listing (`:h dir`, netrw is off). Navigation is upstream's;
-the filesystem keys are this config's.
+the filesystem keys, the colouring, and the redraw when the directory changes
+on disk are this config's.
 
 | Key | Mode | Action |
 |-----|------|--------|
