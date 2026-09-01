@@ -1,4 +1,4 @@
-local sw = require('config.c_width').detect()
+local sw = require('config.c_width').get()
 vim.bo.shiftwidth = sw
 vim.bo.tabstop = sw
 vim.bo.softtabstop = sw
