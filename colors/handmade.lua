@@ -76,8 +76,8 @@ vim.opt.guicursor = {
   "o:block-CursorNormal",
 }
 
-hl(0, "Normal", { fg = c.text, bg = c.back })
-hl(0, "NormalNC", { fg = c.text, bg = c.back })
+hl(0, "Normal", { fg = c.text, bg = "none" })
+hl(0, "NormalNC", { fg = c.text, bg = "none" })
 hl(0, "NormalFloat", { fg = c.text, bg = c.panel })
 hl(0, "FloatBorder", { fg = c.splitter, bg = c.panel })
 hl(0, "FloatTitle", { fg = c.keyword, bg = c.panel, bold = true })
@@ -115,7 +115,7 @@ hl(0, "WinBarNC", { fg = c.ui_dim, bg = c.back })
 hl(0, "TabLine", { fg = c.ui_dim, bg = c.panel_deep })
 hl(0, "TabLineFill", { bg = c.panel_deep })
 hl(0, "TabLineSel", { fg = c.text, bg = c.back, bold = true })
-hl(0, "VertSplit", { fg = c.ruler, bg = c.back })
+hl(0, "VertSplit", { fg = c.ruler })
 hl(0, "WinSeparator", { fg = c.ruler, bg = c.back })
 
 hl(0, "Pmenu", { fg = c.text, bg = c.panel })
@@ -348,15 +348,17 @@ hl(0, "TelescopeMatching", { fg = c.keyword, bold = true })
 -- Back-cycle for nested scopes. hh.lua indexes these mod #back_cycle (6), so six
 -- entries is the full cycle. Upstream leaves region_scope_* flat at #161616; this
 -- lifts each nesting level slightly warmer off that base, toward the tan text.
--- The step is half what it was: the old ramp topped out at #2a271f, which read
+-- Level 1 paints nothing -- Normal is transparent, so the outermost scope has to
+-- be the terminal or it reads as a dark slab over it. The step is half what it
+-- was: the old ramp topped out at #2a271f, which read
 -- as banding on deeply nested code.
 local scope_bgs = {
+  "none",
   "#161616",
   "#181817",
   "#1a1918",
   "#1c1b19",
   "#1e1d1a",
-  "#201f1b",
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

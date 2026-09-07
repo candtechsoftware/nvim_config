@@ -87,8 +87,8 @@ vim.opt.guicursor = {
 }
 
 -- Core UI -----------------------------------------------------------------
-hl(0, "Normal",       { fg = c.text, bg = c.back })
-hl(0, "NormalNC",     { fg = c.text, bg = c.back })
+hl(0, "Normal",       { fg = c.text, bg = "none" })
+hl(0, "NormalNC",     { fg = c.text, bg = "none" })
 hl(0, "NormalFloat",  { fg = c.text, bg = c.margin })
 hl(0, "FloatBorder",  { fg = c.margin_active, bg = c.margin })
 hl(0, "FloatTitle",   { fg = c.keyword, bg = c.margin, bold = true })
@@ -118,7 +118,7 @@ hl(0, "TabLine",      { fg = c.text, bg = c.margin })
 hl(0, "TabLineFill",  { bg = c.back })
 hl(0, "TabLineSel",   { fg = c.base, bg = c.bar, bold = true })
 
-hl(0, "VertSplit",    { fg = c.margin_active, bg = c.back })
+hl(0, "VertSplit",    { fg = c.margin_active })
 hl(0, "WinSeparator", { fg = c.margin_active, bg = c.back })
 
 -- defcolor_highlight is the *background* of highlighted text and
@@ -393,7 +393,11 @@ hl(0, "TelescopeMatching",       { fg = c.keyword, bold = true })
 --   0x10A00000 0x0C00A000 0x0C0000A0 0x0CA0A000 over #0c0c0c. Neovim has no
 -- alpha, so the blends are precomputed here, at alpha 8 rather than upstream's
 -- 16/12: the same hues, softened, and the red no longer stronger than the rest.
+-- Level 1 paints nothing -- Normal is transparent, so the outermost scope has to
+-- be the terminal or it reads as a dark slab over it -- and the four hues rotate
+-- above it.
 local scope_bgs = {
+  "none",   -- the outermost scope is the terminal
   "#110c0c", -- 0xA00000 (red)
   "#0c110c", -- 0x00A000 (green)
   "#0c0c11", -- 0x0000A0 (blue)

@@ -6,34 +6,37 @@ end
 
 vim.o.termguicolors = true
 vim.o.background = "dark"
-vim.g.colors_name = "ll"
+vim.g.colors_name = "op"
 
--- ll: min lifted off black onto neutral grey, with the accent moved from the
--- keywords to the names. Keywords, operators and local identifiers are all one
--- plain tone; calls, types, constants and literals take a slate blue and
--- strings a sage green, so a line reads as text with its references picked
--- out of it. Comments sit a step below the text. Every color is desaturated a
--- notch from the source screenshot so nothing on screen is bright.
+-- op: four neutral steps on one warm hue, with two accents hung off them. What
+-- separates this from the other schemes in colors/ is that the loudest thing on
+-- screen is a name being introduced: declarations, parameters and fields are
+-- bold cream, ordinary text and calls sit a step below, and the operators and
+-- punctuation holding them together sit a step below that, so the shape of a
+-- declaration reads before any of its detail does. Types take a slate blue and
+-- literals a sand tan. Comments are the bottom step of the same ladder.
 local c = {
-  bg = "#1c1c1c",
-  fg = "#bcbcb2",
+  bg = "#17160f",
+  fg = "#b9b4a6", -- calls and plain text
 
-  blue = "#8a9eaf",   -- calls, types, constants, numbers
-  green = "#9db08e",  -- strings
-  gray = "gray50",    -- status text
-  comment = "#767670", -- fg one step down: comments recede
+  bright = "#eae3d1", -- fg one step up, bold: names being introduced
+  punct = "#8b877b",  -- fg one step down: operators and delimiters
+  comment = "#66625a", -- two steps down: comments recede
 
-  -- Chrome. Neutral greys a few steps either side of the background.
-  border = "#121212",
-  bar = "#111111",
-  bar_nc = "#171717",
-  sel = "#3a3a3a",    -- visual, search, popup
-  sel_hi = "#525252", -- matching paren, popup selection
-  line = "#272727",   -- cursor line, on in the directory listing only
-  yellow = "#b09a6a", -- warnings
-  rose = "#ad6b7d",   -- current search match, replace-mode cursor, errors
-  cursor = "#7fcf9f",
-  dim = "#4a4a46", -- the one tone every window behind a picker is painted in
+  blue = "#7f96a9", -- types
+  tan = "#c8b88b",  -- strings, numbers, booleans, constants, macros
+  red = "#b06a63",  -- warnings, errors, current search match
+  gray = "gray50",  -- status text
+
+  -- Chrome. Warm darks a few steps either side of the background, so the frame
+  -- stays on the same hue as the text rather than cutting neutral grey into it.
+  border = "#0d0c08",
+  bar = "#0b0a07",
+  bar_nc = "#121109",
+  sel = "#33312a",    -- visual, search, popup
+  sel_hi = "#4b4840", -- matching paren, popup selection
+  line = "#201e16",   -- cursor line, on in the directory listing only
+  dim = "#454239", -- the one tone every window behind a picker is painted in
 }
 
 local hl = vim.api.nvim_set_hl
@@ -67,13 +70,15 @@ paint({ fg = c.fg }, { "Directory" })
 
 -- Cursor. 'guicursor' is global and every scheme in colors/ owns it; the
 -- `hi clear` above wipes the Cursor* groups the previous scheme's guicursor
--- names, so ll has to define its own or the cursor falls back to Neovim's
--- default thin insert-mode bar. Visual mode has no cursor color of its own --
--- the selection block already says where you are.
-paint({ bg = c.cursor }, { "Cursor", "lCursor" })
-hl(0, "CursorNormal", { fg = c.bg, bg = c.cursor })
+-- names, so op has to define its own or the cursor falls back to Neovim's
+-- default thin insert-mode bar. The three modes take the top of the ladder and
+-- the two accents, so no fourth hue enters for the cursor alone. Visual mode
+-- has no cursor color of its own -- the selection block already says where you
+-- are.
+paint({ bg = c.bright }, { "Cursor", "lCursor" })
+hl(0, "CursorNormal", { fg = c.bg, bg = c.bright })
 hl(0, "CursorInsert", { fg = c.bg, bg = c.blue })
-hl(0, "CursorReplace", { fg = c.bg, bg = c.rose })
+hl(0, "CursorReplace", { fg = c.bg, bg = c.red })
 vim.opt.guicursor = {
   "n-v-c-o:block-CursorNormal",
   "i-ci-ve:block-CursorInsert",
@@ -82,28 +87,27 @@ vim.opt.guicursor = {
 
 
 -- Syntax
-paint({ fg = c.fg }, {
-  "PreProc", "Include", "Define", "PreCondit",
+paint({ fg = c.bright, bold = true }, {
+  "Identifier",
   "Keyword", "Statement", "Conditional", "Repeat", "Label", "Exception", "StorageClass",
-  "Identifier", "Operator", "Delimiter", "Special", "SpecialChar",
+  "PreProc", "Include", "Define", "PreCondit",
 })
-paint({ fg = c.blue }, {
-  "Type", "Structure", "Typedef",
-  "Constant", "Boolean", "Number", "Float", "Function", "Macro",
-})
+paint({ fg = c.fg }, { "Function" })
+paint({ fg = c.punct }, { "Operator", "Delimiter", "Special", "SpecialChar" })
+paint({ fg = c.blue }, { "Type", "Structure", "Typedef" })
+paint({ fg = c.tan }, { "String", "Character", "Number", "Float", "Boolean", "Constant", "Macro" })
 paint({ fg = c.comment }, { "Comment", "SpecialComment" })
-paint({ fg = c.green }, { "String", "Character" })
 
-hl(0, "DiagnosticWarn", { fg = c.yellow })
-hl(0, "WarningMsg", { fg = c.yellow })
-hl(0, "ErrorMsg", { fg = c.rose })
+hl(0, "DiagnosticWarn", { fg = c.red })
+hl(0, "WarningMsg", { fg = c.red })
+hl(0, "ErrorMsg", { fg = c.red })
 
 
 -- Search and completion
 hl(0, "Search", { bg = c.sel })
-paint({ fg = c.bg, bg = c.rose }, { "IncSearch", "CurSearch" })
+paint({ fg = c.bg, bg = c.red }, { "IncSearch", "CurSearch" })
 hl(0, "Pmenu", { fg = c.fg })
-hl(0, "PmenuSel", { fg = c.fg, bg = c.sel_hi })
+hl(0, "PmenuSel", { fg = c.bright, bg = c.sel_hi })
 hl(0, "PmenuSbar", { bg = c.sel })
 hl(0, "PmenuThumb", { bg = c.sel_hi })
 
@@ -122,15 +126,16 @@ paint({ fg = c.gray }, {
   "TelescopeTitle", "TelescopePromptTitle", "TelescopeResultsTitle", "TelescopePreviewTitle",
 })
 hl(0, "TelescopePromptPrefix", { fg = c.blue })
-hl(0, "TelescopeSelection", { fg = c.fg, bg = c.sel })
+hl(0, "TelescopeSelection", { fg = c.bright, bg = c.sel })
 hl(0, "TelescopeSelectionCaret", { fg = c.blue, bg = c.sel })
 hl(0, "TelescopeMultiSelection", { fg = c.blue })
-hl(0, "TelescopeMatching", { fg = c.blue })
+hl(0, "TelescopeMatching", { fg = c.red })
 
 
 -- Everything else is a link. YgKeyword/YgType are the groups lua/hh/macros.lua
--- paints project macros and their base types with; here a call is blue, so a
--- macro call is blue like any other call and both halves of that indexer show.
+-- paints project macros and their base types with; the macro is tan with the
+-- constants it stands in for and the base type blue with the other types, so
+-- both halves of the indexer read at a glance.
 local links = {
   YgKeyword = "Macro",
   YgType = "Type",
@@ -156,10 +161,13 @@ local links = {
   ["@constant.builtin"] = "Constant",
   ["@constant.macro"] = "Macro",
 
-  ["@function"] = "Function",
+  -- A call is plain text; the name being declared is not. @function is the
+  -- definition site, so it goes up to the bold step with the other declarations
+  -- while every call form stays on Function.
+  ["@function"] = "Identifier",
   ["@function.builtin"] = "Function",
   ["@function.call"] = "Function",
-  ["@function.method"] = "Function",
+  ["@function.method"] = "Identifier",
   ["@function.method.call"] = "Function",
 
   ["@variable"] = "Identifier",
@@ -202,17 +210,17 @@ for group, target in pairs(links) do
 end
 
 
--- Back-cycle for nested scopes: each level lifts off the background, warming
--- slightly so the lift reads against the neutral chrome. Level 1 paints nothing
--- -- Normal is transparent, so the outermost scope has to be the terminal or it
--- reads as a dark slab over it -- and the three above it lift at ~9 per step, so
--- a level is legible against the one outside it and the cycle repeats before the
--- lift gets loud. hh/scope.lua indexes these mod cycle_len.
+-- Back-cycle for nested scopes: each level lifts warmer off the background,
+-- along the same hue as the text. Level 1 paints nothing -- Normal is
+-- transparent, so the outermost scope has to be the terminal or it reads as a
+-- dark slab over it -- and the three above it lift at ~5 per step, so the
+-- nesting is there to follow when you look for it and stays out of the way when
+-- you are reading the code instead. hh/scope.lua indexes these mod cycle_len.
 local scope_bgs = {
   "none",
-  "#252525",
-  "#2e2d2a",
-  "#37352f",
+  "#1c1b14",
+  "#211f17",
+  "#26241a",
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

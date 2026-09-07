@@ -40,6 +40,12 @@ vim.api.nvim_create_autocmd('PackChanged', {
                         vim.log.levels.ERROR)
                 end
             end))
+        elseif name == 'fff' then
+            -- Blocking, unlike the hook above: fff's download_or_build_binary
+            -- pumps the event loop itself, and the final rename of the built
+            -- .dylib only lands if the caller stays alive for it.
+            if not ev.data.active then vim.cmd.packadd('fff') end
+            require('fff.download').download_or_build_binary()
         end
     end,
 })
@@ -49,6 +55,7 @@ vim.pack.add({
     'https://github.com/nvim-lua/plenary.nvim',
     'https://github.com/nvim-telescope/telescope.nvim',
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
+    'https://github.com/dmtrKovalenko/fff',
 })
 
 -- render-markdown is markdown-only but cost ~4ms of a ~40ms startup: its
@@ -88,7 +95,8 @@ require("config.treesitter").setup()
 -- ERROR-recovered unity-macro functions, and colors/handmade.lua links them
 -- to the same groups the matchadd patterns forced.
 
--- Telescope
+-- Pickers: fff owns find-files and live-grep, telescope keeps the rest.
+require("config.fff").setup()
 require("config.telescope").setup()
 
 -- Utilities
@@ -111,5 +119,7 @@ pcall(function()
     require('vim._core.ui2').enable({})
 end)
 
--- Colorscheme
+-- Colorscheme. The transparency lives in colors/ll.lua now: overriding the
+-- groups here after the fact wiped the scheme's foregrounds along with the
+-- backgrounds (nvim_set_hl replaces a definition, it does not merge into it).
 vim.cmd.colorscheme("ll")

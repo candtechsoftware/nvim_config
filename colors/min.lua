@@ -47,8 +47,8 @@ end
 
 
 -- Frame
-paint({ fg = c.fg, bg = c.bg }, { "Normal", "NormalNC" })
-paint({ fg = c.border, bg = c.bg }, { "VertSplit", "WinSeparator" })
+paint({ fg = c.fg, bg = "none" }, { "Normal", "NormalNC" })
+paint({ fg = c.border }, { "VertSplit", "WinSeparator" })
 paint({ fg = c.gray, bg = c.bar }, { "StatusLine", "WinBar" })
 paint({ fg = c.gray, bg = c.bar_nc }, { "StatusLineNC", "WinBarNC" })
 paint({ bg = c.sel }, { "Visual", "VisualNOS" })
@@ -175,16 +175,16 @@ end
 
 
 -- Back-cycle for nested scopes: each level lifts warmer off the background,
--- toward the burlywood text. Four levels at ~9 per step, so a level is legible
--- against the one outside it and the cycle repeats before the lift gets loud.
--- These do NOT track the background down -- level 1 sits above #0a0a0a on
--- purpose, so even the outermost scope reads as a lift. hh/scope.lua indexes
--- these mod cycle_len.
+-- toward the burlywood text. Level 1 paints nothing -- Normal is transparent, so
+-- the outermost scope has to be the terminal or it reads as a dark slab over it
+-- -- and the three above it lift at ~9 per step, so a level is legible against
+-- the one outside it and the cycle repeats before the lift gets loud.
+-- hh/scope.lua indexes these mod cycle_len.
 local scope_bgs = {
+  "none",
   "#131313",
   "#1c1a17",
   "#25211b",
-  "#2e2a20",
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

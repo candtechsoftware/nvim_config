@@ -44,12 +44,12 @@ local c = {
 -- Main
 hl(0, "Normal", {
   fg = c.text,
-  bg = c.back,
+  bg = "none",
 })
 
 hl(0, "NormalNC", {
   fg = c.text,
-  bg = c.back,
+  bg = "none",
 })
 
 hl(0, "NormalFloat", {

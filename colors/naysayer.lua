@@ -109,8 +109,8 @@ vim.opt.guicursor = {
 }
 
 -- Core UI -----------------------------------------------------------------
-hl(0, "Normal",       { fg = c.fg, bg = c.back })
-hl(0, "NormalNC",     { fg = c.fg, bg = c.back })
+hl(0, "Normal",       { fg = c.fg, bg = "none" })
+hl(0, "NormalNC",     { fg = c.fg, bg = "none" })
 hl(0, "NormalFloat",  { fg = c.fg, bg = c.float })
 hl(0, "FloatBorder",  { fg = c.line_fg, bg = c.float })
 hl(0, "FloatTitle",   { fg = c.white, bg = c.float, bold = true })
@@ -139,7 +139,7 @@ hl(0, "TabLine",      { fg = c.fg, bg = c.cur_line })
 hl(0, "TabLineFill",  { bg = c.back })
 hl(0, "TabLineSel",   { fg = c.back, bg = c.fg, bold = true })
 
-hl(0, "VertSplit",    { fg = c.cur_line, bg = c.back })
+hl(0, "VertSplit",    { fg = c.cur_line })
 hl(0, "WinSeparator", { fg = c.cur_line, bg = c.back })
 
 hl(0, "Search",       { fg = c.fg, bg = c.sel_soft })

@@ -41,4 +41,19 @@ function M.find(opts)
   return root
 end
 
+-- Search scope is the repo, not the nearest manifest. `vim.fs.root` stops at
+-- the NEAREST marker, so a buffer in ~/work/percipio-repo/percipio/packages/api
+-- resolved to `packages/api` and a grep never left that one package. Every
+-- checkout under ~/work is its own git repo and the directory holding them has
+-- no markers of its own, so `.git` is exactly one project: all of its packages,
+-- none of its 17 siblings. Outside a repo, fall back to the shared marker list.
+--
+-- Lives here rather than in a picker module because both pickers need it:
+-- config.fff scopes find/grep to it, config.telescope scopes what it kept.
+---@return string
+function M.search_root()
+    local root = M.find({ markers = { ".git" } })
+    return vim.uv.fs_stat(root .. "/.git") and root or M.find()
+end
+
 return M

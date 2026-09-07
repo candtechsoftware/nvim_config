@@ -1,5 +1,11 @@
 -- Telescope configuration
 --
+-- File finding and live grep moved to fff.nvim (config/fff.lua). What is left
+-- here is everything fff has no equivalent for: buffer/oldfile jumping, git
+-- pickers, LSP/ctags symbols, the <leader>pg escape hatch that greps
+-- gitignored files (fff never indexes those, so it cannot search them), and
+-- the custom pickers in notes/ and divider_comments.lua.
+--
 -- Lazy-loaded: requiring the telescope plugin (and the fzf-native extension)
 -- is the single biggest cost in startup, but none of it is needed until the
 -- first picker is opened. So M.setup() only registers keymaps; the plugin is
@@ -9,26 +15,11 @@
 
 local M = {}
 
-local function get_visual_selection()
-    -- getregion handles reversed selections and single/multi-line slicing.
-    return table.concat(
-        vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = "v" }), "\n")
-end
+local search_root = require("utils.project_root").search_root
 
-local find_project_root = require("utils.project_root").find
-
--- Search scope is the repo, not the nearest manifest. `vim.fs.root` stops at
--- the NEAREST marker, so a buffer in ~/work/percipio-repo/percipio/packages/api
--- resolved to `packages/api` and a grep never left that one package. Every
--- checkout under ~/work is its own git repo and the directory holding them has
--- no markers of its own, so `.git` is exactly one project: all of its packages,
--- none of its 17 siblings. Outside a repo, fall back to the shared marker list.
-local function search_root()
-    local root = find_project_root({ markers = { ".git" } })
-    return vim.uv.fs_stat(root .. "/.git") and root or find_project_root()
-end
-
--- Trees every picker skips, and the reason they have to be listed explicitly.
+-- Trees every telescope picker skips, and the reason they have to be listed
+-- explicitly. fff gets the same exclusions a different way -- it has no glob
+-- config at all, so :FFFIgnore writes them as a .ignore file (config/fff.lua).
 --
 -- Vendored code is checked IN, so .gitignore does not filter it: these globs
 -- are what keeps it out. Measured in ~/projects/notes: `live_grep "render"`
@@ -183,46 +174,6 @@ end
 function M.setup()
     -- Keymaps only — setup() above is deferred to the first picker.
 
-    vim.keymap.set("n", "<leader>pws", function()
-        local root = search_root()
-        builtin().grep_string({
-            search = vim.fn.expand("<cword>"),
-            cwd = root,
-            search_dirs = { root },
-            word_match = "-w",
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
-        })
-    end, { desc = "Grep word under cursor (exact)" })
-
-    vim.keymap.set("n", "<leader>pWs", function()
-        local root = search_root()
-        builtin().grep_string({
-            search = vim.fn.expand("<cWORD>"),
-            cwd = root,
-            search_dirs = { root },
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
-        })
-    end, { desc = "Grep WORD under cursor" })
-
-    vim.keymap.set("v", "<leader>ps", function()
-        local root = search_root()
-        local text = get_visual_selection()
-        builtin().grep_string({
-            search = text,
-            cwd = root,
-            search_dirs = { root },
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t")
-        })
-    end, { desc = "Grep selected text" })
-
-    vim.keymap.set("n", "<leader>ff", function()
-        local root = search_root()
-        builtin().find_files({
-            cwd = root,
-            prompt_title = "Files in " .. vim.fn.fnamemodify(root, ":t")
-        })
-    end, { desc = "Find files" })
-
     -- Buffer/recent-file jumping. These replace harpoon: it was the only
     -- "hop between the N files I'm working in" mechanism, and neither picker
     -- was bound anywhere before it was removed.
@@ -233,40 +184,6 @@ function M.setup()
     vim.keymap.set("n", "<leader>fo", function()
         builtin().oldfiles({ cwd_only = true })
     end, { desc = "Find recent files (this project)" })
-
-    vim.keymap.set("n", "<leader>/", function()
-        local root = search_root()
-        builtin().live_grep({
-            cwd = root,
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(root, ":t") .. " (use **file to filter)",
-            on_input_filter_cb = function(prompt)
-                local search, glob = prompt:match("^(.-)%s+%*%*(.+)$")
-                if search and glob ~= "" then
-                    return { prompt = search, updated_finder = require("telescope.finders").new_job(function(new_prompt)
-                        -- This finder builds its own argv, so it bypasses
-                        -- defaults.vimgrep_arguments and needs the exclusions
-                        -- applied explicitly — without them the **file filter
-                        -- was the one grep path still scanning third_party.
-                        return vim.iter(with_excludes({
-                            "rg", "--color=never", "--no-heading", "--with-filename",
-                            "--line-number", "--column", "--smart-case",
-                            "--glob", "**" .. glob,
-                        }, { "--", new_prompt })):flatten():totable()
-                    end, require("telescope.make_entry").gen_from_vimgrep({ cwd = root }), nil, root) }
-                end
-                return { prompt = prompt }
-            end,
-        })
-    end, { desc = "Live grep (project root, use **file to filter)" })
-
-    vim.keymap.set("n", "<leader>.", function()
-        local cwd = vim.fn.getcwd()
-        builtin().live_grep({
-            cwd = cwd,
-            search_dirs = { cwd },
-            prompt_title = "Grep in " .. vim.fn.fnamemodify(cwd, ":t")
-        })
-    end, { desc = "Live grep (current dir)" })
 
     vim.keymap.set("n", "<leader>pg", function()
         local root = search_root()
@@ -313,62 +230,6 @@ function M.setup()
     vim.keymap.set("n", "<leader>gb", function() builtin().git_branches() end, { desc = "Git branches" })
     vim.keymap.set("n", "<leader>gs", function() builtin().git_status() end, { desc = "Git status" })
 
-    -- Jai module search
-    local jai_modules_path = "/Users/alexmatthewcandelario/gits/jai/modules"
-
-    vim.keymap.set("n", "<leader>js", function()
-        vim.ui.select(
-            { "All Symbols", "Functions (::)", "Structs", "Enums", "Constants" },
-            { prompt = "Select symbol type to search:" },
-            function(choice)
-                if not choice then return end
-
-                local search_pattern = ""
-                if choice == "Functions (::)" then
-                    search_pattern = "\\w+\\s*::"
-                elseif choice == "Structs" then
-                    search_pattern = "struct\\s+\\w+"
-                elseif choice == "Enums" then
-                    search_pattern = "enum\\s+\\w+"
-                elseif choice == "Constants" then
-                    search_pattern = "^\\s*\\w+\\s*::\\s*:"
-                end
-
-                builtin().live_grep({
-                    cwd = jai_modules_path,
-                    prompt_title = "Jai " .. choice,
-                    default_text = search_pattern,
-                })
-            end
-        )
-    end, { desc = "Search Jai module symbols" })
-
-    vim.keymap.set("n", "<leader>jg", function()
-        builtin().live_grep({
-            cwd = jai_modules_path,
-            prompt_title = "Grep Jai Modules",
-        })
-    end, { desc = "Grep search in Jai modules" })
-
-    vim.keymap.set("n", "<leader>fg", function()
-        local root = search_root()
-        vim.ui.input({ prompt = "Search --- *.ext: " }, function(input)
-            if not input or input == "" then return end
-
-            local search, glob = input:match("^(.-)%s+%-%-%-%s+(%*.-)$")
-            if not search or search == "" then
-                search = input
-                glob = nil
-            end
-
-            builtin().live_grep({
-                cwd = root,
-                default_text = search,
-                glob_pattern = glob,
-                prompt_title = glob and ("Grep (" .. glob .. ")") or "Grep",
-            })
-        end)
-    end, { desc = "Grep with file type filter (search --- *.ext)" })
 end
 
 return M
