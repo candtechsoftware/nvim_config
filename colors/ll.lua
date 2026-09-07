@@ -6,33 +6,33 @@ end
 
 vim.o.termguicolors = true
 vim.o.background = "dark"
-vim.g.colors_name = "min"
+vim.g.colors_name = "ll"
 
--- min: ddd with the syntax accents collapsed to two. Keywords and preprocessor
--- directives and strings are the only colored things on screen; types,
--- identifiers, functions and constants are all one plain tone, with comments a
--- step dimmer, so the buffer reads as text with the control flow picked out of
--- it. Both accents are lifted from colors/handmade.lua.
+-- ll: min lifted off black onto neutral grey, with the accent moved from the
+-- keywords to the names. Keywords, operators and local identifiers are all one
+-- plain tone; calls, types, constants and literals take a slate blue and
+-- strings a sage green, so a line reads as text with its references picked
+-- out of it. Comments sit a step below the text. Every color is desaturated a
+-- notch from the source screenshot so nothing on screen is bright.
 local c = {
-  bg = "#0a0a0a",
-  fg = "burlywood3",
+  bg = "#1c1c1c",
+  fg = "#bcbcb2",
 
-  yellow = "#b8860b", -- goldenrod keywords, from colors/handmade.lua
-  green = "#6b8e23",  -- olive strings, from colors/handmade.lua
+  blue = "#8a9eaf",   -- calls, types, constants, numbers
+  green = "#9db08e",  -- strings
   gray = "gray50",    -- status text
-  comment = "burlywood4", -- fg one step down: comments recede, hue unchanged
+  comment = "#767670", -- fg one step down: comments recede
 
-  -- Chrome. Neutral greys on purpose: the only warm thing on screen is text
-  -- and the scope back-cycle.
-  border = "#030303",
-  bar = "#000000",
-  bar_nc = "#050505",
-  sel = "#333333",    -- visual, search, popup
-  sel_hi = "#4d4d4d", -- matching paren, popup selection
-  line = "#141414",   -- cursor line, on in the directory listing only
-  blue = "#7d9cb0",   -- insert-mode cursor, warnings
-  rose = "#b55f75",   -- current search match, replace-mode cursor
-  cursor = "#50ffa0",
+  -- Chrome. Neutral greys a few steps either side of the background.
+  border = "#121212",
+  bar = "#111111",
+  bar_nc = "#171717",
+  sel = "#3a3a3a",    -- visual, search, popup
+  sel_hi = "#525252", -- matching paren, popup selection
+  line = "#272727",   -- cursor line, on in the directory listing only
+  yellow = "#b09a6a", -- warnings
+  rose = "#ad6b7d",   -- current search match, replace-mode cursor, errors
+  cursor = "#7fcf9f",
 }
 
 local hl = vim.api.nvim_set_hl
@@ -59,9 +59,9 @@ paint({ fg = c.fg }, { "Directory" })
 
 -- Cursor. 'guicursor' is global and every scheme in colors/ owns it; the
 -- `hi clear` above wipes the Cursor* groups the previous scheme's guicursor
--- names, so min has to define its own or the cursor falls back to
--- Neovim's default thin insert-mode bar. Visual mode has no cursor color of its
--- own -- the selection block already says where you are.
+-- names, so ll has to define its own or the cursor falls back to Neovim's
+-- default thin insert-mode bar. Visual mode has no cursor color of its own --
+-- the selection block already says where you are.
 paint({ bg = c.cursor }, { "Cursor", "lCursor" })
 hl(0, "CursorNormal", { fg = c.bg, bg = c.cursor })
 hl(0, "CursorInsert", { fg = c.bg, bg = c.blue })
@@ -74,20 +74,20 @@ vim.opt.guicursor = {
 
 
 -- Syntax
-paint({ fg = c.yellow }, {
+paint({ fg = c.fg }, {
   "PreProc", "Include", "Define", "PreCondit",
   "Keyword", "Statement", "Conditional", "Repeat", "Label", "Exception", "StorageClass",
+  "Identifier", "Operator", "Delimiter", "Special", "SpecialChar",
 })
-paint({ fg = c.fg }, {
+paint({ fg = c.blue }, {
   "Type", "Structure", "Typedef",
-  "Constant", "Boolean", "Character", "Function", "Identifier", "Macro",
-  "Number", "Float", "Operator",
+  "Constant", "Boolean", "Number", "Float", "Function", "Macro",
 })
 paint({ fg = c.comment }, { "Comment", "SpecialComment" })
-paint({ fg = c.green }, { "String" })
+paint({ fg = c.green }, { "String", "Character" })
 
-hl(0, "DiagnosticWarn", { fg = c.blue })
-hl(0, "WarningMsg", { fg = c.blue })
+hl(0, "DiagnosticWarn", { fg = c.yellow })
+hl(0, "WarningMsg", { fg = c.yellow })
 hl(0, "ErrorMsg", { fg = c.rose })
 
 
@@ -101,8 +101,8 @@ hl(0, "PmenuThumb", { bg = c.sel_hi })
 
 
 -- Everything else is a link. YgKeyword/YgType are the groups lua/hh/macros.lua
--- paints project macros and their base types with; a macro call reads as plain
--- text like any other call, so only the type half of that indexer shows.
+-- paints project macros and their base types with; here a call is blue, so a
+-- macro call is blue like any other call and both halves of that indexer show.
 local links = {
   YgKeyword = "Macro",
   YgType = "Type",
@@ -174,17 +174,17 @@ for group, target in pairs(links) do
 end
 
 
--- Back-cycle for nested scopes: each level lifts warmer off the background,
--- toward the burlywood text. Four levels at ~9 per step, so a level is legible
--- against the one outside it and the cycle repeats before the lift gets loud.
--- These do NOT track the background down -- level 1 sits above #0a0a0a on
--- purpose, so even the outermost scope reads as a lift. hh/scope.lua indexes
--- these mod cycle_len.
+-- Back-cycle for nested scopes: each level lifts off the background, warming
+-- slightly so the lift reads against the neutral chrome. Four levels at ~9 per
+-- step, so a level is legible against the one outside it and the cycle repeats
+-- before the lift gets loud. Level 1 sits above #1c1c1c on purpose, so even
+-- the outermost scope reads as a lift. hh/scope.lua indexes these mod
+-- cycle_len.
 local scope_bgs = {
-  "#131313",
-  "#1c1a17",
-  "#25211b",
-  "#2e2a20",
+  "#252525",
+  "#2e2d2a",
+  "#37352f",
+  "#403d34",
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, "HHScope" .. i, { bg = bg })

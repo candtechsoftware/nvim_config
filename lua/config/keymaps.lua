@@ -42,6 +42,15 @@ vim.keymap.set("n", "<leader>tc", "<cmd>tabclose<CR>zz")
 -- Search and replace
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]]) -- Search and replace the word under the cursor
 
+-- Multicursor (:h multicursor), builtin in 0.13 -- no plugin.
+-- `Q` and `[count]Q` place cursors but leave follow-mode OFF, and only
+-- follow-mode replays motions and Visual sequences per-cursor. That is why
+-- `diw` cascades after "1Q" but `viwd` silently collapses to one cursor.
+-- `{Visual}Q` is the one builtin entry point that enables it for you.
+-- "1q=" forces follow-mode on rather than toggling it.
+vim.keymap.set("n", "<leader>Q", "1Q1q=",
+    { desc = "Cursor on every search match, follow-mode on" })
+
 -- Undotree: the builtin nvim.undotree pack (0.13, replaces mbbill/undotree).
 -- open() toggles; inside the window, moving the cursor changes the undo state.
 vim.keymap.set("n", "<leader>u", function()

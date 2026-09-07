@@ -6,19 +6,22 @@ end
 
 vim.o.termguicolors = true
 vim.o.background = "dark"
-vim.g.colors_name = "min"
+vim.g.colors_name = "min-blue"
 
--- min: ddd with the syntax accents collapsed to two. Keywords and preprocessor
--- directives and strings are the only colored things on screen; types,
--- identifiers, functions and constants are all one plain tone, with comments a
--- step dimmer, so the buffer reads as text with the control flow picked out of
--- it. Both accents are lifted from colors/handmade.lua.
+-- min-blue: min with the keyword accent swapped from goldenrod to ddd's blue.
+-- Keywords, preprocessor directives and strings are the only colored things on
+-- screen; types, identifiers, functions and constants are all one plain tone,
+-- with comments a step dimmer, so the buffer reads as text with the control
+-- flow picked out of it. Keywords come from colors/ddd.lua, strings from
+-- colors/handmade.lua. Goldenrod is left to warnings, which min spent on the
+-- same blue the keywords now use.
 local c = {
   bg = "#0a0a0a",
   fg = "burlywood3",
 
-  yellow = "#b8860b", -- goldenrod keywords, from colors/handmade.lua
+  blue = "#7d9cb0",   -- keywords, from colors/ddd.lua
   green = "#6b8e23",  -- olive strings, from colors/handmade.lua
+  yellow = "#b8860b", -- goldenrod warnings, from colors/handmade.lua
   gray = "gray50",    -- status text
   comment = "burlywood4", -- fg one step down: comments recede, hue unchanged
 
@@ -30,7 +33,6 @@ local c = {
   sel = "#333333",    -- visual, search, popup
   sel_hi = "#4d4d4d", -- matching paren, popup selection
   line = "#141414",   -- cursor line, on in the directory listing only
-  blue = "#7d9cb0",   -- insert-mode cursor, warnings
   rose = "#b55f75",   -- current search match, replace-mode cursor
   cursor = "#50ffa0",
 }
@@ -59,7 +61,7 @@ paint({ fg = c.fg }, { "Directory" })
 
 -- Cursor. 'guicursor' is global and every scheme in colors/ owns it; the
 -- `hi clear` above wipes the Cursor* groups the previous scheme's guicursor
--- names, so min has to define its own or the cursor falls back to
+-- names, so min-blue has to define its own or the cursor falls back to
 -- Neovim's default thin insert-mode bar. Visual mode has no cursor color of its
 -- own -- the selection block already says where you are.
 paint({ bg = c.cursor }, { "Cursor", "lCursor" })
@@ -74,7 +76,7 @@ vim.opt.guicursor = {
 
 
 -- Syntax
-paint({ fg = c.yellow }, {
+paint({ fg = c.blue }, {
   "PreProc", "Include", "Define", "PreCondit",
   "Keyword", "Statement", "Conditional", "Repeat", "Label", "Exception", "StorageClass",
 })
@@ -86,8 +88,8 @@ paint({ fg = c.fg }, {
 paint({ fg = c.comment }, { "Comment", "SpecialComment" })
 paint({ fg = c.green }, { "String" })
 
-hl(0, "DiagnosticWarn", { fg = c.blue })
-hl(0, "WarningMsg", { fg = c.blue })
+hl(0, "DiagnosticWarn", { fg = c.yellow })
+hl(0, "WarningMsg", { fg = c.yellow })
 hl(0, "ErrorMsg", { fg = c.rose })
 
 

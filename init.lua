@@ -112,4 +112,4 @@ pcall(function()
 end)
 
 -- Colorscheme
-vim.cmd.colorscheme("min")
+vim.cmd.colorscheme("ll")

@@ -22,6 +22,25 @@ Leader: `<Space>`
 | `<leader><leader>` | n | Source current file |
 | `]c` / `[c` | n | Next/prev comment |
 
+## Multicursor (builtin, `:h multicursor`)
+
+Follow-mode (`q=`) is what replays **motions and Visual sequences** at every
+cursor. `Q` / `[count]Q` leave it OFF, so `diw` cascades but `viwd` does not.
+`{Visual}Q` and `<leader>Q` turn it on.
+
+| Key | Mode | Action |
+|-----|------|--------|
+| `<leader>Q` | n | Cursor on every search match, follow-mode on (`1Q1q=`) |
+| `Q` | n | Toggle a cursor here (disables follow-mode) |
+| `[count]Q` | n | Cursor at every match of the last search |
+| `Q` | v | Cursor on each line of the selection (enables follow-mode) |
+| `q=` | n | Toggle follow-mode (`1q=` force on, `2q=` force off) |
+| `<C-LeftMouse>` | n | Toggle a cursor at the click, keeps follow-mode |
+| `<C-l>` | n | Clear cursors |
+| `gQ` | n | Restore cleared cursors |
+| `]C` / `[C` | n | Jump to next/prev cursor |
+| `g<C-a>` | n | Insert an ascending counter at each cursor |
+
 ## Directory browser (after/ftplugin/directory.lua)
 
 The builtin 0.13 listing (`:h dir`, netrw is off). Navigation is upstream's;

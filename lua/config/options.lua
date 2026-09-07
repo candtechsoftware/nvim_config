@@ -45,6 +45,7 @@ vim.opt.scrolloff = 2 -- Keep 2 lines above and below the cursor
 vim.opt.smoothscroll = true
 vim.opt.updatetime = 250 -- Update interval for CursorHold and CursorHoldI
 vim.opt.shortmess:append('c') -- Suppress completion messages (prevents command line focus steal)
+vim.opt.shortmess:append('u') -- Suppress "1 line less; before #2" undo/redo messages (0.13)
 
 -- Performance optimizations
 vim.opt.synmaxcol = 300 -- Syntax highlight up to 300 columns
