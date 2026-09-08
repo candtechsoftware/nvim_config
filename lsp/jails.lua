@@ -47,26 +47,51 @@ if not cmd then
   return {
     cmd = { 'jails' },  -- Will fail gracefully
     filetypes = { 'jai' },
-    root_markers = { 'build.jai', 'first.jai', '.git' },
+    root_markers = { 'jails.json', 'build.jai', 'first.jai', '.git' },
   }
 end
 
--- Add jai_path if jai compiler isn't directly findable via whereis
-local jai_path = vim.fn.expand('~/bins/jai')
-if vim.fn.isdirectory(jai_path) == 1 then
+-- jails wants the jai *installation root* (it looks for <root>/modules), not the
+-- compiler binary. `~/bins/jai` is a symlink to the binary, so the old
+-- `isdirectory('~/bins/jai')` test was always false and -jai_path was never
+-- passed at all. jails' own whereis fallback happens to land on the right
+-- place today, but only while `jai` stays on PATH. Resolve the link instead and
+-- strip `bin/<exe>`, which also gives us the real binary name for free.
+local function get_jai_install()
+  for _, candidate in ipairs({ vim.fn.expand('~/bins/jai'), vim.fn.exepath('jai') }) do
+    if candidate ~= '' then
+      local real = vim.uv.fs_realpath(candidate)
+      if real then
+        if vim.fn.isdirectory(real) == 1 and vim.fn.isdirectory(real .. '/modules') == 1 then
+          return real, nil
+        end
+        local root = vim.fs.dirname(vim.fs.dirname(real))
+        if root and vim.fn.isdirectory(root .. '/modules') == 1 then
+          return root, vim.fs.basename(real)
+        end
+      end
+    end
+  end
+  return nil, nil
+end
+
+local jai_path, jai_exe = get_jai_install()
+if jai_path then
   table.insert(cmd, '-jai_path')
   table.insert(cmd, jai_path)
-  -- Platform-specific jai binary name
-  local sysname = vim.uv.os_uname().sysname:lower()
-  local exe_name = sysname == 'darwin' and 'jai-macos' or 'jai-linux'
-  table.insert(cmd, '-jai_exe_name')
-  table.insert(cmd, exe_name)
+  if jai_exe then
+    table.insert(cmd, '-jai_exe_name')
+    table.insert(cmd, jai_exe)
+  end
 end
 
 return {
   cmd = cmd,
   filetypes = { 'jai' },
-  root_markers = { 'build.jai', 'first.jai', '.git' },
+  -- jails.json is the strongest signal: it is the file jails itself reads for
+  -- roots, build_root and local_modules, so a project that has one but no
+  -- build.jai and no .git still gets a correct root.
+  root_markers = { 'jails.json', 'build.jai', 'first.jai', '.git' },
   -- Jai LSP needs a project root. This was `single_file_support = false` — an
   -- nvim-lspconfig key nothing in native vim.lsp reads, so the intent was
   -- silently unenforced. workspace_required is the native equivalent (same
