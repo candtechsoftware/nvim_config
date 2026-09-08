@@ -107,7 +107,15 @@ end
 ---@param item {filename:string, lnum:integer, col:integer}
 local function jump_to(item)
   vim.cmd("normal! m'")
-  vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
+  -- `:edit` on the file we are already in reloads that buffer, which fails with E37 once it has
+  -- unsaved changes, and a definition in the file being edited is the common case. Switching
+  -- buffers never reloads and never refuses, so the jump works with the buffer dirty.
+  local bufnr = vim.fn.bufadd(item.filename)
+  vim.fn.bufload(bufnr)
+  vim.bo[bufnr].buflisted = true
+  if bufnr ~= vim.api.nvim_get_current_buf() then
+    vim.api.nvim_set_current_buf(bufnr)
+  end
   vim.api.nvim_win_set_cursor(0, { item.lnum, math.max(item.col - 1, 0) })
 end
 
@@ -198,6 +206,10 @@ end
 ---@param bufnr integer
 local function set_keymaps(bufnr)
   local opts = { buffer = bufnr, silent = true }
+
+  -- Neovim only installs its default `K` -> hover mapping when nothing else claims `K`, and
+  -- keymaps.lua binds it in visual mode. Bind it explicitly so hover does not depend on that.
+  vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
 
   -- Navigation
   vim.keymap.set('n', 'gd', M.goto_definition, opts)
