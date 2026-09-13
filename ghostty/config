@@ -27,6 +27,9 @@ mouse-hide-while-typing = true
 custom-shader = ./shaders/crt.glsl
 custom-shader-animation = true
 
+# Left Option sends Alt so nvim gets <M-n>; right Option still types special characters.
+macos-option-as-alt = left
+
 # Keybindings
 keybind = cmd+shift+x=close_surface
 keybind = cmd+/=toggle_quick_terminal

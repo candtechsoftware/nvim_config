@@ -24,8 +24,22 @@ vim.keymap.set("n", "<leader>qf", function()
     vim.diagnostic.setqflist({ severity = vim.diagnostic.severity.ERROR })
     vim.cmd("copen")
 end, { desc = "Send diagnostic errors to quickfix" }) -- e.g. clang/clangd errors
-vim.keymap.set("n", "<C-k>", "<cmd>cnext<CR>zz") -- Move to the next quickfix item
-vim.keymap.set("n", "<C-j>", "<cmd>cprev<CR>zz") -- Move to the previous quickfix item
+
+-- A fresh list starts ON entry 1, so a plain :cnext skips the first entry (or
+-- says "no more items" when there is only one). Step to the current entry
+-- first unless the cursor is already on it. <M-n> is 4coder's Alt-N.
+local function qf_step(cmd)
+    local idx = vim.fn.getqflist({ idx = 0 }).idx
+    local cur = idx > 0 and vim.fn.getqflist({ idx = idx, items = 0 }).items[1] or nil
+    local on_it = cur ~= nil and cur.bufnr == vim.api.nvim_get_current_buf() and cur.lnum == vim.fn.line(".")
+    return "<cmd>" .. (on_it and cmd or "cc") .. "<CR>zz"
+end
+vim.keymap.set("n", "<C-k>", function() return qf_step("cnext") end, { expr = true, desc = "Next quickfix item" })
+vim.keymap.set("n", "<C-j>", function() return qf_step("cprev") end, { expr = true, desc = "Previous quickfix item" })
+vim.keymap.set("n", "<M-n>", function() return qf_step("cnext") end, { expr = true, desc = "Next quickfix item" })
+vim.keymap.set("n", "<M-N>", function() return qf_step("cprev") end, { expr = true, desc = "Previous quickfix item" })
+vim.keymap.set("n", "<leader>qo", "<cmd>copen<cr>", { desc = "Open quickfix list" })
+vim.keymap.set("n", "<leader>qc", "<cmd>cclose<cr>", { desc = "Close quickfix list" })
 vim.keymap.set("n", "<leader>k", "<cmd>lnext<CR>zz") -- Move to the next location list item
 vim.keymap.set("n", "<leader>j", "<cmd>lprev<CR>zz") -- Move to the previous location list item
 

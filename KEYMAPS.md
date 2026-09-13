@@ -61,11 +61,12 @@ on disk are this config's.
 
 | Key | Mode | Action | Source |
 |-----|------|--------|--------|
-| `<C-k>` / `<C-j>` | n | Next/prev quickfix (centered) | keymaps.lua |
+| `<C-k>` / `<C-j>` | n | Next/prev quickfix; the first press on a new list lands on its first entry (centered) | keymaps.lua |
+| `<M-n>` / `<M-N>` | n | Same, as 4coder's Alt-N for build errors (left Option is Alt) | keymaps.lua |
 | `<leader>k` / `<leader>j` | n | Next/prev loclist (centered) | keymaps.lua |
-| `]q` / `[q` | n | Next/prev quickfix | make_detect.lua |
-| `]Q` / `[Q` | n | Last/first quickfix | make_detect.lua |
-| `<leader>qo` / `<leader>qc` | n | Open/close quickfix | make_detect.lua |
+| `]q` / `[q` | n | Next/prev quickfix | built-in |
+| `]Q` / `[Q` | n | Last/first quickfix | built-in |
+| `<leader>qo` / `<leader>qc` | n | Open/close quickfix | keymaps.lua |
 | `<leader>qf` | n | Diagnostics to quickfix | lsp.lua |
 | `<leader>qq` | n | Diagnostics to loclist | lsp.lua |
 
@@ -126,38 +127,30 @@ on disk are this config's.
 
 ## Build & run (launch/)
 
-Targets come from `<root>/launch.json` — see the README for the schema, or run
-`:LaunchInit` to drop a commented starter file into the current project.
-
-A count picks the target: `<leader>b` builds target 1, `2<leader>b` builds
-target 2. (Counts rather than `<leader>b1`/`<leader>b2`, so a bare `<leader>b`
-fires immediately instead of waiting out `timeoutlen` to see if a digit is
-coming.)
+Keys come from `<root>/launch.json` (see the README for the schema), or run
+`:LaunchInit` to drop a commented starter file into the current project. Each
+command's errors land in quickfix; `<M-n>` / `<M-N>` step through them.
 
 | Key | Mode | Action |
 |-----|------|--------|
-| `<leader>b` | n | Build target 1 (quickfix + inline diagnostics) |
-| `N<leader>b` | n | Build target N |
-| `<leader>r` | n | Run target 1 (streaming terminal pane) |
-| `N<leader>r` | n | Run target N |
+| *(your launch.json keys)* | n | Run that command into its `out` buffer |
+| `<leader>b` | n | `:Make` with the detected build command, unless launch.json binds it |
 | `<leader>o` | n | Toggle the output pane (job keeps running) |
 | `<leader>x` | n | Stop running jobs |
-| `<leader>ft` | n | Pick a target |
-| `q` | n | *(in the output pane)* hide the pane, leave the job running |
-| `<C-c>` | n | *(in the output pane)* stop this job |
-
-With no `launch.json`, `<leader>b` falls back to the makeprg detected by
-`utils/make_detect.lua`, so it still builds any Makefile/Cargo/zig project.
+| `<leader>ft` | n | Pick a launch.json command |
+| `<CR>` | n | *(in an output buffer)* jump to the error on this line |
+| `q` | n | *(in an output buffer)* close the window, leave the job running |
+| `<C-c>` | n | *(in an output buffer)* stop this job |
 
 | Command | Action |
 |---|---|
-| `:Launch [name\|index]` | Run a target |
-| `:LaunchStop [name]` | Stop one job, or all |
-| `:LaunchList` | Targets + running state |
-| `:LaunchQF` | Push the output pane through `errorformat` into quickfix |
-| `:LaunchInit` | Write a starter `launch.json` |
+| `:Launch [key]` | Run a command by key (no key: pick one) |
+| `:LaunchStop [out]` | Stop one output buffer's job, or all |
+| `:LaunchList` | Root, commands + running jobs |
+| `:LaunchQF` | Re-parse the last output's errors into quickfix |
+| `:LaunchInit` | Write a starter `launch.json`, or open the existing one |
 | `:LaunchReload` | Re-read `launch.json` after editing it |
-| `:Make [args]` | Async build via the detected makeprg |
+| `:Make [args]` | Build with the detected build command, into `*compilation*` |
 
 ## Clipboard (clipboard.lua)
 

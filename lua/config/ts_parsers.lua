@@ -156,8 +156,11 @@ function M.install(lang, opts)
         for _, f in ipairs(files) do
             local name = vim.fn.fnamemodify(f, ":t")
             local content = vim.fn.readfile(f)
-            -- Prepend ; inherits: directive for parsers that extend another language
-            if info.inherits and name == "highlights.scm" then
+            -- Prepend ; inherits: directive for parsers that extend another
+            -- language, unless upstream already declares one (tree-sitter-objc
+            -- does). nvim does not dedupe inherits: a second line compiled the
+            -- whole C query into objc's highlights twice (~400ms per session).
+            if info.inherits and name == "highlights.scm" and not (content[1] or ""):match("^; inherits:") then
                 table.insert(content, 1, "; inherits: " .. info.inherits)
             end
             vim.fn.writefile(content, queries_dst .. "/" .. name)

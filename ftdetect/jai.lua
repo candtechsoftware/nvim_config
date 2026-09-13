@@ -26,10 +26,6 @@ vim.api.nvim_create_autocmd("FileType", {
     -- an error state, so the reindent has to wait for the `;`. For every other
     -- statement the recomputed indent is the one it already had.
     vim.bo.indentkeys = '0{,0},0),0],;,!^F,o,O,0=case,0=#'
-    -- No errorformat here. This used to set "%f:%l\,%c:%m", which raced the
-    -- richer jai errorformat in utils/make_detect.lua from a second FileType
-    -- autocmd — whichever ran last won, so which one you got depended on
-    -- autocmd registration order. make_detect owns errorformat.
     vim.bo.define = "^\\s*\\w\\+\\s*:.*:.*\\s*[({]"
   end,
 })

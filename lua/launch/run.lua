@@ -1,390 +1,338 @@
--- Job registry + terminal output pane for lua/launch.
+-- Output buffers and jobs for lua/launch.
 --
--- Two execution kinds, because a build and a run want opposite things:
+-- Every command writes into a named out buffer (launch://*compilation*,
+-- launch://*run*, ...): one buffer per name, one job per buffer. Starting a
+-- command stops whatever was still writing to its buffer.
 --
---   build  buffered jobstart -> errorformat -> quickfix + inline diagnostics.
---          You do not want to watch a compile scroll past; you want the errors.
---
---   run    PTY terminal buffer, streaming.
---          You DO want to watch this. The PTY is the point: a program whose
---          stdout is a pipe gets libc's 4KB block buffering, so a long-running
---          app produces nothing observable until it exits or fills the block.
---          On a tty it line-buffers instead, and you also get ANSI colour and
---          a working stdin for an interactive CLI.
---
--- Every job is registered by target name so a re-run can kill the previous
--- instance. Without that, pressing the run key twice left two GUI processes
--- alive with no way to reach either one.
+-- Jobs run on a PTY so the program line-buffers its stdout. On a pipe libc
+-- block-buffers it and a GUI app shows nothing until it exits. The output
+-- still lands in a plain buffer, not a terminal, so it can be edited, yanked
+-- and searched.
 
 local M = {}
 
-M.DEFAULT_HEIGHT = 15
+local HEIGHT = 15
 
----name -> { job, bufnr, cmd, kind, started }
+-- Wide, so compilers that wrap diagnostics to the terminal width do not.
+local PTY_WIDTH = 500
+
+-- One errorformat for every compiler, 4coder style: any command's output is
+-- parsed the same way, whichever buffer it was started from.
+local ERRORFORMAT = table.concat({
+  '%Dlaunch-root: %f', -- errors() prepends this so relative paths resolve against the root
+  '%f:%l\\,%c: %m', -- Jai
+  '%f:%l:%c: %m', -- clang, gcc, zig
+  '%f:%l: %m', -- gcc/ld, Jai without a column
+  '%f(%l\\,%c): %m', -- MSVC /diagnostics:column, tsc
+  '%f(%l): %m', -- MSVC
+  '%f(%l) : %m', -- older MSVC
+  '%f(%l:%c) %m', -- Odin
+  '%.%#--> %f:%l:%c', -- Rust
+  'CMake Error at %f:%l %m',
+  '%f:%l:%c - %m', -- ESLint
+  '%-G%.%#',
+}, ',')
+
+---out name -> { buf, job, key, cmd, root, partial }
 ---@type table<string, table>
-local jobs = {}
+local outs = {}
 
--- The single shared output window. Reused across targets so a project with
--- four run targets doesn't end up with four splits.
 local pane_win = nil
-local last_shown = nil
+local last_out = nil
 
-local build_diag_ns = vim.api.nvim_create_namespace('launch_build')
+-- The quickfix list launch owns, by id, 0 until a command first reports
+-- errors. The error marks are drawn from it. Diagnostics are switched off
+-- globally (lua/config/lsp.lua), so the marks are plain extmarks.
+local qf_id = 0
+local marks_ns = vim.api.nvim_create_namespace('launch_errors')
+
+---Quickfix items for the error locations in `lines`. Only locations whose
+---file exists count: the formats are broad enough that a log line like
+---`12:34:56: started` parses as file `12`.
+---@param root string
+---@param lines string[]
+---@return table[]
+local function errors(root, lines)
+  -- Every format has a `:<digit>` or `(<digit>`. Dropping the other lines
+  -- first keeps a long log from paying for every pattern on every line.
+  local candidates = { 'launch-root: ' .. root }
+  for _, line in ipairs(lines) do
+    if line:find('[:(]%d') then candidates[#candidates + 1] = line end
+  end
+  local items = vim.fn.getqflist({ lines = candidates, efm = ERRORFORMAT }).items
+  return vim.tbl_filter(function(item)
+    return item.valid == 1 and vim.uv.fs_stat(vim.api.nvim_buf_get_name(item.bufnr)) ~= nil
+  end, items)
+end
+
+---The launch list's items. Guarded because id 0 means the current list; a
+---list that fell out of the quickfix history comes back empty.
+---@return table[]
+local function launch_items()
+  if qf_id == 0 then return {} end
+  return vim.fn.getqflist({ id = qf_id, items = 0 }).items
+end
+
+---Draw the `items` that belong to `buf`: error lines get a red tint and the
+---message at the end of the line, warnings only the message. Extmarks follow
+---edits, so a mark stays on its line until the next build.
+---@param buf integer
+---@param items table[]
+local function mark_errors(buf, items)
+  vim.api.nvim_buf_clear_namespace(buf, marks_ns, 0, -1)
+  local line_count = vim.api.nvim_buf_line_count(buf)
+  for _, item in ipairs(items) do
+    if item.bufnr == buf and item.lnum <= line_count then
+      local warning = item.text:lower():match('^warning') ~= nil
+      vim.api.nvim_buf_set_extmark(buf, marks_ns, item.lnum - 1, 0, {
+        line_hl_group = not warning and 'LaunchErrorLine' or nil,
+        virt_text = { { '  ' .. item.text, warning and 'DiagnosticWarn' or 'ErrorMsg' } },
+        virt_text_pos = 'eol',
+      })
+    end
+  end
+end
+
+---Put this output's errors in the launch list and redraw the marks. New
+---errors become the current list; a clean run empties the launch list in
+---place and leaves whatever list you are on (a grep) alone.
+---@return integer count
+local function to_quickfix(o)
+  local items = errors(o.root, vim.api.nvim_buf_get_lines(o.buf, 0, -1, false))
+  local what = { items = items, title = 'launch: ' .. o.key }
+  if #items > 0 and (qf_id == 0 or vim.fn.getqflist({ id = 0 }).id ~= qf_id) then
+    vim.fn.setqflist({}, ' ', what)
+    qf_id = vim.fn.getqflist({ id = 0 }).id
+  elseif qf_id ~= 0 then
+    what.id = qf_id
+    vim.fn.setqflist({}, 'r', what)
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) then mark_errors(buf, items) end
+  end
+  return #items
+end
+
+---A PTY line as plain text: no colour codes, no CRLF, and only the final
+---frame of a `\r` progress redraw.
+---@param line string
+---@return string
+local function clean(line)
+  line = line:gsub('\27%[[0-9;?]*[ -/]*[@-~]', ''):gsub('\r$', '')
+  return (line:match('[^\r]*$'))
+end
+
+---Write a jobstart chunk into the output buffer. The buffer's last line is
+---always the unfinished line, so each chunk replaces it. Windows showing the
+---end keep following it.
+local function write(o, data)
+  data[1] = o.partial .. data[1]
+  -- Only the last `\r` frame can still show (see clean), and keeping just that
+  -- stops a status line that is redrawn forever from growing without end.
+  o.partial = data[#data]:match('[^\r]*\r?$')
+  local last = vim.api.nvim_buf_line_count(o.buf)
+  local following = vim.tbl_filter(function(win)
+    return vim.api.nvim_win_get_cursor(win)[1] == last
+  end, vim.fn.win_findbuf(o.buf))
+  vim.api.nvim_buf_set_lines(o.buf, -2, -1, false, vim.tbl_map(clean, data))
+  for _, win in ipairs(following) do
+    vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(o.buf), 0 })
+  end
+end
 
 ---@return boolean
 local function pane_valid()
   return pane_win ~= nil and vim.api.nvim_win_is_valid(pane_win)
 end
 
----@param bufnr integer
----@param height integer|nil
-local function open_pane(bufnr, height)
+---Show `buf` in the shared bottom pane, at its end, without taking focus.
+---@param buf integer
+local function show(buf)
   if pane_valid() then
-    vim.api.nvim_win_set_buf(pane_win, bufnr)
+    vim.api.nvim_win_set_buf(pane_win, buf)
   else
-    -- botright, so the pane spans the full width under everything rather than
-    -- splitting whichever window happened to be focused.
-    vim.cmd('botright ' .. (height or M.DEFAULT_HEIGHT) .. 'split')
-    pane_win = vim.api.nvim_get_current_win()
-    vim.api.nvim_win_set_buf(pane_win, bufnr)
+    pane_win = vim.api.nvim_open_win(buf, false, { split = 'below', win = -1, height = HEIGHT })
+    local wo = vim.wo[pane_win]
+    wo.winfixheight = true
+    wo.number = false
+    wo.relativenumber = false
+    wo.signcolumn = 'no'
+    wo.spell = false
+    wo.list = false
   end
-  local wo = vim.wo[pane_win]
-  wo.winfixheight = true
-  wo.number = false
-  wo.relativenumber = false
-  wo.signcolumn = 'no'
-  wo.spell = false
-  wo.list = false
+  vim.api.nvim_win_set_cursor(pane_win, { vim.api.nvim_buf_line_count(buf), 0 })
 end
 
----@param name string
----@return boolean
-function M.is_running(name)
-  local e = jobs[name]
-  return e ~= nil and e.job ~= nil and vim.fn.jobwait({ e.job }, 0)[1] == -1
+---Open the error on the cursor line in the window you came from, and make it
+---the launch list's current entry so <M-n> continues from there.
+---@param out string
+local function jump(out)
+  local item = errors(outs[out].root, { vim.api.nvim_get_current_line() })[1]
+  if item then
+    for i, entry in ipairs(launch_items()) do
+      if entry.bufnr == item.bufnr and entry.lnum == item.lnum and entry.col == item.col then
+        vim.fn.setqflist({}, 'a', { id = qf_id, idx = i })
+        break
+      end
+    end
+    -- Like lsp.lua's jump_to: leave a jumplist entry, and list the buffer
+    -- (quickfix parsing creates it unlisted).
+    vim.cmd.wincmd('p')
+    vim.cmd("normal! m'")
+    vim.bo[item.bufnr].buflisted = true
+    vim.api.nvim_set_current_buf(item.bufnr)
+    vim.fn.cursor(item.lnum, math.max(item.col, 1))
+    vim.cmd('normal! zz')
+  end
 end
 
----Stop one target's job. Safe to call when nothing is running.
----@param name string
+---@param out string
+---@return integer buf
+local function new_buf(out)
+  local buf = vim.api.nvim_create_buf(true, true)
+  -- A bare `*run*` would be expanded to a path under cwd; a URL-like name is not.
+  vim.api.nvim_buf_set_name(buf, 'launch://' .. out)
+  vim.keymap.set('n', '<CR>', function() jump(out) end,
+    { buffer = buf, desc = 'launch: jump to the error on this line' })
+  vim.keymap.set('n', 'q', '<cmd>close<CR>',
+    { buffer = buf, desc = 'launch: close the window, the job keeps running' })
+  vim.keymap.set('n', '<C-c>', function() M.stop(out) end,
+    { buffer = buf, desc = 'launch: stop this job' })
+  -- Deleting the buffer stops its job and frees the name for the next run.
+  vim.api.nvim_create_autocmd('BufUnload', {
+    buffer = buf,
+    once = true,
+    callback = function()
+      local o = outs[out]
+      outs[out] = nil
+      if o.job then vim.fn.jobstop(o.job) end
+      o.job = nil
+      vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
+      end)
+    end,
+  })
+  return buf
+end
+
+---Run `entry.cmd` in `root`, writing into the buffer named `entry.out`.
+---@param entry { key: string, cmd: string, out: string }
+---@param root string
+function M.start(entry, root)
+  M.stop(entry.out)
+  local o = outs[entry.out] or { buf = new_buf(entry.out) }
+  outs[entry.out] = o
+  o.key, o.cmd, o.root, o.partial = entry.key, entry.cmd, root, ''
+  vim.api.nvim_buf_set_lines(o.buf, 0, -1, false, {})
+  last_out = entry.out
+  show(o.buf)
+
+  -- Callbacks from a job this buffer no longer belongs to (it was restarted
+  -- or stopped) are dropped.
+  local job = vim.fn.jobstart(entry.cmd, {
+    pty = true,
+    width = PTY_WIDTH,
+    cwd = root,
+    on_stdout = function(id, data)
+      if id == o.job then write(o, data) end
+    end,
+    on_exit = function(id, code)
+      if id == o.job then
+        o.job = nil
+        write(o, { '', ('[exited %d]'):format(code) })
+        vim.notify(('launch: %s exited %d, %d error(s)'):format(o.key, code, to_quickfix(o)),
+          code == 0 and vim.log.levels.INFO or vim.log.levels.WARN)
+      end
+    end,
+  })
+  if job <= 0 then
+    vim.notify('launch: could not start ' .. entry.cmd, vim.log.levels.ERROR)
+  else
+    o.job = job
+  end
+end
+
+---@param out string
 ---@return boolean stopped
-function M.stop(name)
-  local e = jobs[name]
-  if not e or not e.job then return false end
-  local running = M.is_running(name)
-  -- jobstop signals the whole process group for a PTY job, which is what
-  -- kills a shell-wrapped `cmd &&  cmd` chain rather than orphaning the tail.
-  pcall(vim.fn.jobstop, e.job)
-  e.job = nil
+function M.stop(out)
+  local o = outs[out]
+  local running = o ~= nil and o.job ~= nil
+  if running then
+    -- Hanging up the PTY reaches the whole process group, so a `build && app`
+    -- chain dies with its shell.
+    vim.fn.jobstop(o.job)
+    o.job = nil
+    write(o, { '', '[stopped]' })
+  end
   return running
 end
 
 ---@return integer count
 function M.stop_all()
   local n = 0
-  for name in pairs(jobs) do
-    if M.stop(name) then n = n + 1 end
+  for out in pairs(outs) do
+    if M.stop(out) then n = n + 1 end
   end
   return n
 end
 
----@return table[] rows  { name, kind, cmd, running }
+---@return table[] rows  { out, cmd } of the jobs still running
 function M.list()
-  local out = {}
-  for name, e in pairs(jobs) do
-    out[#out + 1] = {
-      name = name, kind = e.kind, cmd = e.cmd, running = M.is_running(name),
-    }
+  local rows = {}
+  for out, o in pairs(outs) do
+    if o.job then rows[#rows + 1] = { out = out, cmd = o.cmd } end
   end
-  table.sort(out, function(a, b) return a.name < b.name end)
-  return out
+  table.sort(rows, function(a, b) return a.out < b.out end)
+  return rows
 end
 
----Drop a dead target's terminal buffer.
----Buffer names are unique, so a stale `launch://run` would make the rename of
----the next run's buffer fail silently and leave it as `term://...`.
----@param name string
-local function wipe_buf(name)
-  local e = jobs[name]
-  if not e or not e.bufnr then return end
-  if vim.api.nvim_buf_is_valid(e.bufnr) then
-    pcall(vim.api.nvim_buf_delete, e.bufnr, { force = true })
-  end
-  e.bufnr = nil
-end
-
---------------------------------------------------------------------------------
--- run: streaming PTY terminal
---------------------------------------------------------------------------------
-
----@param target table  { name, cmd, height? }
----@param root string
----@param opts table|nil { focus?: boolean }
-function M.run_term(target, root, opts)
-  opts = opts or {}
-  local name = target.name
-
-  -- Kill the previous instance before starting another. This is the whole
-  -- reason the registry exists: a GUI app started twice used to leave an
-  -- unreachable orphan behind.
-  if M.is_running(name) then
-    M.stop(name)
-    vim.notify(('launch: restarted %s'):format(name), vim.log.levels.INFO)
-  end
-  wipe_buf(name)
-
-  local buf = vim.api.nvim_create_buf(false, true)
-  local prev_win = vim.api.nvim_get_current_win()
-
-  -- The buffer has to be current in a REAL window before jobstart, not just
-  -- current via nvim_buf_call: the PTY takes its rows/cols from the window it
-  -- is created in, and buf_call's scratch window has the wrong geometry, so
-  -- anything that draws to width (progress bars, tables) wraps wrong.
-  open_pane(buf, target.height)
-  vim.api.nvim_set_current_win(pane_win)
-
-  local job = vim.fn.jobstart(target.cmd, {
-    term = true,
-    cwd = root,
-    on_exit = function(_, code)
-      vim.schedule(function()
-        local level = code == 0 and vim.log.levels.INFO or vim.log.levels.WARN
-        vim.notify(('launch: %s exited (%d)'):format(name, code), level)
-      end)
-    end,
-  })
-
-  if job <= 0 then
-    vim.api.nvim_set_current_win(prev_win)
-    vim.notify(('launch: could not start %s (%s)'):format(name, target.cmd),
-      vim.log.levels.ERROR)
-    return
-  end
-
-  -- jobstart(term=true) renames the buffer to term://<cwd>//<pid>:<cmd>.
-  -- Rename after, so the pane reads as the target rather than a pid.
-  pcall(vim.api.nvim_buf_set_name, buf, 'launch://' .. name)
-
-  jobs[name] = { job = job, bufnr = buf, cmd = target.cmd, kind = 'run', started = true }
-  last_shown = name
-
-  -- Park the cursor on the last line. Neovim tail-follows a terminal window
-  -- only while the cursor is at the bottom, so this gives live follow for free
-  -- AND gives up follow the moment you scroll up to read something — which is
-  -- the behaviour you want and costs no code.
-  pcall(vim.api.nvim_win_set_cursor, pane_win, { vim.api.nvim_buf_line_count(buf), 0 })
-
-  local function map(lhs, fn, desc)
-    vim.keymap.set('n', lhs, fn, { buffer = buf, silent = true, desc = desc })
-  end
-  map('q', function() M.hide_pane() end, 'launch: hide output pane (job keeps running)')
-  map('<C-c>', function()
-    if M.stop(name) then
-      vim.notify('launch: stopped ' .. name, vim.log.levels.INFO)
-    end
-  end, 'launch: stop this job')
-
-  if not opts.focus then
-    if vim.api.nvim_win_is_valid(prev_win) then
-      vim.api.nvim_set_current_win(prev_win)
-    end
-  end
-end
-
---------------------------------------------------------------------------------
--- build: buffered, errorformat -> quickfix + diagnostics
---------------------------------------------------------------------------------
-
----@param target table  { name, cmd }
----@param root string
----@param on_done fun(code: integer)|nil
-function M.run_build(target, root, on_done)
-  local name = target.name
-  if M.is_running(name) then
-    M.stop(name)
-  end
-
-  local lines = {}
-  vim.notify(('launch: %s'):format(target.cmd), vim.log.levels.INFO)
-
-  -- Snapshot the errorformat NOW, from the buffer that started the build.
-  -- make_detect sets it buffer-locally per (cwd, filetype); by the time the
-  -- job exits, the current buffer can easily be the quickfix window or a
-  -- terminal pane, whose filetype resolves to a different — wrong — format.
-  require('utils.make_detect').apply()
-  local efm = vim.bo.errorformat
-
-  local job = vim.fn.jobstart(target.cmd, {
-    cwd = root,
-    stdout_buffered = true,
-    stderr_buffered = true,
-    on_stdout = function(_, data) if data then vim.list_extend(lines, data) end end,
-    on_stderr = function(_, data) if data then vim.list_extend(lines, data) end end,
-    on_exit = function(_, code)
-      vim.schedule(function()
-        vim.diagnostic.reset(build_diag_ns)
-
-        -- NOTE: when a {what} dict is passed, setqflist IGNORES the {list}
-        -- argument — items have to travel inside the dict. Passing them
-        -- positionally alongside a dict silently does nothing.
-        if code == 0 then
-          vim.fn.setqflist({}, 'r', { items = {}, title = name .. ': SUCCESS' })
-          vim.cmd('cclose')
-          vim.notify(('launch: %s ok'):format(name), vim.log.levels.INFO)
-          if on_done then on_done(code) end
-          return
-        end
-
-        -- One setqflist call, not one per line. The old version appended each
-        -- output line with a separate setqflist(..., 'a'), which rebuilds the
-        -- whole list every time — quadratic on a chatty failing build.
-        vim.fn.setqflist({}, 'r', {
-          lines = lines,
-          efm = efm,
-          title = ('%s: %s'):format(name, target.cmd),
-        })
-
-        local qf = vim.fn.getqflist()
-        local errors = 0
-        for _, item in ipairs(qf) do
-          if item.valid == 1 then errors = errors + 1 end
-        end
-
-        if errors > 0 then
-          local by_buf = {}
-          for _, d in ipairs(vim.diagnostic.fromqflist(qf, { merge_lines = true })) do
-            if d.bufnr and d.bufnr > 0 then
-              by_buf[d.bufnr] = by_buf[d.bufnr] or {}
-              table.insert(by_buf[d.bufnr], d)
-            end
-          end
-          for bufnr, diags in pairs(by_buf) do
-            vim.diagnostic.set(build_diag_ns, bufnr, diags)
-          end
-          vim.notify(('launch: %s failed — %d error(s)'):format(name, errors),
-            vim.log.levels.ERROR)
-        else
-          -- Nothing matched the errorformat, so show the raw output rather
-          -- than an empty quickfix list.
-          local raw = {}
-          for _, l in ipairs(lines) do
-            if l ~= '' then raw[#raw + 1] = { text = l } end
-          end
-          vim.fn.setqflist({}, 'r', {
-            items = raw,
-            title = ('%s: exit %d'):format(name, code),
-          })
-          vim.notify(('launch: %s failed (exit %d)'):format(name, code),
-            vim.log.levels.ERROR)
-        end
-        vim.cmd('copen')
-        if on_done then on_done(code) end
-      end)
-    end,
-  })
-
-  if job <= 0 then
-    vim.notify(('launch: could not start %s (%s)'):format(name, target.cmd),
-      vim.log.levels.ERROR)
-    return
-  end
-  jobs[name] = { job = job, cmd = target.cmd, kind = 'build', started = true }
-end
-
---------------------------------------------------------------------------------
--- pane control
---------------------------------------------------------------------------------
-
-function M.hide_pane()
-  if pane_valid() then
-    vim.api.nvim_win_close(pane_win, false)
-  end
-  pane_win = nil
-end
-
----Show/hide the most recent run target's output. The job is untouched either
----way — hiding a pane must not kill what it is showing.
+---Show or hide the last output. Hiding never stops the job.
 function M.toggle_pane()
   if pane_valid() then
-    M.hide_pane()
-    return
-  end
-  local e = last_shown and jobs[last_shown]
-  if not e or not e.bufnr or not vim.api.nvim_buf_is_valid(e.bufnr) then
+    vim.api.nvim_win_close(pane_win, false)
+  elseif outs[last_out] then
+    show(outs[last_out].buf)
+  else
     vim.notify('launch: no output to show', vim.log.levels.WARN)
-    return
   end
-  local cur = vim.api.nvim_get_current_win()
-  open_pane(e.bufnr)
-  vim.api.nvim_set_current_win(cur)
 end
 
----@return integer|nil bufnr  the visible output buffer, if any
-function M.pane_buf()
-  if pane_valid() then
-    return vim.api.nvim_win_get_buf(pane_win)
+---Re-parse the last output's errors into quickfix, e.g. while an app runs.
+function M.quickfix()
+  local o = outs[last_out]
+  if o then
+    vim.notify(('launch: %d error(s) in %s'):format(to_quickfix(o), last_out), vim.log.levels.INFO)
+  else
+    vim.notify('launch: no output', vim.log.levels.WARN)
   end
-  local e = last_shown and jobs[last_shown]
-  if e and e.bufnr and vim.api.nvim_buf_is_valid(e.bufnr) then return e.bufnr end
-  return nil
 end
 
----Push the output pane through 'errorformat' into the quickfix list, so a RUN
----that happens to print compiler-style diagnostics still gets jump-to-line.
----
----Deliberately not `:cbuffer`. That takes 'errorformat' from whatever buffer
----is current — which, called from inside the pane, is the terminal — and it
----ingests the terminal's blank screen padding as a wall of invalid entries
----(one per unused row). Reading the lines out and filtering first gives a
----quickfix list containing only real matches.
-function M.to_quickfix()
-  local buf = M.pane_buf()
-  if not buf then
-    vim.notify('launch: no output buffer', vim.log.levels.WARN)
-    return
-  end
-
-  local lines = {}
-  for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
-    if l:match('%S') then lines[#lines + 1] = l end
-  end
-
-  require('utils.make_detect').apply()
-  vim.fn.setqflist({}, 'r', {
-    lines = lines,
-    efm = vim.bo.errorformat,
-    title = 'launch: ' .. (last_shown or 'output'),
-  })
-
-  -- Keep only entries the errorformat actually resolved to a location.
-  local valid = {}
-  for _, item in ipairs(vim.fn.getqflist()) do
-    if item.valid == 1 then valid[#valid + 1] = item end
-  end
-
-  if #valid == 0 then
-    vim.fn.setqflist({}, 'r', { items = {} })
-    vim.notify('launch: no errorformat matches in output', vim.log.levels.INFO)
-    return
-  end
-
-  vim.fn.setqflist({}, 'r', {
-    items = valid,
-    title = ('launch: %s (%d)'):format(last_shown or 'output', #valid),
-  })
-  vim.cmd('copen')
+local function set_highlights()
+  -- ll's error rose at about a quarter strength over its background.
+  vim.api.nvim_set_hl(0, 'LaunchErrorLine', { bg = '#3d2a30' })
 end
-
----@return string|nil
-function M.last() return last_shown end
 
 function M.setup()
-  -- A run target must not outlive the editor. Nothing stopped these before,
-  -- so quitting nvim left a GUI app running with its parent gone.
+  local group = vim.api.nvim_create_augroup('launch_run', { clear = true })
+
+  -- A running app must not outlive the editor.
   vim.api.nvim_create_autocmd('VimLeavePre', {
-    group = vim.api.nvim_create_augroup('launch_run_cleanup', { clear = true }),
+    group = group,
     callback = function() M.stop_all() end,
     desc = 'Stop all launch jobs before quitting',
   })
+
+  -- A file opened after the build gets its marks as it loads.
+  vim.api.nvim_create_autocmd('BufReadPost', {
+    group = group,
+    callback = function(ev) mark_errors(ev.buf, launch_items()) end,
+    desc = 'Draw the launch errors into the file',
+  })
+
+  -- Plain hex, so a colorscheme's `hi clear` wipes it: set it now and again
+  -- after every :colorscheme.
+  vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = set_highlights })
+  set_highlights()
 end
 
 return M

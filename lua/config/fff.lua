@@ -68,12 +68,11 @@ local function write_ignore()
 end
 
 function M.setup()
-    -- Read lazily by fff.conf on first picker open, so this costs nothing at
-    -- startup and no fff module is required here.
+    -- Read by fff.conf when the index is first built (the UIEnter hook below).
     --
     -- lazy_sync must be EXPLICITLY true: plugin/fff.lua reads vim.g.fff.lazy_sync
-    -- directly and indexes at UIEnter when it is nil, which is the opposite of
-    -- what the name suggests.
+    -- directly and indexes getcwd() at UIEnter when it is nil. The hook below
+    -- indexes search_root() instead, the root every picker here opens on.
     vim.g.fff = {
         lazy_sync = true,
         prompt = "> ",
@@ -95,6 +94,25 @@ function M.setup()
             max_file_size = 1024 * 1024,
         },
     }
+
+    -- Build the index right after startup, not on the first keypress. A picker
+    -- opened on a cold index loads the Rust library and starts the scan inside
+    -- the keypress, and a picker opened mid-scan draws an empty list and polls
+    -- on a 100-500ms timer (monitor_scan_progress) until the scan ends. Home is
+    -- skipped: with no project there, indexing it would walk all of ~.
+    vim.api.nvim_create_autocmd("UIEnter", {
+        once = true,
+        desc = "Index the project root for fff after startup",
+        callback = vim.schedule_wrap(function()
+            local root = search_root()
+            if root == vim.fs.normalize(vim.uv.os_homedir()) then return end
+            vim.g.fff = vim.tbl_extend("force", vim.g.fff, { base_path = root })
+            require("fff.core").ensure_initialized()
+            -- Warms a private fff module. fff follows a moving tag, so a
+            -- rename there must cost only the warm-up, not a startup error.
+            pcall(require, "fff.picker_ui.picker_ui")
+        end),
+    })
 
     vim.api.nvim_create_user_command("FFFIgnore", write_ignore, {
         desc = "Write a .ignore at the project root from utils.skip_dirs",

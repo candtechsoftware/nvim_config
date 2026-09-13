@@ -55,7 +55,10 @@ vim.pack.add({
     'https://github.com/nvim-lua/plenary.nvim',
     'https://github.com/nvim-telescope/telescope.nvim',
     'https://github.com/nvim-telescope/telescope-fzf-native.nvim',
-    'https://github.com/dmtrKovalenko/fff',
+    -- fff's CI moves the `nightly` tag only after a commit's prebuilt binaries
+    -- are published. Tracking main can land on a commit the download hook 404s
+    -- on, which falls back to a local cargo build.
+    { src = 'https://github.com/dmtrKovalenko/fff', version = 'nightly' },
 })
 
 -- render-markdown is markdown-only but cost ~4ms of a ~40ms startup: its
@@ -100,7 +103,6 @@ require("config.fff").setup()
 require("config.telescope").setup()
 
 -- Utilities
-require("utils.make_detect").setup()
 require("launch").setup()
 require("notes").setup()
 require("config.clipboard").setup()

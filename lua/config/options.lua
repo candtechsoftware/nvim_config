@@ -156,6 +156,7 @@ vim.opt.clipboard = "unnamedplus"
 if vim.g.neovide then
     vim.g.neovide_position_animation_length = 0.01
     vim.g.neovide_scroll_animation_length = 0.01
+    vim.g.neovide_input_macos_option_key_is_meta = "only_left" -- <M-n> for build errors
 end
 
 

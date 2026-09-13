@@ -73,9 +73,9 @@ local GENERATED_BASES = { 'build', 'out', 'gen', 'generated' }
 -- onto more text (win64, x11drv) is NOT matched. Nothing in these projects is
 -- named that way; add the literal token here if that ever changes.
 local FOREIGN_PLATFORM = {
-  Darwin = 'win|win32|windows|linux|wayland|x11',
+  Darwin = 'win|win32|windows|linux|lnx|wayland|x11',
   Linux = 'win|win32|windows|mac|macos|darwin|cocoa|metal',
-  Windows_NT = 'mac|macos|darwin|cocoa|metal|linux|wayland|x11',
+  Windows_NT = 'mac|macos|darwin|cocoa|metal|linux|lnx|wayland|x11',
 }
 
 -- #include/#import forms; second element marks system (<...>) includes.
@@ -1057,20 +1057,23 @@ end
 ---@param opts? {force?: boolean, dir?: string}
 function M.generate(opts)
   opts = opts or {}
-  -- Default: the git root, which is the right answer for a single-project
-  -- repo. It is the wrong answer for a monorepo — ~/projects/notes holds
-  -- renderer/, appgui/, some-engine-some/ and research/, each its own unity
-  -- build with its own src/ include base. Rooted at the git dir, scan() picks
-  -- ONE primary TU for all four (it chose research/ash/phase-4/main.c),
-  -- prefixes that shell project's preamble onto every other subtree, fails to
-  -- resolve `base/base_inc.h` from an example because it only probes
-  -- root-relative include bases, and hands clangd 6282 files to background
-  -- index instead of the 52 that renderer/ actually contains.
+  -- The git root is the wrong root for a monorepo — ~/notes holds appgui/,
+  -- research/soui/, research/ash/phase-N/ and more, each its own unity build
+  -- with its own src/ include base. Rooted at the git dir, scan() picks ONE
+  -- primary TU for all of them, prefixes that project's preamble onto every
+  -- other subtree, and stops at its 200-file limit before most subprojects are
+  -- even seen: research/soui got no fragment at all, so render_metal.mm parsed
+  -- with no preamble and reported 34 errors.
   --
-  -- So allow an explicit dir: `:ClangdSetup renderer` writes renderer/.clangd.
+  -- So the default is the OUTERMOST dir holding a build file between the buffer
+  -- and the git root. Every project here builds from a script at its own root
+  -- (soui/build_mac.sh); outermost rather than nearest so a nested test script
+  -- (phase-6/test/build_tests.sh) doesn't win. No build file: the git root.
+  -- An explicit dir still overrides: `:ClangdSetup renderer`.
+  --
   -- clangd's root_markers list `.clangd` (see lsp/clangd.lua) and vim.fs.root
-  -- takes the NEAREST match, so that file also becomes the LSP root — which is
-  -- what scopes the background index to the subproject.
+  -- takes the NEAREST match, so the written file also becomes the LSP root —
+  -- which is what scopes the background index to the subproject.
   local root
   if opts.dir and opts.dir ~= '' then
     root = vim.fn.fnamemodify(vim.fs.normalize(opts.dir), ':p'):gsub('/$', '')
@@ -1079,7 +1082,15 @@ function M.generate(opts)
       return
     end
   else
-    root = vim.fs.root(0, '.git') or vim.fn.getcwd()
+    local git = vim.fs.root(0, '.git')
+    local buf_name = vim.api.nvim_buf_get_name(0)
+    local build_files = vim.fs.find(build_file, {
+      upward = true,
+      path = buf_name ~= '' and vim.fs.dirname(buf_name) or vim.fn.getcwd(),
+      stop = git and vim.fs.dirname(git) or vim.uv.os_homedir(),
+      limit = math.huge,
+    })
+    root = #build_files > 0 and vim.fs.dirname(build_files[#build_files]) or git or vim.fn.getcwd()
   end
   root = vim.fs.normalize(root)
   local target = root .. '/.clangd'
@@ -1144,7 +1155,7 @@ function M.setup()
     bang = true,
     nargs = '?',
     complete = 'dir',
-    desc = 'Generate a unity-build .clangd + compile_commands.json (arg: subproject dir; default git root; ! overwrites)',
+    desc = 'Generate a unity-build .clangd + compile_commands.json (arg: subproject dir; default outermost build-file dir, else git root; ! overwrites)',
   })
 end
 

@@ -9,6 +9,9 @@ local M = {}
 -- embedded-asset headers that actually hurt.
 local MAX_TS_BYTES = 512 * 1024
 
+-- Languages whose highlights query this session has compiled (FileType below).
+local started_langs = {}
+
 ---Should this buffer get treesitter highlighting?
 ---@param buf integer
 ---@return boolean
@@ -54,7 +57,22 @@ function M.setup()
             -- Start treesitter highlighting if a parser exists.
             -- objcpp uses the objc parser via the language.register call
             -- in ftdetect/objc.lua.
-            pcall(vim.treesitter.start, args.buf)
+            local lang = vim.treesitter.language.get_lang(ft) or ft
+            if started_langs[lang] then
+                pcall(vim.treesitter.start, args.buf)
+                return
+            end
+            -- The first buffer of a language compiles its highlights query
+            -- (~120ms for cpp, ~490ms for objc), and the window kept showing
+            -- the previous buffer until it finished. Draw the file first and
+            -- colour it after; later buffers reuse the compiled query inline.
+            started_langs[lang] = true
+            local buf = args.buf
+            vim.schedule(function()
+                if not vim.api.nvim_buf_is_valid(buf) then return end
+                vim.cmd.redraw()
+                pcall(vim.treesitter.start, buf)
+            end)
         end,
     })
 

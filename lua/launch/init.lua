@@ -1,21 +1,27 @@
--- Per-project build/run targets, read from <root>/launch.json.
+-- Per-project commands, read from <root>/launch.json:
 --
---   <leader>b   build target 1        N<leader>b   build target N
---   <leader>r   run target 1          N<leader>r   run target N
---   <leader>o   toggle output pane    <leader>x    stop the running job
---   <leader>ft  pick a target
+--   {
+--     "<F1>": "./build.sh",
+--     "<F4>": { "cmd": "./build.sh && ./build/game", "out": "*run*" },
+--     "linux": { "<F1>": "./build_linux.sh" }
+--   }
 --
--- The count prefix rather than <leader>b1/<leader>b2: a bare <leader>b that is
--- also the prefix of a longer mapping has to wait out 'timeoutlen' (400ms here)
--- before it can fire. Counts are free, and there are 4 mappings instead of 20.
+-- Each key is a normal-mode mapping, bound while a file from the project is
+-- current. `out` names the buffer the output goes to, *compilation* by
+-- default. A mac/linux/windows table overrides the top-level entries there.
+-- Without a launch.json, :Make and <leader>b run the build command that
+-- utils/make_detect.lua detects.
 --
 -- Execution lives in launch/run.lua. This file is config: find the root, read
--- and normalize launch.json, resolve a target, bind keys.
+-- launch.json, bind keys.
 
 local M = {}
 
 local run = require('launch.run')
 local find_project_root = require('utils.project_root').find
+local detect_build = require('utils.make_detect').detect
+
+local DEFAULT_OUT = '*compilation*'
 
 local function get_os()
   local uname = vim.uv.os_uname().sysname:lower()
@@ -26,18 +32,28 @@ local function get_os()
 end
 
 local OS = get_os()
+local PLATFORMS = { mac = true, linux = true, windows = true }
 
-local active_keymaps = {}
 local current_launch_root = nil
 
+-- The active root's launch.json entries, each { key, cmd, out, prev }. prev is
+-- the mapping the key shadowed, put back when the project changes.
+local entries = {}
+
 -- Root lookups cached per buffer directory. BufEnter fires on every buffer
--- switch and find_project_root scandirs each ancestor directory — repeating
--- that disk walk for a directory already resolved is pure waste. DirChanged
--- and :LaunchReset/:LaunchReload clear the cache (a launch.json appearing in
--- an already-visited dir needs the same :LaunchReload it always did).
+-- switch and find_project_root scandirs each ancestor directory, so a
+-- directory already resolved is not walked again. DirChanged and
+-- :LaunchReload clear the cache.
 local root_by_dir = {}
 
+---The project the current buffer belongs to. Output buffers, quickfix and
+---help are not project files, so they keep the current project: a build key
+---pressed in the output pane rebuilds the same project.
+---@return string
 local function buffer_root()
+  if vim.bo.buftype ~= '' and current_launch_root then
+    return current_launch_root
+  end
   local name = vim.api.nvim_buf_get_name(0)
   local dir = name ~= '' and vim.fs.dirname(name) or vim.fs.normalize(vim.uv.cwd() or '')
   local root = root_by_dir[dir]
@@ -107,214 +123,95 @@ end
 
 local reported_bad_json = {}
 
----Read and parse <root>/launch.json.
----
----pcall'd: this is reached from a BufEnter autocmd, and a malformed file would
----otherwise throw on every buffer switch. Report once per root.
+---Read <root>/launch.json into a list of { key, cmd, out }, sorted by key.
+---Reached from BufEnter, so problems are reported once per root rather than
+---on every buffer switch; a clean read re-arms the report.
 ---@param root string
----@return table?
-local function load_launch_json(root)
-  local path = root .. '/launch.json'
-  if vim.fn.filereadable(path) ~= 1 then return nil end
-
-  local joined = table.concat(vim.fn.readfile(path), '\n')
-  local ok, config = pcall(vim.json.decode, strip_jsonc(joined))
-  if not ok then
-    if not reported_bad_json[root] then
-      reported_bad_json[root] = true
-      vim.notify(('launch.json: could not parse %s\n%s'):format(path, config),
-        vim.log.levels.WARN)
-    end
-    return nil
-  end
-  reported_bad_json[root] = nil
-  return config
-end
-
----Resolve an OS-keyed table to this platform's value, passing anything else
----through. Shared by key_map (which has always supported this) and by the
----build/run arrays.
----@param spec any
----@return any
-local function os_pick(spec)
-  if type(spec) ~= 'table' then return spec end
-  if spec.mac or spec.linux or spec.windows then return spec[OS] end
-  return spec
-end
-
----Normalize one kind's spec into a flat target list.
----Accepts "cmd", ["cmd", ...], {name=,cmd=,...}, [{...}, ...], or an OS-keyed
----table wrapping any of those — all collapse to one internal shape so there is
----a single execution path.
----@param spec any
----@param kind "build"|"run"
 ---@return table[]
-local function normalize(spec, kind)
-  spec = os_pick(spec)
-  if spec == nil then return {} end
-  if type(spec) == 'string' then spec = { spec } end
-  if type(spec) ~= 'table' then return {} end
+local function load_entries(root)
+  local path = root .. '/launch.json'
+  if vim.fn.filereadable(path) ~= 1 then return {} end
 
-  local out = {}
-  for i, t in ipairs(spec) do
-    if type(t) == 'string' then t = { cmd = t } end
-    if type(t) == 'table' and type(t.cmd) == 'string' then
-      out[#out + 1] = {
-        name = t.name or (i == 1 and kind or (kind .. i)),
-        cmd = t.cmd,
-        kind = kind,
-        depends = t.depends,
-        height = tonumber(t.height),
-        index = i,
-      }
-    end
+  local ok, config = pcall(vim.json.decode, strip_jsonc(table.concat(vim.fn.readfile(path), '\n')))
+  if ok and type(config) ~= 'table' then
+    ok, config = false, 'expected an object of "<key>": command'
   end
-  return out
+
+  local loaded, problems = {}, {}
+  if ok then
+    local merged = {}
+    for key, value in pairs(config) do
+      if not PLATFORMS[key] then merged[key] = value end
+    end
+    for key, value in pairs(type(config[OS]) == 'table' and config[OS] or {}) do
+      merged[key] = value
+    end
+    for key, value in pairs(merged) do
+      if type(value) == 'string' then value = { cmd = value } end
+      if type(key) == 'string' and type(value) == 'table' and type(value.cmd) == 'string'
+          and (value.out == nil or type(value.out) == 'string') then
+        loaded[#loaded + 1] = { key = key, cmd = value.cmd, out = value.out or DEFAULT_OUT }
+      else
+        problems[#problems + 1] =
+          ('%s: expected "command" or { "cmd": "command", "out": "*name*" }'):format(key)
+      end
+    end
+    table.sort(loaded, function(a, b) return a.key < b.key end)
+  else
+    problems[1] = config
+  end
+
+  if #problems == 0 then
+    reported_bad_json[root] = nil
+  elseif not reported_bad_json[root] then
+    reported_bad_json[root] = true
+    vim.notify(('launch.json: %s\n%s'):format(path, table.concat(problems, '\n')),
+      vim.log.levels.WARN)
+  end
+  return loaded
 end
 
--- Parsed targets for the active root: { build = {...}, run = {...} }
-local targets = { build = {}, run = {} }
-
 --------------------------------------------------------------------------------
--- legacy key_map
+-- keys
 --------------------------------------------------------------------------------
-
--- Mappings that existed before launch.json overrode them, keyed by lhs, so
--- clear_keymaps can put them back. Without this, a launch.json binding a key
--- the config already owns (<leader>t, <F5>, ...) would silently clobber it,
--- and the vim.keymap.del on the next project switch would then delete it
--- outright — gone until restart.
-local shadowed = {}
 
 local function clear_keymaps()
-  for _, key in ipairs(active_keymaps) do
-    pcall(vim.keymap.del, 'n', key)
-    local prev = shadowed[key]
-    if prev then
-      -- maparg(..., true) gives a dict restorable by mapset.
-      pcall(vim.fn.mapset, prev)
-      shadowed[key] = nil
+  for _, entry in ipairs(entries) do
+    pcall(vim.keymap.del, 'n', entry.key)
+    if entry.prev then
+      pcall(vim.fn.mapset, entry.prev)
     end
-  end
-  active_keymaps = {}
-end
-
----@param key_map table<string, string>
-local function bind_legacy(key_map)
-  for key, cmd in pairs(key_map) do
-    table.insert(active_keymaps, key)
-    local prev = vim.fn.maparg(key, 'n', false, true)
-    if prev and not vim.tbl_isempty(prev) then
-      shadowed[key] = prev
-    end
-    vim.keymap.set('n', key, function()
-      run.run_build({ name = 'launch:' .. key, cmd = cmd }, find_project_root())
-    end, { noremap = true, silent = true, desc = 'launch.json: ' .. cmd })
   end
 end
 
---------------------------------------------------------------------------------
--- applying a project
---------------------------------------------------------------------------------
+---Bind each entry's key, keeping the mapping it shadows (<leader>b, <F5>, ...)
+---in entry.prev. Without that the next project switch would delete the
+---config's own mapping outright, gone until restart.
+---@param root string
+local function bind_keys(root)
+  for _, entry in ipairs(entries) do
+    local prev = vim.fn.maparg(entry.key, 'n', false, true)
+    entry.prev = not vim.tbl_isempty(prev) and prev or nil
+    vim.keymap.set('n', entry.key, function() run.start(entry, root) end,
+      { silent = true, desc = 'launch.json: ' .. entry.cmd })
+  end
+end
 
 ---@param root string
 local function apply_launch(root)
   if root == current_launch_root then return end
-
   clear_keymaps()
   current_launch_root = root
-  targets = { build = {}, run = {} }
-
-  local config = load_launch_json(root)
-  if not config then return end
-
-  targets.build = normalize(config.build, 'build')
-  targets.run = normalize(config.run, 'run')
-
-  local key_map = os_pick(config.key_map)
-  if type(key_map) == 'table' then bind_legacy(key_map) end
+  entries = load_entries(root)
+  bind_keys(root)
 end
 
---------------------------------------------------------------------------------
--- target resolution + dispatch
---------------------------------------------------------------------------------
-
----Fall back to the detected makeprg when a project has no launch.json. Means
----<leader>b builds any Makefile/Cargo/zig project with no config at all.
----@return table
-local function implicit_build()
-  require('utils.make_detect').apply()
-  return { name = 'make', cmd = vim.bo.makeprg, kind = 'build', index = 1 }
-end
-
----@param kind "build"|"run"
----@param n integer|nil  1-based; 0/nil mean "the default target"
----@return table|nil
-function M.target(kind, n)
-  local list = targets[kind]
-  local idx = (n and n > 0) and n or 1
-  local t = list[idx]
-  if t then return t end
-
-  if #list > 0 then
-    vim.notify(('launch: no %s target %d (have %d)'):format(kind, idx, #list),
-      vim.log.levels.WARN)
-    return nil
-  end
-  if kind == 'build' then return implicit_build() end
-
-  vim.notify('launch: no run targets — :LaunchInit writes a starter launch.json',
-    vim.log.levels.WARN)
-  return nil
-end
-
----@param target table|nil  nil when M.target() already reported why
-function M.start(target)
-  if not target then return end
-  local root = current_launch_root or find_project_root()
-
-  local function go()
-    if target.kind == 'run' then
-      run.run_term(target, root)
-    else
-      run.run_build(target, root)
-    end
-  end
-
-  -- "depends": "build" — chain, and only launch when the dependency succeeds.
-  if target.depends then
-    local dep = M.by_name(target.depends)
-    if not dep then
-      vim.notify(('launch: %s depends on unknown target %s')
-        :format(target.name, target.depends), vim.log.levels.ERROR)
-      return
-    end
-    run.run_build(dep, root, function(code)
-      if code == 0 then go() end
-    end)
-    return
-  end
-
-  go()
-end
-
----@param name string
----@return table|nil
-function M.by_name(name)
-  for _, kind in ipairs({ 'build', 'run' }) do
-    for _, t in ipairs(targets[kind]) do
-      if t.name == name then return t end
-    end
-  end
-  return nil
-end
-
----@return table[]
-function M.all()
-  local out = {}
-  vim.list_extend(out, targets.build)
-  vim.list_extend(out, targets.run)
-  return out
+---Re-read launch.json and rebind, e.g. after editing it.
+local function reload()
+  root_by_dir, reported_bad_json = {}, {}
+  local root = buffer_root()
+  current_launch_root = nil
+  apply_launch(root)
 end
 
 --------------------------------------------------------------------------------
@@ -323,95 +220,74 @@ end
 
 local STARTER = [[
 {
-  // Targets are ordered. <leader>b runs build #1, 2<leader>b runs build #2;
-  // <leader>r runs run #1, 2<leader>r runs run #2. Comments and trailing
-  // commas are fine — this file is parsed as JSONC.
+  // Each key is a normal-mode mapping, bound while you are in this project.
+  // The value is a shell command, or { "cmd": ..., "out": ... } where out
+  // names the buffer the output goes to (default "*compilation*").
+  // Errors in the output go to quickfix: <M-n>/<M-N> step, <CR> jumps.
+  // Comments and trailing commas are fine, this is parsed as JSONC.
 
-  "build": [
-    "make -j",
-    "make -j RELEASE=1"
-  ],
+  "<F1>": "make -j",
+  "<F4>": { "cmd": "make -j && ./build/app", "out": "*run*" },
 
-  "run": [
-    "./bin/tool --verbose",
-
-    // Long form, when a target needs options:
-    //   depends  build target to run first; only launches on success
-    //   height   output pane height, in lines
-    { "name": "game", "cmd": "./build/game", "depends": "build", "height": 20 }
-  ]
-
-  // Platform-specific variants are supported on any of the above:
-  //   "run": { "mac": ["./build/app.app/Contents/MacOS/app"], "linux": ["./build/app"] }
+  // Entries under mac/linux/windows override the ones above on that platform.
+  "linux": { "<F1>": "make -j LINUX=1" }
 }
 ]]
 
-function M.reset_cache()
-  current_launch_root = nil
-  root_by_dir = {}
-  reported_bad_json = {}
-  vim.notify('Launch root cache cleared', vim.log.levels.INFO)
+---@param entry table
+---@return string
+local function describe(entry)
+  return ('%-12s %-15s %s'):format(entry.key, entry.out, entry.cmd)
 end
 
-function M.show_root()
-  vim.notify('Current launch root: ' .. find_project_root(), vim.log.levels.INFO)
-end
-
-function M.info()
-  local root = current_launch_root or find_project_root()
-  local lines = { 'root  ' .. vim.fn.fnamemodify(root, ':~') }
-  local running = {}
-  for _, r in ipairs(run.list()) do
-    if r.running then running[r.name] = true end
+local function info()
+  local lines = { 'root  ' .. vim.fn.fnamemodify(current_launch_root, ':~') }
+  for _, entry in ipairs(entries) do
+    lines[#lines + 1] = describe(entry)
   end
-
-  for _, kind in ipairs({ 'build', 'run' }) do
-    for i, t in ipairs(targets[kind]) do
-      lines[#lines + 1] = ('%-5s %d  %-12s %s%s'):format(
-        kind, i, t.name, t.cmd, running[t.name] and '   [running]' or '')
-    end
+  if #entries == 0 then
+    lines[#lines + 1] = 'no launch.json, :LaunchInit writes one; <leader>b runs :Make'
   end
-  if #lines == 1 then
-    lines[#lines + 1] = 'no launch.json — :LaunchInit to create one'
-    lines[#lines + 1] = 'implicit build: ' .. implicit_build().cmd
+  for _, row in ipairs(run.list()) do
+    lines[#lines + 1] = ('running  %-15s %s'):format(row.out, row.cmd)
   end
   vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
 end
 
-function M.init_file()
-  local root = find_project_root()
-  local path = root .. '/launch.json'
-  if vim.fn.filereadable(path) == 1 then
-    vim.notify('launch.json already exists at ' .. path, vim.log.levels.WARN)
-    vim.cmd.edit(path)
-    return
+local function init_file()
+  local path = buffer_root() .. '/launch.json'
+  if vim.fn.filereadable(path) ~= 1 then
+    vim.fn.writefile(vim.split(vim.trim(STARTER), '\n'), path)
+    reload()
   end
-  vim.fn.writefile(vim.split(vim.trim(STARTER), '\n'), path)
-  M.reset_cache()
-  apply_launch(find_project_root())
   vim.cmd.edit(path)
-  vim.notify('Wrote ' .. path, vim.log.levels.INFO)
 end
 
----Pick a target. vim.ui.select rather than a hand-built telescope picker:
----telescope-ui-select is not installed, the list is a handful of items, and
----0.13's built-in select is already a popup — a picker here would mean pulling
----telescope in on a keypress to fuzzy-match four lines.
-function M.pick()
-  local list = M.all()
-  if #list == 0 then
-    vim.notify('launch: no targets — :LaunchInit to create launch.json',
-      vim.log.levels.WARN)
+local function pick()
+  if #entries == 0 then
+    vim.notify('launch: no launch.json here, :LaunchInit writes one', vim.log.levels.WARN)
     return
   end
-  vim.ui.select(list, {
-    prompt = 'Launch target',
-    format_item = function(t)
-      return ('%-5s %-12s %s'):format(t.kind, t.name, t.cmd)
-    end,
-  }, function(choice)
-    if choice then M.start(choice) end
+  vim.ui.select(entries, { prompt = 'Launch', format_item = describe }, function(entry)
+    if entry then run.start(entry, current_launch_root) end
   end)
+end
+
+local function stop_all()
+  local n = run.stop_all()
+  vim.notify(n > 0 and ('launch: stopped %d job(s)'):format(n)
+    or 'launch: nothing running', vim.log.levels.INFO)
+end
+
+---:Make [args]: the detected build command, for a project without a
+---launch.json, into the same buffer launch.json builds use.
+local function make(o)
+  local cmd = detect_build(current_launch_root, vim.bo.filetype)
+  if o.args ~= '' then cmd = cmd .. ' ' .. o.args end
+  -- The Jai fallback compiles `%`. Expand it as :make would, to an absolute
+  -- path since the command runs in the root.
+  cmd = cmd:gsub('%%', vim.fn.expand('%:p'))
+  run.start({ key = ':Make', cmd = cmd, out = DEFAULT_OUT }, current_launch_root)
 end
 
 --------------------------------------------------------------------------------
@@ -420,18 +296,24 @@ end
 
 function M.setup()
   run.setup()
-  apply_launch(find_project_root())
+
+  local cmd = vim.api.nvim_create_user_command
+
+  -- Before the first project is applied, so a launch.json key can shadow
+  -- <leader>b and give it back.
+  cmd('Make', make, { nargs = '*', desc = 'Build with the detected build command' })
+  vim.keymap.set('n', '<leader>b', '<cmd>Make<cr>', { desc = 'Build with the detected build command' })
+
+  apply_launch(buffer_root())
 
   local group = vim.api.nvim_create_augroup('launch_auto', { clear = true })
-
-  -- Re-evaluate keymaps when project context changes (cached per directory).
   vim.api.nvim_create_autocmd('BufEnter', {
     group = group,
     callback = function() apply_launch(buffer_root()) end,
   })
 
   -- A cwd change invalidates every unnamed-buffer entry and any root that
-  -- fell back to cwd, so drop the whole cache — DirChanged is rare.
+  -- fell back to cwd, so drop the whole cache. DirChanged is rare.
   vim.api.nvim_create_autocmd('DirChanged', {
     group = group,
     callback = function()
@@ -440,68 +322,49 @@ function M.setup()
     end,
   })
 
-  vim.keymap.set('n', '<leader>b', function()
-    M.start(M.target('build', vim.v.count))
-  end, { desc = 'Build (count picks target)' })
+  vim.keymap.set('n', '<leader>o', run.toggle_pane, { desc = 'Toggle launch output pane' })
+  vim.keymap.set('n', '<leader>x', stop_all, { desc = 'Stop running launch jobs' })
+  vim.keymap.set('n', '<leader>ft', pick, { desc = 'Pick a launch.json command' })
 
-  vim.keymap.set('n', '<leader>r', function()
-    M.start(M.target('run', vim.v.count))
-  end, { desc = 'Run (count picks target)' })
-
-  vim.keymap.set('n', '<leader>o', run.toggle_pane,
-    { desc = 'Toggle launch output pane' })
-
-  vim.keymap.set('n', '<leader>x', function()
-    local n = run.stop_all()
-    vim.notify(n > 0 and ('launch: stopped %d job(s)'):format(n)
-      or 'launch: nothing running', vim.log.levels.INFO)
-  end, { desc = 'Stop running launch jobs' })
-
-  vim.keymap.set('n', '<leader>ft', M.pick, { desc = 'Pick a launch target' })
-
-  local cmd = vim.api.nvim_create_user_command
   cmd('Launch', function(o)
-    if o.args == '' then M.start(M.target('run')) return end
-    local t = M.by_name(o.args) or M.all()[tonumber(o.args) or -1]
-    if not t then
-      vim.notify('launch: no such target: ' .. o.args, vim.log.levels.ERROR)
+    if o.args == '' then
+      pick()
       return
     end
-    M.start(t)
+    for _, entry in ipairs(entries) do
+      if entry.key == o.args then
+        run.start(entry, current_launch_root)
+        return
+      end
+    end
+    vim.notify('launch: no such key: ' .. o.args, vim.log.levels.ERROR)
   end, {
     nargs = '?',
-    desc = 'Run a launch target by name or index',
+    desc = 'Run a launch.json command by key',
     complete = function()
-      return vim.tbl_map(function(t) return t.name end, M.all())
+      return vim.tbl_map(function(entry) return entry.key end, entries)
     end,
   })
 
   cmd('LaunchStop', function(o)
-    if o.args ~= '' then
+    if o.args == '' then
+      stop_all()
+    else
       vim.notify(run.stop(o.args) and ('launch: stopped ' .. o.args)
         or ('launch: ' .. o.args .. ' was not running'), vim.log.levels.INFO)
-      return
     end
-    local n = run.stop_all()
-    vim.notify(('launch: stopped %d job(s)'):format(n), vim.log.levels.INFO)
   end, {
     nargs = '?',
-    desc = 'Stop one launch job, or all',
+    desc = "Stop one output buffer's job, or all",
     complete = function()
-      return vim.tbl_map(function(r) return r.name end, run.list())
+      return vim.tbl_map(function(row) return row.out end, run.list())
     end,
   })
 
-  cmd('LaunchList', M.info, { desc = 'List launch targets and running jobs' })
-  cmd('LaunchQF', run.to_quickfix,
-    { desc = 'Send the launch output pane through errorformat to quickfix' })
-  cmd('LaunchInit', M.init_file, { desc = 'Write a starter launch.json' })
-  cmd('LaunchReset', M.reset_cache, { desc = 'Reset launch root cache' })
-  cmd('LaunchInfo', M.show_root, { desc = 'Show current launch root' })
-  cmd('LaunchReload', function()
-    M.reset_cache()
-    apply_launch(find_project_root())
-  end, { desc = 'Reload launch configuration' })
+  cmd('LaunchList', info, { desc = 'List launch.json commands and running jobs' })
+  cmd('LaunchQF', run.quickfix, { desc = "Re-parse the last output buffer's errors into quickfix" })
+  cmd('LaunchInit', init_file, { desc = 'Write a starter launch.json, or open the existing one' })
+  cmd('LaunchReload', reload, { desc = 'Re-read launch.json after editing it' })
 end
 
 return M
