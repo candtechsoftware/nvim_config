@@ -1,4 +1,3 @@
--- Odin Language Server configuration
 return {
   cmd = { 'ols' },
   filetypes = { 'odin' },

@@ -1,4 +1,3 @@
--- Zig Language Server configuration
 return {
   cmd = { 'zls' },
   filetypes = { 'zig' },

@@ -1,64 +1,32 @@
--- Smart identifier completion for unity-build C/C++ with no LSP.
---
--- Wired as 'completefunc' (see after/ftplugin/c.lua), invoked by <Tab> via
--- <C-x><C-u> on a plain identifier. Candidates are real identifiers only —
--- never words from comments or string literals — drawn from the buffer's
--- treesitter tree merged with the project's ctags symbols, ranked so the
--- most relevant lead the popup:
---   [local]    identifier inside the function enclosing the cursor
---   [file]     identifier elsewhere in the current buffer
---   [project]  symbol from the ctags file (other files in the project)
---
--- Struct/union member completion (`.` / `->`) is handled by M.omnifunc below
--- (wired as 'omnifunc' in after/ftplugin/c.lua, invoked via <C-x><C-o>):
--- treesitter resolves the type of the variable before the operator, then the
--- project's ctags index supplies that type's members. This replaces the
--- built-in `ccomplete`, which resolves types unreliably from the tags file.
-
+-- Completion for C-family buffers with no LSP, wired in after/ftplugin/c.lua.
+-- complete(): identifiers ranked [local] > [file] > [open] > [project], from the
+-- treesitter trees of the open buffers plus the tags file.
+-- omnifunc(): members after `.`/`->`/`::`. Treesitter resolves the variable's
+-- type, the tags file supplies that type's members.
 local M = {}
 
--- treesitter node types that are genuine identifiers (valid in c and cpp).
 local ID_QUERY = '[(identifier) (field_identifier) (type_identifier)] @id'
+local DECL_QUERY = '[(declaration) (parameter_declaration)] @decl'
+local SCOPE_NODES = { function_definition = true, lambda_expression = true }
+local C_FILETYPES = { c = true, cpp = true, objc = true, objcpp = true }
 
--- Node types that bound a "local" scope for the [local] rank.
-local SCOPE_NODES = {
-  function_definition = true,
-  lambda_expression = true,
-}
+local MAX_IDENTS = 4000
+local MAX_OPEN_IDENTS = 2000
+local MAX_TAGS = 300
 
-local MAX_IDENTS = 4000   -- cap the file-wide treesitter walk on huge buffers
-local MAX_TAGS = 300      -- cap project symbols pulled from the tags file
-
-local RANK_LOCAL, RANK_FILE, RANK_OBUF, RANK_TAG = 0, 1, 2, 3
+local RANK_LOCAL, RANK_FILE, RANK_OPEN, RANK_TAG = 0, 1, 2, 3
 local RANK_LABEL = {
   [RANK_LOCAL] = '[local]',
   [RANK_FILE] = '[file]',
-  [RANK_OBUF] = '[open]',
+  [RANK_OPEN] = '[open]',
   [RANK_TAG] = '[project]',
 }
 
--- Per-buffer cap on identifiers pulled from each OTHER open buffer ([open]),
--- so completing from a session with many files loaded stays bounded.
-local MAX_OBUF_IDENTS = 2000
-
--- Filetypes whose open buffers contribute [open] identifiers (treesitter
--- parses these as c/cpp). Matches the C-family completion is wired for.
-local OBUF_FILETYPES = { c = true, cpp = true, objc = true, objcpp = true }
-
----True if `word` can complete `base`: a case-insensitive prefix match that
----is not an exact-case repeat of `base`. (Completing the typed word to
----itself is the only true no-op — a different-cased hit like `Foo` for
----`foo` is a useful completion and must NOT be excluded.)
----@param word string
----@param base string
----@param blow string  base:lower(), hoisted by the caller
----@return boolean
+-- Case-insensitive prefix match. Only the exact word already typed is excluded.
 local function matches(word, base, blow)
   return word ~= base and word:sub(1, #blow):lower() == blow
 end
 
----0-based byte column where the identifier under the cursor begins.
----@return integer
 local function find_start()
   local line = vim.fn.getline('.')
   local s = vim.fn.col('.') - 1
@@ -68,67 +36,46 @@ local function find_start()
   return s
 end
 
----Record identifier captures under `node`, keeping each word's best (lowest)
----rank.
----@param node TSNode
----@param query vim.treesitter.Query
----@param buf integer
----@param rank integer
----@param base string
----@param blow string
----@param found table<string, integer>
-local function collect(node, query, buf, rank, base, blow, found)
-  for _, idnode in query:iter_captures(node, buf) do
-    local text = vim.treesitter.get_node_text(idnode, buf)
-    if matches(text, base, blow) and (found[text] == nil or rank < found[text]) then
-      found[text] = rank
-    end
-  end
+local function root_and_query(buf, src)
+  local ok, parser = pcall(vim.treesitter.get_parser, buf)
+  if not ok or not parser then return end
+  local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), src)
+  if not ok_q then return end
+  local tree = (parser:parse() or {})[1]
+  if tree then return tree:root(), query end
 end
 
--- Full-tree identifier sets cached per buffer, keyed by changedtick. Each
--- <Tab> used to re-run the whole-tree capture walk for the current buffer AND
--- every other open C buffer — get_node_text allocates a fresh string per
--- capture, so a many-file session paid thousands of allocations per keypress.
--- The word SET is independent of the typed prefix, so it is collected once
--- per edit and only the cheap prefix filter runs per completion. Entries for
--- unloaded buffers are pruned in M.complete.
+local function enclosing_scope(node)
+  while node and not SCOPE_NODES[node:type()] do
+    node = node:parent()
+  end
+  return node
+end
+
+local function identifiers(node, query, buf, cap)
+  local words, n = {}, 0
+  for _, id in query:iter_captures(node, buf) do
+    n = n + 1
+    if n > cap then break end
+    words[vim.treesitter.get_node_text(id, buf)] = true
+  end
+  return words
+end
+
+-- Whole-buffer identifier sets, recollected only when the buffer changes.
 local ident_cache = {}
 
----Unfiltered identifier words in `buf`'s full tree, cached by changedtick.
----@param buf integer
----@param cap integer  max captures walked when (re)collecting
----@return table<string, true>
-local function cached_identifiers(buf, cap)
+local function buffer_words(buf, cap)
   local tick = vim.api.nvim_buf_get_changedtick(buf)
   local entry = ident_cache[buf]
   if entry and entry.tick == tick and entry.cap == cap then return entry.words end
-
-  local words = {}
-  local ok, parser = pcall(vim.treesitter.get_parser, buf)
-  if ok and parser then
-    local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), ID_QUERY)
-    local tree = ok_q and (parser:parse() or {})[1] or nil
-    if tree and query then
-      local n = 0
-      for _, idnode in query:iter_captures(tree:root(), buf) do
-        n = n + 1
-        if n > cap then break end
-        words[vim.treesitter.get_node_text(idnode, buf)] = true
-      end
-    end
-  end
+  local root, query = root_and_query(buf, ID_QUERY)
+  local words = root and identifiers(root, query, buf, cap) or {}
   ident_cache[buf] = { tick = tick, cap = cap, words = words }
   return words
 end
 
----Merge a cached word set into `found`, keeping each word's best rank.
----@param words table<string, true>
----@param rank integer
----@param base string
----@param blow string
----@param found table<string, integer>
-local function merge_words(words, rank, base, blow, found)
+local function merge(words, rank, base, blow, found)
   for word in pairs(words) do
     if matches(word, base, blow) and (found[word] == nil or rank < found[word]) then
       found[word] = rank
@@ -136,102 +83,52 @@ local function merge_words(words, rank, base, blow, found)
   end
 end
 
----Real identifiers in the current buffer, via treesitter.
----@param base string  prefix to match (may be empty)
----@param blow string
----@return table<string, integer>  identifier -> best (lowest) scope rank
-local function buffer_identifiers(base, blow)
-  local found = {}
-  local buf = vim.api.nvim_get_current_buf()
-  local ok, parser = pcall(vim.treesitter.get_parser, buf)
-  if not ok or not parser then return found end
-  local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), ID_QUERY)
-  if not ok_q or not query then return found end
-  local tree = (parser:parse() or {})[1]
-  if not tree then return found end
-  local root = tree:root()
-
-  -- The function enclosing the cursor is walked in full and uncached (it is
-  -- small and cursor-dependent), so the [local] rank is always correct; only
-  -- the file-wide set is capped, so a huge buffer loses some [file]
-  -- suggestions but never [local] ones.
-  local crow, ccol = unpack(vim.api.nvim_win_get_cursor(0))
-  local node = root:named_descendant_for_range(crow - 1, ccol, crow - 1, ccol)
-  while node and not SCOPE_NODES[node:type()] do
-    node = node:parent()
-  end
-  if node then
-    collect(node, query, buf, RANK_LOCAL, base, blow, found)
-  end
-  merge_words(cached_identifiers(buf, MAX_IDENTS), RANK_FILE, base, blow, found)
-  return found
-end
-
----Merge identifiers from the OTHER loaded, listed C-family buffers into
----`found` at RANK_OBUF. This is what lets <Tab> complete across the files you
----have open with `:e`/`:vs`, with no project-wide index — merging only
----lowers a word's rank, so an identifier already seen in the current buffer
----([local]/[file]) keeps its better rank and is not demoted to [open].
----@param base string
----@param blow string
----@param found table<string, integer>
-local function open_buffer_identifiers(base, blow, found)
-  local cur = vim.api.nvim_get_current_buf()
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if buf ~= cur
-      and vim.api.nvim_buf_is_loaded(buf)
-      and vim.bo[buf].buflisted
-      and OBUF_FILETYPES[vim.bo[buf].filetype]
-    then
-      merge_words(cached_identifiers(buf, MAX_OBUF_IDENTS), RANK_OBUF, base, blow, found)
-    end
-  end
-end
-
----Project symbols matching `base` from the ctags file (&tags).
----@param base string
----@return string[]
-local function tag_symbols(base)
-  if base == '' then return {} end
-  local ok, names = pcall(vim.fn.getcompletion, base, 'tag')
-  if not ok or type(names) ~= 'table' then return {} end
-  return names
-end
-
----'completefunc' implementation. See |complete-functions|.
----@param findstart integer
----@param base string
 function M.complete(findstart, base)
-  if findstart == 1 then
-    return find_start()
-  end
-  base = base or ''
+  if findstart == 1 then return find_start() end
   local blow = base:lower()
 
-  -- Drop cached word sets whose buffer has been unloaded.
   for buf in pairs(ident_cache) do
     if not vim.api.nvim_buf_is_loaded(buf) then ident_cache[buf] = nil end
   end
 
-  local found = buffer_identifiers(base, blow)
-  open_buffer_identifiers(base, blow, found)
+  local found = {}
+  local cur = vim.api.nvim_get_current_buf()
+  local root, query = root_and_query(cur, ID_QUERY)
+  if root then
+    -- The enclosing function is walked uncapped so [local] is never lost.
+    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    local scope = enclosing_scope(root:named_descendant_for_range(row - 1, col, row - 1, col))
+    if scope then
+      merge(identifiers(scope, query, cur, math.huge), RANK_LOCAL, base, blow, found)
+    end
+    merge(buffer_words(cur, MAX_IDENTS), RANK_FILE, base, blow, found)
+  end
+
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if buf ~= cur and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buflisted
+      and C_FILETYPES[vim.bo[buf].filetype] then
+      merge(buffer_words(buf, MAX_OPEN_IDENTS), RANK_OPEN, base, blow, found)
+    end
+  end
 
   local list = {}
-  local seen = {}
   for word, rank in pairs(found) do
-    seen[word] = true
     list[#list + 1] = { word = word, rank = rank }
   end
 
-  local tag_count = 0
-  for _, name in ipairs(tag_symbols(base)) do
-    if tag_count >= MAX_TAGS then break end
-    -- tag names can be operators or qualified (operator==, Foo::bar) — this
-    -- path only completes plain identifiers.
-    if not seen[name] and name:match('^[%a_][%w_]*$') and matches(name, base, blow) then
-      seen[name] = true
+  local tags = {}
+  if base ~= '' then
+    local ok, names = pcall(vim.fn.getcompletion, base, 'tag')
+    tags = ok and names or {}
+  end
+  local ntags = 0
+  for _, name in ipairs(tags) do
+    if ntags >= MAX_TAGS then break end
+    -- Tag names can be operators or qualified names; only plain identifiers complete here.
+    if not found[name] and name:match('^[%a_][%w_]*$') and matches(name, base, blow) then
+      found[name] = RANK_TAG
       list[#list + 1] = { word = name, rank = RANK_TAG }
-      tag_count = tag_count + 1
+      ntags = ntags + 1
     end
   end
 
@@ -239,7 +136,6 @@ function M.complete(findstart, base)
     if a.rank ~= b.rank then return a.rank < b.rank end
     return a.word < b.word
   end)
-
   local items = {}
   for _, e in ipairs(list) do
     items[#items + 1] = { word = e.word, menu = RANK_LABEL[e.rank], icase = 1 }
@@ -247,150 +143,89 @@ function M.complete(findstart, base)
   return items
 end
 
--- ===========================================================================
--- Member completion (`.` / `->`): treesitter type resolution + ctags members.
--- ===========================================================================
+-- Member index parsed from the first tags file on &tags, rebuilt when it changes.
+local tag_index = {}
 
--- Parsed ctags member index, keyed by the project tags file + its mtime so it
--- is rebuilt only after a regenerate (debounced save in lua/config/ctags.lua).
-local tag_index_cache = { path = nil, stamp = nil, index = nil }
-
----First existing tags file on &tags (the project cache file is listed first).
----@return string?
-local function project_tags_file()
-  for _, t in ipairs(vim.split(vim.bo.tags, ',', { trimempty = true })) do
-    if vim.uv.fs_stat(t) then return t end
-  end
+-- ctags kinds the index reads: member, enumerator, typedef, struct, union, enum.
+local WANT_KIND = {}
+for kind in ('metsug'):gmatch('.') do
+  WANT_KIND[kind:byte()] = true
 end
+local AGGREGATE_PREFIX = { s = 'struct:', u = 'union:', g = 'enum:' }
 
--- The ctags kind letters this index actually uses, keyed by byte value so the
--- hot loop in parse_tags can test one byte instead of building a substring.
---   m member  e enumerator  t typedef  s struct  u union  g enum
--- Everything else in the file (f function, v variable, d macro, p prototype,
--- x extern, l local, ...) is skipped before any pattern matching runs.
-local WANT_KIND = {
-  [string.byte('m')] = true,
-  [string.byte('e')] = true,
-  [string.byte('t')] = true,
-  [string.byte('s')] = true,
-  [string.byte('u')] = true,
-  [string.byte('g')] = true,
-}
-
----Pull a `struct:`/`union:`/`enum:`/`class:` scope token out of a tag field.
----@param field string
----@return string?
 local function scope_token(field)
   return field:match('^(struct:.+)$') or field:match('^(union:.+)$')
     or field:match('^(enum:.+)$') or field:match('^(class:.+)$')
 end
 
----Parse a ctags file into the lookups member completion needs:
----  members    scope ("struct:Foo") -> list of { name, type }
----  typedefs   typedef name          -> aggregate scope it aliases
----  aggregates struct/union/enum name -> its own scope ("struct:Foo")
----@param path string
----@return { members: table, typedefs: table, aggregates: table }
+-- members:    "struct:Foo" -> { { name, type } }
+-- typedefs:   typedef name -> the aggregate scope it aliases
+-- aggregates: struct/union/enum name -> its own scope
 local function parse_tags(path)
   local members, typedefs, aggregates = {}, {}, {}
   local f = io.open(path, 'r')
-  if not f then return { members = members, typedefs = typedefs, aggregates = aggregates } end
-  for line in f:lines() do
-    if line:byte(1) ~= 33 then -- skip "!_TAG_..." pseudo-tags
-      -- Reject uninteresting lines as cheaply as possible, BEFORE running any
-      -- pattern match. About half of a C tags file is kinds this index does not
-      -- use (f, v, d, p, x, l...), and the old code ran `^([^\t]+)\t` plus a
-      -- gmatch field loop over every one of them. On a 6.7MB/35k-line file that
-      -- was 77ms; rejecting on the kind letter first brings it to 33ms for a
-      -- byte-identical index.
-      --
-      -- `find(..., true)` is a plain substring search (no regex engine). `sep`
-      -- is the index of the ';' in the `;"` that terminates the search command,
-      -- so: ';'=sep, '"'=sep+1, '\t'=sep+2, kind letter=sep+3.
+  if f then
+    for line in f:lines() do
+      -- `;"<Tab>` ends the search command and the kind letter follows it. Checking
+      -- the kind first skips the unused half of the file before any pattern runs.
       local sep = line:find(';"\t', 1, true)
-      if sep and WANT_KIND[line:byte(sep + 3)] then
+      if line:byte(1) ~= 33 and sep and WANT_KIND[line:byte(sep + 3)] then
         local kind = line:sub(sep + 3, sep + 3)
         local name = line:match('^([^\t]+)\t')
-        -- Fields follow the `;"`; the first is the kind letter, the rest are
-        -- key:value (scope, typeref, ...).
-        local fields = line:sub(sep + 3)
         if name then
           local scope, typeref
           local i = 0
-          for fld in (fields .. '\t'):gmatch('([^\t]*)\t') do
+          for field in (line:sub(sep + 3) .. '\t'):gmatch('([^\t]*)\t') do
             i = i + 1
             if i > 1 then
-              scope = scope_token(fld) or scope
-              typeref = fld:match('^typeref:(.+)$') or typeref
+              scope = scope_token(field) or scope
+              typeref = field:match('^typeref:(.+)$') or typeref
             end
           end
           if (kind == 'm' or kind == 'e') and scope then
-            local list = members[scope]
-            if not list then list = {}; members[scope] = list end
-            list[#list + 1] = { name = name, type = typeref }
+            members[scope] = members[scope] or {}
+            table.insert(members[scope], { name = name, type = typeref })
           elseif kind == 't' and typeref then
-            local tr = scope_token(typeref)
-            if tr then typedefs[name] = tr end
-          elseif kind == 's' then
-            aggregates[name] = 'struct:' .. name
-          elseif kind == 'u' then
-            aggregates[name] = 'union:' .. name
-          elseif kind == 'g' then
-            aggregates[name] = 'enum:' .. name
+            local aliased = scope_token(typeref)
+            if aliased then typedefs[name] = aliased end
+          elseif AGGREGATE_PREFIX[kind] then
+            aggregates[name] = AGGREGATE_PREFIX[kind] .. name
           end
         end
       end
     end
+    f:close()
   end
-  f:close()
   return { members = members, typedefs = typedefs, aggregates = aggregates }
 end
 
----The current project's member index, rebuilt only when the tags file changes.
----@return { members: table, typedefs: table, aggregates: table }?
 local function get_tag_index()
-  local path = project_tags_file()
-  if not path then return end
-  local st = vim.uv.fs_stat(path)
-  if not st then return end
-  -- Key on nanoseconds AND size, not just mtime.sec. At one-second granularity
-  -- a regenerate landing in the same wall-clock second as the previous stat
-  -- looked unchanged, and the stale index was served with no way to invalidate
-  -- it short of another save.
-  local stamp = ('%d.%d.%d'):format(st.mtime.sec, st.mtime.nsec, st.size)
-  if tag_index_cache.path == path and tag_index_cache.stamp == stamp then
-    return tag_index_cache.index
+  for _, path in ipairs(vim.split(vim.bo.tags, ',', { trimempty = true })) do
+    local st = vim.uv.fs_stat(path)
+    if st then
+      local stamp = ('%d.%d.%d'):format(st.mtime.sec, st.mtime.nsec, st.size)
+      if tag_index.path ~= path or tag_index.stamp ~= stamp then
+        tag_index = { path = path, stamp = stamp, index = parse_tags(path) }
+      end
+      return tag_index.index
+    end
   end
-  local index = parse_tags(path)
-  tag_index_cache = { path = path, stamp = stamp, index = index }
-  return index
 end
 
----Resolve a type name to the member-scope key whose members we should list,
----following one typedef hop and falling back to a direct aggregate guess.
----@param index table
----@param typename string
----@return string?
+-- The member scope for a type name, following one typedef hop.
 local function scope_for_type(index, typename)
-  typename = typename
-    :gsub('^%s*struct%s+', ''):gsub('^%s*union%s+', ''):gsub('^%s*enum%s+', '')
+  typename = typename:gsub('^%s*struct%s+', ''):gsub('^%s*union%s+', ''):gsub('^%s*enum%s+', '')
   typename = typename:match('^%s*([%w_]+)') or typename
   local td = index.typedefs[typename]
   if td and index.members[td] then return td end
   local agg = index.aggregates[typename]
   if agg and index.members[agg] then return agg end
-  for _, pre in ipairs({ 'struct:', 'union:', 'enum:', 'class:' }) do
-    if index.members[pre .. typename] then return pre .. typename end
+  for _, prefix in ipairs({ 'struct:', 'union:', 'enum:', 'class:' }) do
+    if index.members[prefix .. typename] then return prefix .. typename end
   end
 end
 
--- Declarations and parameters — the nodes that bind a name to a type.
-local DECL_QUERY = '[(declaration) (parameter_declaration)] @decl'
-
----Innermost declared identifier under a declarator subtree (peels
----pointer/array/init/function declarators down to the name).
----@param node TSNode
----@return string?
+-- The identifier a declarator binds, under any pointer/array/init/function declarators.
 local function declared_name(node)
   local t = node:type()
   if t == 'identifier' or t == 'field_identifier' then
@@ -400,76 +235,47 @@ local function declared_name(node)
   if inner then return declared_name(inner) end
   for child in node:iter_children() do
     if child:named() then
-      local r = declared_name(child)
-      if r then return r end
+      local name = declared_name(child)
+      if name then return name end
     end
   end
 end
 
----Type name from a `type:` node — the tag/aggregate name for struct/union/enum
----specifiers, otherwise the node text (type_identifier, primitive_type, ...).
----@param type_node TSNode
----@return string?
 local function type_name(type_node)
   local t = type_node:type()
-  if t == 'struct_specifier' or t == 'union_specifier'
-    or t == 'enum_specifier' or t == 'class_specifier' then
-    local nm = type_node:field('name')[1]
-    return nm and vim.treesitter.get_node_text(nm, 0) or nil
+  if t == 'struct_specifier' or t == 'union_specifier' or t == 'enum_specifier' or t == 'class_specifier' then
+    local name = type_node:field('name')[1]
+    return name and vim.treesitter.get_node_text(name, 0) or nil
   end
   return vim.treesitter.get_node_text(type_node, 0)
 end
 
--- The project's storage-class macros. tree-sitter has no idea these are
--- storage classes, so it mis-parses any declaration starting with one and the
--- `type:`/`declarator:` fields cannot be trusted — see `decl_binds` below.
--- (after/ftplugin/c.lua plays the same trick for cindent, and
--- after/queries/c/highlights.scm has its own ERROR-node workaround for
--- highlighting. This is the completion path's version.)
-local STORAGE_MACROS = {
-  internal = true, global = true, local_persist = true, ['function'] = true,
-}
+-- Storage-class macros treesitter mis-parses as the declaration's type.
+local STORAGE_MACROS = { internal = true, global = true, local_persist = true, ['function'] = true }
 
----Does `node` bind `var`, and if so to what type?
----
----Straightforward for a well-formed declaration: read the `type:` and
----`declarator:` fields. But `global Foo bar;` parses as
----  (declaration type: (type_identifier)"global" (ERROR (identifier)"Foo")
----                declarator: (identifier)"bar")
----— the macro is taken as the type and the real type is stranded in an ERROR
----node. There is no stable rule for digging it back out, because the recovery
----shape is not even consistent: for `internal Widget w;` the parser puts the
----TYPE in `declarator:` and the NAME in the ERROR node, exactly the other way
----round. So instead of pattern-matching error recovery, rewrite the macro to
----`static` (which tree-sitter parses correctly, as a real storage_class_specifier)
----and re-parse the one declaration in isolation.
----@param node TSNode
----@param buf integer
----@param var string
----@return string?  type name, if this declaration binds `var`
+-- The type `node` declares `var` with, if it declares `var` at all.
 local function decl_binds(node, buf, var)
   local tnode = node:field('type')[1]
   if not tnode then return end
 
   local macro = vim.treesitter.get_node_text(tnode, buf)
   if not STORAGE_MACROS[macro] then
-    -- Normal declaration: trust the fields.
     for _, dnode in ipairs(node:field('declarator')) do
       if declared_name(dnode) == var then return type_name(tnode) end
     end
     return
   end
 
+  -- Error recovery around the macro has no stable shape, so swap it for
+  -- `static` and re-parse the declaration on its own.
   local text = vim.treesitter.get_node_text(node, buf)
   local fixed = text:gsub('^(%s*)' .. vim.pesc(macro) .. '%f[%W]', '%1static', 1)
   if fixed == text then return end
-
   local ok, sparser = pcall(vim.treesitter.get_string_parser, fixed, 'c')
   if not ok or not sparser then return end
   local stree = (sparser:parse() or {})[1]
   if not stree then return end
 
-  -- Find the declaration in the re-parsed fragment and read its real fields.
   local found
   local function walk(n)
     if found then return end
@@ -485,85 +291,34 @@ local function decl_binds(node, buf, var)
   local ftype = found:field('type')[1]
   if not ftype then return end
   for _, dnode in ipairs(found:field('declarator')) do
-    -- declared_name/type_name read text via buffer 0; on this detached tree the
-    -- nodes belong to `fixed`, so pull the text from the string instead.
     local name = vim.treesitter.get_node_text(dnode, fixed)
-    -- peel pointer/array declarators down to the bare name
     name = name:match('([%a_][%w_]*)%s*[%[%(]?') or name
     if name == var then
-      local tn = vim.treesitter.get_node_text(ftype, fixed)
-      local nm = ftype:field('name')[1]
-      if nm then tn = vim.treesitter.get_node_text(nm, fixed) end
-      return tn
+      local tname = ftype:field('name')[1]
+      return vim.treesitter.get_node_text(tname or ftype, fixed)
     end
   end
 end
 
----Type name of the variable `var`, via the nearest declaration at or above the
----cursor that binds it, preferring one inside the cursor's enclosing function
----over a file-scope one.
----
----The scope preference matters in a unity build: this used to take the nearest
----declaration above the cursor anywhere in the file, so in a 17k-line file
----where `arena`/`ctx`/`state` are re-declared in every function, a name that is
----NOT declared in the current function silently resolved to some unrelated
----function's local and offered that type's members. Wrong-but-confident is
----worse than empty.
----@param buf integer
----@param var string
----@param crow integer  1-based cursor row
----@return string?
+-- The type of `var` from the nearest declaration at or above the cursor. Only
+-- the cursor's own function or file scope can bind the name the cursor sees,
+-- and a local shadows a file-scope declaration.
 local function resolve_var_type(buf, var, crow)
-  local ok, parser = pcall(vim.treesitter.get_parser, buf)
-  if not ok or not parser then return end
-  local tree = (parser:parse() or {})[1]
-  if not tree then return end
-  local ok_q, query = pcall(vim.treesitter.query.parse, parser:lang(), DECL_QUERY)
-  if not ok_q or not query then return end
-
-  -- The function (if any) the cursor sits in.
-  local cursor_scope = vim.treesitter.get_node({ bufnr = buf, pos = { crow - 1, 0 } })
-  while cursor_scope and not SCOPE_NODES[cursor_scope:type()] do
-    cursor_scope = cursor_scope:parent()
-  end
-
-  ---The function enclosing `node`, or nil if it is at file scope.
-  ---@param node TSNode
-  ---@return TSNode?
-  local function enclosing_fn(node)
-    local n = node:parent()
-    while n and not SCOPE_NODES[n:type()] do
-      n = n:parent()
-    end
-    return n
-  end
+  local root, query = root_and_query(buf, DECL_QUERY)
+  if not root then return end
+  local cursor_scope = enclosing_scope(vim.treesitter.get_node({ bufnr = buf, pos = { crow - 1, 0 } }))
 
   local best, best_row, best_local = nil, -1, false
-  -- Bound the walk to rows at or above the cursor: a declaration below can
-  -- never bind the name the cursor sees, and in a 17k-line unity file the
-  -- unbounded full-tree walk ran on every member-completion <Tab>.
-  for _, node in query:iter_captures(tree:root(), buf, 0, crow) do
+  for _, node in query:iter_captures(root, buf, 0, crow) do
     local srow = node:range()
     if srow <= crow - 1 then
-      local fn = enclosing_fn(node)
-      -- Only two kinds of declaration can bind the name the cursor sees: one
-      -- in the cursor's own function, or one at file scope. A declaration
-      -- inside a DIFFERENT function is invisible here, and must be ignored
-      -- rather than used as a fallback — that is what made `arena`/`ctx`/
-      -- `state` resolve to an unrelated function's type and complete members
-      -- that do not exist on the variable in front of you. No answer is the
-      -- correct answer for an undeclared name.
-      local visible = (fn == nil) or (cursor_scope ~= nil and fn:equal(cursor_scope))
-      if visible then
-        local is_local = fn ~= nil
-        -- A local shadows a file-scope declaration; among equals, nearest wins.
-        local better = (is_local and not best_local)
-          or (is_local == best_local and srow > best_row)
-        if better then
-          local tn = decl_binds(node, buf, var)
-          if tn then
-            best, best_row, best_local = tn, srow, is_local
-          end
+      local fn = enclosing_scope(node:parent())
+      local visible = fn == nil or (cursor_scope ~= nil and fn:equal(cursor_scope))
+      local is_local = fn ~= nil
+      if visible and ((is_local and not best_local) or (is_local == best_local and srow > best_row)) then
+        local tname = decl_binds(node, buf, var)
+        if tname then
+          best, best_row, best_local = tname, srow, is_local
         end
       end
     end
@@ -571,15 +326,12 @@ local function resolve_var_type(buf, var, crow)
   return best
 end
 
----The member-access chain ending at the operator under the cursor: e.g.
----`cmd_line->inputs.` yields { 'cmd_line', 'inputs' } (root first, the member
----just before the trailing operator last). Returns nil when the text is not a
----plain identifier chain — a call or index in the middle (`get().x`, `a[i].x`)
----bails rather than guess.
----@return string[]?
+-- The member-access chain ending at the operator before the cursor:
+-- `cmd_line->inputs.` gives { 'cmd_line', 'inputs' }. nil when a call or index
+-- sits in the chain.
 local function access_chain()
   local line = vim.fn.getline('.')
-  local before = line:sub(1, find_start()):gsub('%s+$', '')   -- up to & incl operator
+  local before = line:sub(1, find_start()):gsub('%s+$', '')
   before = before:gsub('%->$', ''):gsub('%.$', ''):gsub('::$', '')
 
   local id = before:match('([%w_]+)$')
@@ -591,19 +343,14 @@ local function access_chain()
     if not op then break end
     before = before:sub(1, #before - #op):gsub('%s+$', '')
     local pid = before:match('([%w_]+)$')
-    if not pid then return nil end                            -- `)`/`]` before op: too complex
+    if not pid then return nil end
     table.insert(parts, 1, pid)
     before = before:sub(1, #before - #pid):gsub('%s+$', '')
   end
   return parts
 end
 
----Member scope for a member's typeref (as stored by parse_tags, e.g.
----'typename:StringList', 'typename:StringNode *', 'struct:Foo'). Used to step
----from one link of an access chain to the next.
----@param index table
----@param typeref string?
----@return string?
+-- A member's typeref ('typename:StringNode *', 'struct:Foo') as a member scope.
 local function scope_from_typeref(index, typeref)
   if not typeref then return end
   local kind, rest = typeref:match('^(%a+):(.+)$')
@@ -616,14 +363,6 @@ local function scope_from_typeref(index, typeref)
   return tname and scope_for_type(index, tname) or nil
 end
 
----Walk an access chain to the member scope whose members should be offered:
----treesitter resolves the root variable's type, then each intermediate member's
----type is followed through the ctags index.
----@param index table
----@param parts string[]
----@param buf integer
----@param crow integer  1-based cursor row
----@return string?
 local function chain_scope(index, parts, buf, crow)
   local typename = resolve_var_type(buf, parts[1], crow)
   if not typename then return end
@@ -632,47 +371,35 @@ local function chain_scope(index, parts, buf, crow)
     if not scope then return end
     local mtype
     for _, m in ipairs(index.members[scope] or {}) do
-      if m.name == parts[i] then mtype = m.type; break end
+      if m.name == parts[i] then
+        mtype = m.type
+        break
+      end
     end
     scope = scope_from_typeref(index, mtype)
   end
   return scope
 end
 
----Strip the `typeref:` namespace prefix for a readable popup menu label.
----@param typeref string?
----@return string
 local function pretty_type(typeref)
   if not typeref then return '' end
-  return (typeref:gsub('^typename:', '')
-    :gsub('^struct:', 'struct ')
-    :gsub('^union:', 'union ')
-    :gsub('^enum:', 'enum '))
+  return (typeref:gsub('^typename:', ''):gsub('^struct:', 'struct ')
+    :gsub('^union:', 'union '):gsub('^enum:', 'enum '))
 end
 
----'omnifunc' implementation for member completion. See |complete-functions|.
----@param findstart integer
----@param base string
 function M.omnifunc(findstart, base)
-  if findstart == 1 then
-    return find_start()
-  end
-  base = base or ''
-  local blow = base:lower()
+  if findstart == 1 then return find_start() end
   local parts = access_chain()
-  if not parts then return {} end
-
-  local index = get_tag_index()
+  local index = parts and get_tag_index()
   if not index then return {} end
-
   local buf = vim.api.nvim_get_current_buf()
-  local crow = vim.api.nvim_win_get_cursor(0)[1]
-  local scope = chain_scope(index, parts, buf, crow)
+  local scope = chain_scope(index, parts, buf, vim.api.nvim_win_get_cursor(0)[1])
   if not scope or not index.members[scope] then return {} end
 
+  local blow = base:lower()
   local items, seen = {}, {}
   for _, m in ipairs(index.members[scope]) do
-    if not seen[m.name] and (base == '' or m.name:sub(1, #blow):lower() == blow) then
+    if not seen[m.name] and m.name:sub(1, #blow):lower() == blow then
       seen[m.name] = true
       items[#items + 1] = { word = m.name, menu = pretty_type(m.type), kind = 'm', icase = 1 }
     end

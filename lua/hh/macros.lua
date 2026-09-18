@@ -1,71 +1,31 @@
--- 4coder-style project-wide #define indexer + yg_*/type keyword highlighting.
---
--- Scans a project's C-family sources once for `#define` names so that every
--- project macro (push_struct, ArrayCount, KB, ...) gets the macro color whether
--- or not an LSP has indexed it, and adds the yg_*/arc_* storage-class and type
--- patterns on top of treesitter.
---
--- A colorscheme opts in with:
---
---     require("hh.macros").setup()
---
--- Two things this fixes versus the old in-colors/hh.lua version:
---
---  * The scan was `vim.fn.systemlist` — a synchronous, full-tree rg/grep on the
---    UI thread, run on the first C buffer you opened. It is now vim.system +
---    callback, so the editor never blocks.
---  * Its caches were file-local to a colors/*.lua chunk, which Neovim re-sources
---    on EVERY :colorscheme. So the cache reset to {} each time and the whole
---    blocking scan ran again — while the matches already added to each window
---    were still live but no longer tracked, so they could not be deleted and a
---    second full set was added on top. As a require'd module this state is
---    cached once, for real.
-
+-- 4coder-style project #define highlighting plus the yg_*/type keyword
+-- patterns. A colorscheme opts in with `require('hh.macros').setup()`.
 local M = {}
 
 local C_FT = { c = true, cpp = true, objc = true, objcpp = true }
+local SOURCE_GLOBS = { '*.h', '*.c', '*.hpp', '*.cpp', '*.cc', '*.hh', '*.m', '*.mm' }
+local SKIP_DIRS = require('config.project').SKIP_DIRS
 
--- [root] = { "MACRO_NAME", ... }
+-- matchadd patterns run on every displayed line of every redraw. Past this
+-- many names that costs more than the highlighting is worth.
+local MAX_MACROS = 4000
+
+-- [root] = { 'MACRO_NAME', ... }
 local macro_cache = {}
--- [root] = { done_cb, ... } while a scan is in flight, so N windows still only
--- spawn ONE scan but every one of them gets repainted when it lands. This was a
--- bare `true`: callers 2..N were turned away and their `done` dropped on the
--- floor, and since add_matches() had already filled match_ids[winid] with the
--- static patterns, the `if match_ids[winid] then return end` guard meant they
--- never retried either. The second window of a `:vsp` permanently showed no
--- project #defines.
+-- [root] = { done_cb, ... } while a scan is in flight, so N windows spawn one
+-- scan and all of them get painted when it lands.
 local scan_waiters = {}
 -- [winid] = { match id, ... }
 local match_ids = {}
 
-local SOURCE_GLOBS = { "*.h", "*.c", "*.hpp", "*.cpp", "*.cc", "*.hh", "*.m", "*.mm" }
-
--- Excluding vendored trees from the #define scan is a PERFORMANCE fix, not a
--- tidiness one: every name found becomes part of a matchadd() alternation, and
--- matchadd patterns are re-run by Vim's regex engine on every displayed line of
--- every redraw. Letting SDL in cost 131ms per redraw. See lua/utils/skip_dirs.lua.
-local skip_dirs = require("utils.skip_dirs")
-
--- Backstop, not the fix. The skip list is a hand-maintained enumeration that can
--- never be proven complete — the next project vendors under `deps/` or `libs/`
--- and the count is back in the tens of thousands. Above this many names the
--- alternation patterns cost more per redraw than the highlighting is worth, so
--- the index is dropped LOUDLY rather than silently making the editor stutter.
-local MAX_MACROS = 4000
-
----@param buf integer
----@return string?
 local function project_root(buf)
-  -- vim.fs.root replaces the hand-rolled parent-directory walk this used to do.
-  return vim.fs.root(buf, { ".git", "compile_commands.json", ".clangd" })
+  return vim.fs.root(buf, { '.git', 'compile_commands.json', '.clangd' })
 end
 
----@param out string
----@return string[]
 local function parse_defines(out)
   local names, seen = {}, {}
-  for line in out:gmatch("[^\r\n]+") do
-    local name = line:match("#%s*define%s+([A-Za-z_][A-Za-z0-9_]*)")
+  for line in out:gmatch('[^\r\n]+') do
+    local name = line:match('#%s*define%s+([A-Za-z_][A-Za-z0-9_]*)')
     if name and not seen[name] then
       seen[name] = true
       names[#names + 1] = name
@@ -74,48 +34,40 @@ local function parse_defines(out)
   return names
 end
 
----@param root string
----@return string[]
 local function scan_cmd(root)
-  if vim.fn.executable("rg") == 1 then
-    local cmd = { "rg", "--no-heading", "--no-line-number", "-N", "-I",
-      "-e", "^\\s*#\\s*define\\s+[A-Za-z_][A-Za-z0-9_]*" }
+  if vim.fn.executable('rg') == 1 then
+    local cmd = { 'rg', '--no-heading', '--no-line-number', '-N', '-I',
+      '-e', '^\\s*#\\s*define\\s+[A-Za-z_][A-Za-z0-9_]*' }
     for _, g in ipairs(SOURCE_GLOBS) do
-      cmd[#cmd + 1] = "-g"
-      cmd[#cmd + 1] = g
+      vim.list_extend(cmd, { '-g', g })
     end
-    -- Negative globs come after the positive ones; rg applies last-match-wins,
-    -- so these override the `*.h`/`*.c` includes for anything under a skipped
-    -- directory rather than being overridden by them.
-    vim.list_extend(cmd, skip_dirs.rg_glob_args())
+    -- rg is last-match-wins, so the excludes come after the includes.
+    for _, d in ipairs(SKIP_DIRS) do
+      vim.list_extend(cmd, { '-g', '!**/' .. d .. '/**' })
+    end
     cmd[#cmd + 1] = root
     return cmd
   end
-  local cmd = { "grep", "-rhE",
-    "^[[:space:]]*#[[:space:]]*define[[:space:]]+[A-Za-z_][A-Za-z0-9_]*" }
+  local cmd = { 'grep', '-rhE',
+    '^[[:space:]]*#[[:space:]]*define[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' }
   for _, g in ipairs(SOURCE_GLOBS) do
-    cmd[#cmd + 1] = "--include=" .. g
+    cmd[#cmd + 1] = '--include=' .. g
   end
-  vim.list_extend(cmd, skip_dirs.flags("--exclude-dir=%s"))
+  for _, d in ipairs(SKIP_DIRS) do
+    cmd[#cmd + 1] = '--exclude-dir=' .. d
+  end
   cmd[#cmd + 1] = root
   return cmd
 end
 
----Scan `root` for #define names, then invoke `done(names)` on the main loop.
----Cached, and de-duplicated while in flight.
----@param root string
----@param done fun(names: string[])
+-- Calls `done(names)` on the main loop. Cached per root.
 local function scan_macros(root, done)
-  local cached = macro_cache[root]
-  if cached then
-    done(cached)
+  if macro_cache[root] then
+    done(macro_cache[root])
     return
   end
-  -- A scan is already in flight for this root: queue up behind it rather than
-  -- dropping this caller, and rather than spawning a second rg.
-  local waiting = scan_waiters[root]
-  if waiting then
-    waiting[#waiting + 1] = done
+  if scan_waiters[root] then
+    table.insert(scan_waiters[root], done)
     return
   end
   scan_waiters[root] = { done }
@@ -123,14 +75,13 @@ local function scan_macros(root, done)
   vim.system(scan_cmd(root), { text = true }, vim.schedule_wrap(function(res)
     local callbacks = scan_waiters[root] or {}
     scan_waiters[root] = nil
-    -- rg exits 1 when it finds nothing; that is a legitimate empty result.
-    local names = parse_defines(res.stdout or "")
+    -- rg exits 1 when it finds nothing, which is a valid empty result.
+    local names = parse_defines(res.stdout or '')
     if #names > MAX_MACROS then
       vim.notify(
-        ("hh.macros: %d #define names under %s — over the %d limit, so project macro\n"
-          .. "highlighting is OFF here (it would cost more per redraw than it is worth).\n"
-          .. "A count this high usually means a vendored tree is missing from\n"
-          .. "lua/utils/skip_dirs.lua. :HHMacroDump shows what was found."
+        ('hh.macros: %d #define names under %s, over the %d limit, so project macro\n'
+          .. 'highlighting is OFF here. A count this high usually means a vendored tree\n'
+          .. 'is missing from SKIP_DIRS in lua/config/project.lua. :HHMacroDump shows what was found.'
         ):format(#names, root, MAX_MACROS),
         vim.log.levels.WARN)
       names = {}
@@ -142,19 +93,17 @@ local function scan_macros(root, done)
   end))
 end
 
----@param winid integer
 local function clear_matches(winid)
-  local ids = match_ids[winid]
-  if not ids then return end
-  for _, id in ipairs(ids) do
+  for _, id in ipairs(match_ids[winid] or {}) do
     pcall(vim.fn.matchdelete, id, winid)
   end
   match_ids[winid] = nil
 end
 
----Add the static (non-macro) patterns to `winid`, then fill in the project's
----#define names asynchronously when the scan lands.
----@param winid integer
+local STORAGE = 'internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static'
+  .. '\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported'
+
+-- The static patterns go in now, the project's #define names when the scan lands.
 local function add_matches(winid)
   if match_ids[winid] then return end
   local ids = {}
@@ -166,71 +115,39 @@ local function add_matches(winid)
     end)
   end
 
-  -- All yg/arc macros in one pattern (teal)
-  add("YgKeyword", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\|global\\|local_persist\\)\\>")
+  add('YgKeyword', '\\<\\(yg\\|arc\\)_\\(internal\\|inline\\|global\\|local_persist\\)\\>')
+  add('YgType',
+    '\\<\\([usb]\\(8\\|16\\|32\\|64\\)\\|f\\(32\\|64\\)\\|void\\|Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\|Mat[34]\\(F32\\)\\?\\|Quaternion\\(F32\\)\\?\\|Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\|Arena\\|Scratch\\|String8\\|R_Handle\\|Entity\\(Handle\\|Store\\|Pool\\|Kind\\|Flags\\)\\?\\|Direction8\\)\\>')
+  -- Return type after a yg/arc prefix macro.
+  add('YgType', '\\<\\(yg\\|arc\\)_\\(internal\\|inline\\)\\s\\+\\zs\\w\\+\\ze')
+  -- PREFIX TYPE name( and PREFIX TYPE *name(
+  add('Function', '\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(')
+  add('Function', '\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(')
+  add('Function', '\\<\\(' .. STORAGE .. '\\)\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(')
+  add('Function', '\\<\\(' .. STORAGE .. '\\)\\s\\+\\w\\+\\s*\\*\\+\\s*\\zs\\w\\+\\ze\\s*(')
+  -- PascalCase type after a storage-class macro; uppercase-first skips `const`, `int`.
+  add('Type', '\\<\\(' .. STORAGE .. '\\)\\s\\+\\zs[A-Z]\\w*\\ze\\s*\\*\\?\\s*\\w')
+  add('YgKeyword',
+    '\\<\\(thread_local\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\>')
 
-  -- All yg base types in one pattern (gold)
-  add("YgType",
-    "\\<\\([usb]\\(8\\|16\\|32\\|64\\)\\|f\\(32\\|64\\)\\|void\\|Vec[234]\\(F32\\|F64\\|S16\\|S32\\|S64\\)\\?\\|Mat[34]\\(F32\\)\\?\\|Quaternion\\(F32\\)\\?\\|Rng[12]\\(F32\\|U32\\|U64\\|S16\\|S32\\)\\?\\|Arena\\|Scratch\\|String8\\|R_Handle\\|Entity\\(Handle\\|Store\\|Pool\\|Kind\\|Flags\\)\\?\\|Direction8\\)\\>")
-
-  -- Return type after yg/arc prefix macros (gold)
-  add("YgType", "\\<\\(yg\\|arc\\)_\\(internal\\|inline\\)\\s\\+\\zs\\w\\+\\ze")
-
-  -- Function declarations after yg/arc macros: PREFIX TYPE FUNCNAME( or PREFIX TYPE *FUNCNAME(
-  add("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
-  add("Function", "\\<\\(arc\\|yg\\)_\\w\\+\\s\\+\\w\\+\\s*\\*\\s*\\zs\\w\\+\\ze\\s*(")
-
-  -- Function names after bare storage-class macros: MACRO TYPE name( or MACRO TYPE *name(
-  add("Function",
-    "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\w\\+\\s\\+\\zs\\w\\+\\ze\\s*(")
-  add("Function",
-    "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\w\\+\\s*\\*\\+\\s*\\zs\\w\\+\\ze\\s*(")
-
-  -- Return/declaration type (PascalCase) after bare storage-class macros.
-  -- Uppercase-first to skip C keywords like `const`, `int`. Lowercase types
-  -- (u32/f32/etc.) are already covered by the YgType pattern above.
-  add("Type",
-    "\\<\\(internal\\|function\\|global\\|local_persist\\|thread_local\\|inline\\|static\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\s\\+\\zs[A-Z]\\w*\\ze\\s*\\*\\?\\s*\\w")
-
-  -- thread_local + other storage-class macros as keywords
-  add("YgKeyword",
-    "\\<\\(thread_local\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\>")
-
-  -- Every #define in the project gets the macro color. Priority 200 so it beats
-  -- the Function patterns above (100) — otherwise a macro like push_struct would
-  -- match both and the function pattern would win by registration order.
-  -- Chunked alternation keeps each pattern under Vim's regex limits.
-  local buf = vim.api.nvim_win_get_buf(winid)
-  local root = project_root(buf)
+  local root = project_root(vim.api.nvim_win_get_buf(winid))
   if not root then return end
 
   scan_macros(root, function(macros)
-    -- The window may have closed, or switched to a non-C buffer, while the scan
-    -- was in flight; and the id list may have been replaced by a teardown.
-    if not vim.api.nvim_win_is_valid(winid) then return end
-    if match_ids[winid] ~= ids then return end
-
-    local CHUNK = 50
-    for i = 1, #macros, CHUNK do
-      local parts = {}
-      for j = i, math.min(i + CHUNK - 1, #macros) do
-        parts[#parts + 1] = macros[j]
-      end
-      if #parts > 0 then
-        add("YgKeyword", "\\<\\(" .. table.concat(parts, "\\|") .. "\\)\\>", 200)
-      end
+    -- The window may be gone or re-matched while the scan was in flight.
+    if not vim.api.nvim_win_is_valid(winid) or match_ids[winid] ~= ids then return end
+    -- Priority 200 beats the Function patterns; chunks of 50 stay under the
+    -- regex engine's limits.
+    for i = 1, #macros, 50 do
+      local chunk = vim.list_slice(macros, i, i + 49)
+      add('YgKeyword', '\\<\\(' .. table.concat(chunk, '\\|') .. '\\)\\>', 200)
     end
   end)
 end
 
----Add or remove this window's matches so they track the buffer it is showing.
----
----matchadd is WINDOW-local and buffer-agnostic, so without the teardown branch
----every project #define plus \<void\>, \<u32\>, \<static\>... kept highlighting
----after you :e'd a Lua or Markdown file into the same window.
----@param winid integer?
+-- matchadd is window-local and buffer-agnostic, so a window that switches to a
+-- non-C buffer has to drop its matches.
 local function refresh(winid)
-  winid = winid or vim.api.nvim_get_current_win()
   if not vim.api.nvim_win_is_valid(winid) then return end
   local buf = vim.api.nvim_win_get_buf(winid)
   if C_FT[vim.bo[buf].filetype] then
@@ -240,7 +157,6 @@ local function refresh(winid)
   end
 end
 
----Drop every window's matches and re-add them where appropriate.
 local function refresh_all()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     clear_matches(win)
@@ -249,14 +165,13 @@ local function refresh_all()
 end
 
 function M.setup()
-  local group = vim.api.nvim_create_augroup("HHMacroKeywords", { clear = true })
+  local group = vim.api.nvim_create_augroup('HHMacroKeywords', { clear = true })
 
-  vim.api.nvim_create_autocmd({ "BufWinEnter", "FileType", "WinEnter" }, {
+  vim.api.nvim_create_autocmd({ 'BufWinEnter', 'FileType', 'WinEnter' }, {
     group = group,
     callback = function() refresh(vim.api.nvim_get_current_win()) end,
   })
-
-  vim.api.nvim_create_autocmd("WinClosed", {
+  vim.api.nvim_create_autocmd('WinClosed', {
     group = group,
     callback = function(ev)
       local wid = tonumber(ev.match)
@@ -264,27 +179,25 @@ function M.setup()
     end,
   })
 
-  vim.api.nvim_create_user_command("HHMacroDump", function()
+  vim.api.nvim_create_user_command('HHMacroDump', function()
     local root = project_root(0)
     if not root then
-      vim.notify("HH: no project root (need .git, compile_commands.json, or .clangd)",
+      vim.notify('HH: no project root (need .git, compile_commands.json, or .clangd)',
         vim.log.levels.WARN)
       return
     end
     scan_macros(root, function(macros)
-      vim.notify(("HH: root = %s\nHH: %d #define names\nHH: first 20 = %s")
-        :format(root, #macros, table.concat({ unpack(macros, 1, math.min(20, #macros)) }, ", ")),
+      vim.notify(('HH: root = %s\nHH: %d #define names\nHH: first 20 = %s')
+        :format(root, #macros, table.concat(vim.list_slice(macros, 1, 20), ', ')),
         vim.log.levels.INFO)
     end)
-  end, { desc = "Show the #define names the macro indexer found" })
+  end, { desc = 'Show the #define names the macro indexer found' })
 
-  -- Force a fresh scan + reapply in EVERY window. The old version only cleared
-  -- the current window, so other windows kept their stale macro patterns.
-  vim.api.nvim_create_user_command("HHMacroRescan", function()
+  vim.api.nvim_create_user_command('HHMacroRescan', function()
     macro_cache = {}
     refresh_all()
-    vim.notify("HH: rescanning project macros", vim.log.levels.INFO)
-  end, { desc = "Re-scan the project for #define names" })
+    vim.notify('HH: rescanning project macros', vim.log.levels.INFO)
+  end, { desc = 'Re-scan the project for #define names' })
 
   refresh_all()
 end

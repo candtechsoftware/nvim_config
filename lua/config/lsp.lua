@@ -1,147 +1,65 @@
--- Neovim 0.12+ LSP configuration
--- Uses vim.lsp.config + vim.lsp.enable() with lsp/*.lua config files
--- Default mappings (grn, grr, gra, gO, K, C-s) are set automatically
-
+-- Servers are configured in lsp/*.lua. Status, restart and logs are the builtin
+-- :checkhealth vim.lsp, :lsp restart|stop|enable and :log lsp.
 local M = {}
 
--- LSP servers to enable (configs are in lsp/*.lua)
--- tsgo (TypeScript-Go 7.0.0-dev) is intentionally NOT in this list — it has
--- gaps with Expo/React Native projects (e.g. ~/work/app/IrisBetaApp). Use
--- ts_ls (typescript-language-server) instead. To experiment with tsgo on a
--- single buffer, run :lsp enable tsgo manually.
--- clangd is marker-gated (see lsp/clangd.lua); :ClangdSetup opts a project in.
-local servers = {
-  'clangd',
-  'lua_ls',
-  'gopls',
-  'ts_ls',
-  'eslint',
-  'rust_analyzer',
-  'zls',
-  'ols',
-  'jails',
-}
+-- clangd only attaches where :ClangdSetup opted the project in (lsp/clangd.lua).
+local SERVERS = { 'clangd', 'lua_ls', 'gopls', 'ts_ls', 'eslint', 'rust_analyzer', 'zls', 'ols', 'jails' }
 
-local function lsp_command_names()
-  local names, seen = {}, {}
-  for _, name in ipairs(servers) do
-    names[#names + 1] = name
-    seen[name] = true
-  end
-  for _, client in ipairs(vim.lsp.get_clients()) do
-    if not seen[client.name] then
-      names[#names + 1] = client.name
-      seen[client.name] = true
-    end
-  end
-  table.sort(names)
-  return names
-end
-
-local function complete_lsp_name(arg_lead)
-  local out = {}
-  for _, name in ipairs(lsp_command_names()) do
-    if name:find('^' .. vim.pesc(arg_lead)) then
-      out[#out + 1] = name
-    end
-  end
-  return out
-end
-
-local function command_targets(name)
-  if name ~= '' then return { name } end
-  return servers
-end
-
-local function attached_clients(bufnr, name)
-  local opts = { bufnr = bufnr }
-  if name ~= '' then opts.name = name end
-  return vim.lsp.get_clients(opts)
-end
-
-local function stop_clients(bufnr, name)
-  local clients = attached_clients(bufnr, name)
-  for _, client in ipairs(clients) do
-    vim.lsp.stop_client(client.id)
-  end
-  return clients
-end
-
----Get LSP capabilities: the deltas from Neovim's defaults, and nothing else.
----
----This used to assign `caps.textDocument.completion = { ... }` wholesale, ~46
----lines restating what `make_client_capabilities()` already returns
----(contextSupport, deprecatedSupport, labelDetailsSupport, insertReplaceSupport,
----preselectSupport, tagSupport, parameterInformation...). Those were no-ops:
----`Client:_init` deep-merges our table over the defaults, so anything identical
----to the default, and anything omitted, ends up the same either way.
----
----What was NOT a no-op: `tbl_deep_extend` REPLACES lists rather than merging
----them, so restating `resolveSupport.properties` without `'command'` (which the
----default includes) actually dropped it, weakening lazy resolution of
----completion-item commands — ts_ls auto-imports in particular. Mutating the
----defaults in place keeps every list intact and leaves only the three real
----intentions: no snippets, and plaintext preferred over markdown.
----@return table
-local function get_capabilities()
+local function capabilities()
   local caps = vim.lsp.protocol.make_client_capabilities()
   local td = caps.textDocument
-
   td.completion.completionItem.snippetSupport = false
   td.completion.completionItem.documentationFormat = { 'plaintext', 'markdown' }
   td.signatureHelp.signatureInformation.documentationFormat = { 'plaintext', 'markdown' }
   td.hover.contentFormat = { 'plaintext', 'markdown' }
-
-  -- Kept only to preserve the previous behavior exactly: the old wholesale
-  -- assignment set this, and the default is `true`. Unlike completion's and
-  -- signatureHelp's (which are false by default anyway), this one is a real
-  -- deviation. Nothing here records why it was wanted, so it stays rather than
-  -- get flipped as a side effect of a cleanup. Safe to drop if hover should
-  -- follow the default.
-  td.hover.dynamicRegistration = false
-
   return caps
 end
 
----Jump to a quickfix-style item, leaving a jumplist entry behind.
----@param item {filename:string, lnum:integer, col:integer}
-local function jump_to(item)
-  vim.cmd("normal! m'")
-  -- `:edit` on the file we are already in reloads that buffer, which fails with E37 once it has
-  -- unsaved changes, and a definition in the file being edited is the common case. Switching
-  -- buffers never reloads and never refuses, so the jump works with the buffer dirty.
-  local bufnr = vim.fn.bufadd(item.filename)
-  vim.fn.bufload(bufnr)
-  vim.bo[bufnr].buflisted = true
-  if bufnr ~= vim.api.nvim_get_current_buf() then
-    vim.api.nvim_set_current_buf(bufnr)
+-- Some servers start textEdit.range at the cursor instead of the start of the
+-- word, so accepting `window` after `game.win` gave `game.winwindow`. Snap such
+-- starts back to the word boundary. Patches a private function.
+local function patch_completion_ranges()
+  local convert = vim.lsp.completion._convert_results
+  vim.lsp.completion._convert_results = function(line, lnum, cursor_col, client_id, client_start, server_start, result, encoding)
+    local enc = encoding or 'utf-16'
+    local boundary = vim.str_utfindex(line, enc, client_start, false)
+    for _, item in ipairs(result.items or result) do
+      for _, key in ipairs({ 'range', 'insert', 'replace' }) do
+        local range = item.textEdit and item.textEdit[key]
+        if range and range.start.line == lnum
+          and vim.str_byteindex(line, enc, range.start.character, false) > client_start then
+          range.start.character = boundary
+        end
+      end
+    end
+    return convert(line, lnum, cursor_col, client_id, client_start, server_start, result, encoding)
   end
-  vim.api.nvim_win_set_cursor(0, { item.lnum, math.max(item.col - 1, 0) })
 end
 
----One item: jump. Several: quickfix, the same as vim.lsp.buf.definition's
----default on_list.
----@param items table[]
----@param title string
-local function show_items(items, title)
+local function jump(win, item)
+  vim.api.nvim_win_call(win, function() vim.cmd("normal! m'") end)
+  local buf = vim.fn.bufadd(item.filename)
+  vim.bo[buf].buflisted = true
+  vim.api.nvim_win_set_buf(win, buf)
+  vim.api.nvim_win_set_cursor(win, { item.lnum, math.max(item.col - 1, 0) })
+end
+
+-- One result jumps without touching quickfix (it holds the build errors), several go to quickfix.
+local function show(win, items, title)
   if #items == 1 then
-    jump_to(items[1])
-    return
+    jump(win, items[1])
+  else
+    vim.fn.setqflist({}, ' ', { title = title, items = items })
+    vim.cmd('botright copen')
   end
-  vim.fn.setqflist({}, ' ', { title = title, items = items })
-  vim.cmd('copen')
 end
 
----Find `word` through the server's workspace index and go there.
----@param bufnr integer
----@param word string
-local function index_definition(bufnr, word)
-  vim.lsp.buf_request(bufnr, 'workspace/symbol', { query = word }, function(_, result)
+local function index_definition(buf, win, word)
+  vim.lsp.buf_request(buf, 'workspace/symbol', { query = word }, function(_, result)
     local items = {}
     for _, sym in ipairs(result or {}) do
-      -- The query is fuzzy; keep exact names only.
       local loc = sym.location
-      if sym.name == word and loc and loc.range then
+      if sym.name == word and loc.range then
         items[#items + 1] = {
           filename = vim.uri_to_fname(loc.uri),
           lnum = loc.range.start.line + 1,
@@ -151,423 +69,116 @@ local function index_definition(bufnr, word)
       end
     end
     if #items == 0 then
-      vim.notify('no definition of ' .. word .. ' (LSP or index)', vim.log.levels.WARN)
-      return
+      vim.notify('no definition of ' .. word, vim.log.levels.WARN)
+    else
+      show(win, items, 'Definition: ' .. word)
     end
-    show_items(items, 'Definition: ' .. word)
   end)
 end
 
----Go to definition, with a fallback for the unity-build blind spot.
----
----A function that is only DEFINED in another unity member — no prototype in
----any header, which raddebugger-style code does freely because include order
----makes prototypes unnecessary — is a C99 implicit declaration in the open
----file's standalone parse, and clangd answers goto-definition with that
----implicit declaration: the call site itself, so `gd` visibly does nothing.
----The background index does know the real definition (workspace/symbol finds
----it; see :ClangdSetup for why the index exists at all), so when the reply is
----empty or is the identifier under the cursor, ask the index by name instead.
----The self-reply check is exact (line, identifier start, and the identifier
----must be a call), so `gd` on a variable's own declaration, or on a local
----declared earlier in the same line, behaves as before.
-function M.goto_definition()
-  local bufnr = vim.api.nvim_get_current_buf()
-  local name = vim.api.nvim_buf_get_name(bufnr)
-  local cur = vim.api.nvim_win_get_cursor(0)
+-- A function defined only in another unity member is an implicit declaration
+-- in this file's standalone parse, so clangd answers with the call site itself.
+-- The background index knows the real definition, so ask it by name instead.
+function M.goto_definition(win)
+  win = win or vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_get_current_buf()
+  local name = vim.api.nvim_buf_get_name(buf)
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   local line = vim.api.nvim_get_current_line()
-  local before = line:sub(1, cur[2] + 1)
-  local word_start = cur[2] + 2 - #before:match('[%w_]*$')
-  local after = line:sub(cur[2] + 2)
-  local is_call = after:match('^[%w_]*%s*%(') ~= nil
+  local word_col = col + 2 - #line:sub(1, col + 1):match('[%w_]*$')
+  local is_call = line:sub(col + 2):match('^[%w_]*%s*%(') ~= nil
   local word = vim.fn.expand('<cword>')
   vim.lsp.buf.definition({
     on_list = function(list)
-      local items = list.items or {}
-      local self_only = #items == 1
-        and is_call
-        and items[1].filename == name
-        and items[1].lnum == cur[1]
-        and items[1].col == word_start
-      if #items == 0 or self_only then
-        if word == '' then
-          vim.notify('no definition found', vim.log.levels.WARN)
-          return
-        end
-        index_definition(bufnr, word)
-        return
+      local item = list.items[1]
+      if #list.items == 1 and is_call and item.filename == name and item.lnum == row and item.col == word_col then
+        index_definition(buf, win, word)
+      else
+        show(win, list.items, list.title)
       end
-      show_items(items, list.title)
     end,
   })
 end
 
----Set LSP keymaps for a buffer
----@param bufnr integer
-local function set_keymaps(bufnr)
-  local opts = { buffer = bufnr, silent = true }
-
-  -- Neovim only installs its default `K` -> hover mapping when nothing else claims `K`, and
-  -- keymaps.lua binds it in visual mode. Bind it explicitly so hover does not depend on that.
-  vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-
-  -- Navigation
-  vim.keymap.set('n', 'gd', M.goto_definition, opts)
-  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-  vim.keymap.set('n', 'gv', function()
-    local cur_win = vim.api.nvim_get_current_win()
-
-    -- Find or create the target split window
-    local target_win
-    local wins = vim.api.nvim_tabpage_list_wins(0)
-    if #wins < 2 then
-      vim.cmd('vsplit')
-      target_win = vim.api.nvim_get_current_win()
-      vim.api.nvim_set_current_win(cur_win)
-    else
-      for _, w in ipairs(wins) do
-        if w ~= cur_win then
-          target_win = w
-          break
-        end
-      end
+-- Definition in the other split, creating one if needed, keeping focus here.
+local function definition_in_other_window()
+  local cur = vim.api.nvim_get_current_win()
+  local target
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if win ~= cur then
+      target = win
+      break
     end
-
-    vim.lsp.buf.definition({
-      on_list = function(options)
-        if not options.items or #options.items == 0 then return end
-        local item = options.items[1]
-        vim.api.nvim_set_current_win(target_win)
-        vim.cmd('edit ' .. vim.fn.fnameescape(item.filename))
-        vim.api.nvim_win_set_cursor(target_win, { item.lnum, item.col - 1 })
-        vim.api.nvim_set_current_win(cur_win)
-      end
-    })
-  end, opts)
-
-  vim.keymap.set('n', '<leader>vws', vim.lsp.buf.workspace_symbol, opts)
-
-  -- Diagnostics
-  vim.keymap.set('n', '<leader>vd', vim.diagnostic.open_float, opts)
-
-  -- Actions (grn/grr/gra are 0.12 defaults for rename/references/code_action)
-  vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
-
-  -- Formatting (manual): Odin via odinfmt, TS/JS via Prettier then eslint.
-  -- Everything else (incl. unity-build C/C++, Lua, Rust, Jai) is a no-op.
-  vim.keymap.set('n', '<leader>f', function()
-    -- Both formatters are plain binaries, not LSP formatting, and their
-    -- ftplugins (after/ftplugin/odin.lua, javascript.lua) map the same key to
-    -- the same functions so <leader>f does not depend on a server attaching.
-    -- The two paths must not disagree about what the key does.
-    if vim.bo.filetype == 'odin' then
-      require('config.odinfmt').format(0)
-      return
-    end
-    local js = {
-      typescript = true, typescriptreact = true,
-      javascript = true, javascriptreact = true,
-    }
-    if js[vim.bo.filetype] then
-      require('config.prettier').format_buffer(0)
-    end
-  end, opts)
-
-  -- Diagnostics to quickfix/loclist
-  vim.keymap.set('n', '<leader>qf', function()
-    vim.diagnostic.setqflist({ open = true })
-  end, opts)
-  vim.keymap.set('n', '<leader>qq', function()
-    vim.diagnostic.setloclist({ open = true })
-  end, opts)
+  end
+  if not target then
+    vim.cmd('vsplit')
+    target = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_current_win(cur)
+  end
+  M.goto_definition(target)
 end
 
----Configure diagnostics display.
----
----Diagnostics are OFF. This config wants exactly three things from the LSP —
----completion, member/struct completion, and signature help — and diagnostics
----are the part that costs the most for the least: every display mode here
----(virtual_text, signs, underline) is drawn per redrawn line, so on a unity
----build like ~/projects/tick, where clangd reports a steady stream of
----unity-build false positives, they were repainted on every scroll step and
----every keystroke.
----
----`vim.diagnostic.enable(false)` at the end is the ONLY switch: it stops every
----extmark and sign being placed, whatever the display modes below say. Those
----modes are therefore left fully configured rather than set to `false` — a
----second, redundant off switch would have made `:lua vim.diagnostic.enable(true)`
----turn diagnostics back on and still render nothing, which is a worse place to
----land than either state. Diagnostics are still received and stored, so
----`<leader>vd` (open_float) and the qf/loclist commands below work untouched.
-local function setup_diagnostics()
-  vim.diagnostic.config({
-    virtual_text = {
-      prefix = '',
-      source = true,
-      severity = { min = vim.diagnostic.severity.WARN },
-      spacing = 4,
-      format = function(diagnostic)
-        local severity = vim.diagnostic.severity[diagnostic.severity]
-        return string.format('[%s] %s', severity:sub(1, 1), diagnostic.message)
-      end,
-    },
-    signs = {
-      text = {
-        [vim.diagnostic.severity.ERROR] = 'E',
-        [vim.diagnostic.severity.WARN] = 'W',
-        [vim.diagnostic.severity.INFO] = 'I',
-        [vim.diagnostic.severity.HINT] = 'H',
-      },
-    },
-    underline = true,
-    update_in_insert = false,
-    severity_sort = true,
-    float = {
-      -- no `border` here: floats inherit 'winborder' (rounded, options.lua)
-      header = '',
-      prefix = '',
-      focusable = false,
-      max_width = 80,
-      max_height = 20,
-      source = true,
-    },
-  })
-  -- The single off switch. Everything configured above is what you get back
-  -- from `:lua vim.diagnostic.enable(true)`.
-  vim.diagnostic.enable(false)
-end
-
--- Re-query context for a list the server marked incomplete. Same trigger kind
--- Neovim's own autotrigger path uses, so clangd scores the reply as a refined
--- filter rather than a fresh invocation.
-local INCOMPLETE_CTX = {
-  triggerKind = vim.lsp.protocol.CompletionTriggerKind.TriggerForIncompleteCompletions,
-}
-
--- Some servers return textEdit.range starting AT the cursor (insert-only,
--- no prefix replacement). Native LSP completion then anchors the popup at
--- the cursor, so accepting `window` on `game.win<Tab>` appends and yields
--- `game.winwindow` instead of `game.window`. Snap any range start that sits
--- past the keyword boundary back onto it — `plenary.async`-style spans that
--- start BEFORE the keyword boundary are left untouched.
-local function patch_completion_concat_bug()
-  local comp = vim.lsp.completion
-  if not (comp and comp._convert_results) then return end
-  local orig = comp._convert_results
-  comp._convert_results = function(
-    line, lnum, cursor_col, client_id,
-    client_start_boundary, server_start_boundary, result, encoding
-  )
-    local enc = encoding or 'utf-16'
-    local boundary_char = vim.str_utfindex(line, enc, client_start_boundary, false)
-    local items = result.items or result
-    for _, item in ipairs(items) do
-      local te = item.textEdit
-      if te then
-        local function fix(rng)
-          if rng and rng.start and rng.start.line == lnum then
-            local sb = vim.str_byteindex(line, enc, rng.start.character, false)
-            if sb > client_start_boundary then
-              rng.start.character = boundary_char
-            end
-          end
-        end
-        fix(te.range)
-        fix(te.insert)
-        fix(te.replace)
-      end
-    end
-    return orig(line, lnum, cursor_col, client_id,
-      client_start_boundary, server_start_boundary, result, encoding)
+-- Folding is window-local, and LspAttach carries no window.
+local function set_folding(buf)
+  for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+    vim.wo[win].foldmethod = 'expr'
+    vim.wo[win].foldexpr = 'v:lua.vim.lsp.foldexpr()'
+    vim.wo[win].foldlevel = 99
   end
 end
 
----Main setup function
+local INCOMPLETE = { triggerKind = vim.lsp.protocol.CompletionTriggerKind.TriggerForIncompleteCompletions }
+
 function M.setup()
-  patch_completion_concat_bug()
-  setup_diagnostics()
+  patch_completion_ranges()
 
-  -- Configure defaults for ALL LSP servers.
-  -- No `root_markers` here: config resolution deep-extends '*' with the
-  -- server's own table, and lists REPLACE rather than merge — so every
-  -- lsp/*.lua's root_markers won outright and a '.git' default here was never
-  -- read by anything. It also read as if it were *adding* to each server's
-  -- markers, which it was not. All nine servers set their own.
-  vim.lsp.config('*', {
-    capabilities = get_capabilities(),
+  -- Diagnostics are received (float and qf/loclist maps work) but never drawn.
+  vim.diagnostic.config({
+    severity_sort = true,
+    float = { header = '', prefix = '', focusable = false, max_width = 80, max_height = 20, source = true },
   })
+  vim.diagnostic.enable(false)
 
-  -- Enable all servers (vim.lsp.enable handles missing executables gracefully)
-  vim.lsp.enable(servers)
+  vim.lsp.config('*', { capabilities = capabilities() })
+  vim.lsp.enable(SERVERS)
 
-  -- One augroup for every buffer-local LSP autocmd. This used to be
-  -- `nvim_create_augroup('lsp_insert_trigger_' .. bufnr)` per attach, which
-  -- leaked one augroup per buffer that ever had a client — buffer numbers only
-  -- go up, so a long session accumulated them forever. Scoping the *clear* to
-  -- the buffer (below) keeps the anti-stacking property when two clients attach
-  -- to one buffer (ts_ls + eslint) without the leak.
-  local buf_group = vim.api.nvim_create_augroup('lsp_buf_local', { clear = true })
-
-  ---Turn on LSP folding for every window currently displaying `bufnr`.
-  ---
-  ---`LspAttach` is fired with `data = { client_id }` only — there is no
-  ---`winid`. `vim.wo[args.data.winid or 0]` therefore always took the `or 0`
-  ---branch and configured the *current* window, whichever that happened to be
-  ---when the async `initialize` response landed. Splitting to another file
-  ---while clangd started up gave that window clangd's foldexpr. Folding is
-  ---window-local, so it also has to be re-applied when a new window shows the
-  ---buffer, hence the BufWinEnter hook.
-  ---@param bufnr integer
-  local function set_folding(bufnr)
-    for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
-      vim.wo[win].foldmethod = 'expr'
-      vim.wo[win].foldexpr = 'v:lua.vim.lsp.foldexpr()'
-      vim.wo[win].foldlevel = 99
-    end
-  end
-
-  -- LspAttach: Set up keymaps and completion when LSP attaches
+  local buf_group = vim.api.nvim_create_augroup('lsp_buf', {})
   vim.api.nvim_create_autocmd('LspAttach', {
-    group = vim.api.nvim_create_augroup('lsp_attach_config', { clear = true }),
-    callback = function(args)
-      local client = vim.lsp.get_client_by_id(args.data.client_id)
-      if not client then
-        return
-      end
+    group = vim.api.nvim_create_augroup('lsp_attach', {}),
+    callback = function(ev)
+      local buf = ev.buf
+      set_folding(buf)
+      vim.lsp.completion.enable(true, ev.data.client_id, buf, { autotrigger = false })
 
-      local bufnr = args.buf
-
-      -- LSP folding
-      set_folding(bufnr)
-
-      -- Native LSP completion — Tab-only, no auto-triggers
-      -- (see lua/config/keymaps.lua).
-      vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = false })
-
-      -- Replace only THIS buffer's autocmds, leaving other buffers' intact.
-      vim.api.nvim_clear_autocmds({ group = buf_group, buffer = bufnr })
-
-      -- A window opened on this buffer later needs folding too.
+      -- Two clients can attach to one buffer; replace rather than stack.
+      vim.api.nvim_clear_autocmds({ group = buf_group, buf = buf })
       vim.api.nvim_create_autocmd('BufWinEnter', {
-        buffer = bufnr,
         group = buf_group,
-        callback = function() set_folding(bufnr) end,
+        buf = buf,
+        callback = function() set_folding(buf) end,
       })
-
-      -- Signature help on '(' and ',' — one-line cmdline echo only, no popup —
-      -- and a re-query whenever the open popup is showing a truncated list.
-      --
-      -- clangd caps a reply at 100 items and marks it isIncomplete, which in
-      -- ~/projects/MinusTable is every prefix short enough to be worth a <Tab>:
-      -- `a`, `ar`, `db`, `os_`, `r_`, `str_` all come back capped. Neovim does
-      -- re-query on the next keystroke after an incomplete reply, but installs
-      -- that hook only under `autotrigger` (see vim.lsp.completion.enable),
-      -- which this config deliberately does not use — so the popup went on
-      -- filtering the stale 100 client-side and the symbol being typed never
-      -- appeared, however far you typed it.
-      --
-      -- get() returns immediately while the popup is up unless the last reply
-      -- WAS incomplete, so a complete list still costs one function call, and
-      -- nothing auto-opens: the popup still only ever appears from <Tab>.
+      -- Signature help on ( and ,. Without autotrigger nothing re-queries a
+      -- truncated list (clangd caps at 100 items), so do that while its popup is open.
       vim.api.nvim_create_autocmd('InsertCharPre', {
-        buffer = bufnr,
         group = buf_group,
+        buf = buf,
         callback = function()
-          local char = vim.v.char
-          if char == '(' or char == ',' then
-            vim.schedule(function()
-              vim.lsp.buf.signature_help({ silent = true })
-            end)
+          if vim.v.char == '(' or vim.v.char == ',' then
+            vim.schedule(function() vim.lsp.buf.signature_help({ silent = true }) end)
           end
-          -- 'eval' is the mode a popup opened by vim.lsp.completion carries;
-          -- <C-n> reports 'keyword' and omni 'omni', so a manually opened
-          -- fallback popup is never replaced by an LSP list mid-word.
           if vim.fn.complete_info({ 'mode' }).mode == 'eval' then
-            vim.schedule(function()
-              vim.lsp.completion.get({ ctx = INCOMPLETE_CTX })
-            end)
+            vim.schedule(function() vim.lsp.completion.get({ ctx = INCOMPLETE }) end)
           end
         end,
       })
 
-      -- Set keymaps (omnifunc/tagfunc are auto-set by 0.12)
-      set_keymaps(bufnr)
+      local opts = { buf = buf, silent = true }
+      vim.keymap.set('n', 'gd', M.goto_definition, opts)
+      vim.keymap.set('n', 'gv', definition_in_other_window, opts)
+      vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+      vim.keymap.set('n', '<leader>vi', vim.lsp.buf.incoming_calls, opts)
     end,
   })
-
-  -- :LspInfo — short summary of LSP state for the current buffer.
-  -- nvim 0.12+ ships `:lsp enable|disable|restart|stop` and `:checkhealth
-  -- vim.lsp` but no one-shot status command. This fills the gap.
-  vim.api.nvim_create_user_command('LspInfo', function()
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-    local lines = {
-      ('Buffer %d  filetype=%s'):format(bufnr, vim.bo[bufnr].filetype),
-      ('%d attached client(s):'):format(#clients),
-    }
-    local attached = {}
-    for _, c in ipairs(clients) do
-      attached[c.name] = true
-      local stp = c.server_capabilities.semanticTokensProvider and 'yes' or 'no'
-      local root = c.config.root_dir or c.root_dir or '?'
-      table.insert(lines, ('  - %s (id=%d) root=%s  semantic_tokens=%s')
-        :format(c.name, c.id, root, stp))
-      table.insert(lines, ('    cmd=%s'):format(table.concat(c.config.cmd or {}, ' ')))
-    end
-    local not_attached = {}
-    for _, cfg in ipairs(vim.lsp.get_configs()) do
-      if not attached[cfg.name] and vim.lsp.is_enabled(cfg.name) then
-        table.insert(not_attached, cfg.name)
-      end
-    end
-    if #not_attached > 0 then
-      table.insert(lines, ('Enabled but not attached: %s'):format(table.concat(not_attached, ', ')))
-    end
-    vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
-  end, { desc = 'Show LSP clients attached to current buffer' })
-
-  -- Compatibility commands for the old common spellings. Neovim 0.12 has
-  -- lower-case `:lsp ...`, but these are easier to type from memory.
-  vim.api.nvim_create_user_command('LspStop', function(cmd)
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = stop_clients(bufnr, cmd.args)
-    local label = cmd.args ~= '' and cmd.args or 'attached LSP clients'
-    vim.notify(('Stopped %d %s for buffer %d'):format(#clients, label, bufnr), vim.log.levels.INFO)
-  end, {
-    nargs = '?',
-    complete = complete_lsp_name,
-    desc = 'Stop LSP clients attached to current buffer',
-  })
-
-  vim.api.nvim_create_user_command('LspStart', function(cmd)
-    local targets = command_targets(cmd.args)
-    vim.lsp.enable(targets)
-    vim.notify(('Started/enabled LSP: %s'):format(table.concat(targets, ', ')), vim.log.levels.INFO)
-  end, {
-    nargs = '?',
-    complete = complete_lsp_name,
-    desc = 'Start or enable LSP clients',
-  })
-
-  vim.api.nvim_create_user_command('LspRestart', function(cmd)
-    local bufnr = vim.api.nvim_get_current_buf()
-    local targets = command_targets(cmd.args)
-    local stopped = stop_clients(bufnr, cmd.args)
-    vim.defer_fn(function()
-      vim.lsp.enable(targets)
-      vim.notify(('Restarted LSP: %s (%d stopped)'):format(table.concat(targets, ', '), #stopped),
-        vim.log.levels.INFO)
-    end, 200)
-  end, {
-    nargs = '?',
-    complete = complete_lsp_name,
-    desc = 'Restart LSP clients for current buffer',
-  })
-
-  -- :LspLog — open the LSP log file in a new tab.
-  vim.api.nvim_create_user_command('LspLog', function()
-    vim.cmd('tabnew ' .. vim.fn.fnameescape(vim.lsp.log.get_filename()))
-  end, { desc = 'Open the LSP log file' })
 end
 
 return M

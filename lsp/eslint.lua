@@ -1,4 +1,3 @@
--- ESLint Language Server configuration
 return {
   cmd = { 'vscode-eslint-language-server', '--stdio' },
   filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },

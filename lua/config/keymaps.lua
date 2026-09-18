@@ -1,151 +1,88 @@
-vim.g.mapleader = " "
+local map = vim.keymap.set
 
--- Take you to the builtin directory browser (:h dir) at the current file's dir
-vim.keymap.set("n", "<leader>pv", function()
-    local dir = vim.fn.expand("%:p:h")
-    vim.cmd.edit(dir ~= "" and dir or ".")
-end, { desc = "Open directory browser" })
+map('n', '<leader>pv', function()
+  local dir = vim.fn.expand('%:p:h')
+  vim.cmd.edit(dir ~= '' and dir or '.')
+end, { desc = 'Open directory browser' })
 
-vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
-vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv")
+map('v', 'J', ":m '>+1<CR>gv=gv")
+map('v', 'K', ":m '<-2<CR>gv=gv")
+map('n', 'J', 'mzJ`z')
+map('n', '<C-d>', '<C-d>zz')
+map('n', '<C-u>', '<C-u>zz')
+map('n', 'n', 'nzzzv')
+map('n', 'N', 'Nzzzv')
+map('n', '<Esc>', '<cmd>nohlsearch<CR><Esc>', { silent = true })
+map('x', '<leader>p', [["_dP]], { desc = 'Paste without yanking' })
+map({ 'n', 'v' }, '<leader>d', [["_d]], { desc = 'Delete without yanking' })
+map('n', '<leader>s', [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]], { desc = 'Substitute word under cursor' })
 
-vim.keymap.set("n", "J", "mzJ`z") -- Join lines without spaces
-vim.keymap.set("n", "<C-d>", "<C-d>zz") -- Move down half a page and center the cursor
-vim.keymap.set("n", "<C-u>", "<C-u>zz") -- Move up half a page and center the cursor
-vim.keymap.set("n", "n", "nzzzv") -- Keep the cursor centered when searching
-vim.keymap.set("n", "N", "Nzzzv") -- Keep the cursor centered when searching
-vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR><Esc>", { silent = true }) -- Clear search highlight
-
-vim.keymap.set("x", "<leader>p", [["_dP]]) -- Paste without yanking
-vim.keymap.set({"n", "v"}, "<leader>d", "\"_d") -- Delete without yanking
-
--- Quickfix navigation
-vim.keymap.set("n", "<leader>qf", function()
-    vim.diagnostic.setqflist({ severity = vim.diagnostic.severity.ERROR })
-    vim.cmd("copen")
-end, { desc = "Send diagnostic errors to quickfix" }) -- e.g. clang/clangd errors
-
--- A fresh list starts ON entry 1, so a plain :cnext skips the first entry (or
--- says "no more items" when there is only one). Step to the current entry
--- first unless the cursor is already on it. <M-n> is 4coder's Alt-N.
+-- A fresh list starts ON entry 1, so step onto the current entry first unless
+-- the cursor is already there. <M-n> is 4coder's Alt-N.
 local function qf_step(cmd)
-    local idx = vim.fn.getqflist({ idx = 0 }).idx
-    local cur = idx > 0 and vim.fn.getqflist({ idx = idx, items = 0 }).items[1] or nil
-    local on_it = cur ~= nil and cur.bufnr == vim.api.nvim_get_current_buf() and cur.lnum == vim.fn.line(".")
-    return "<cmd>" .. (on_it and cmd or "cc") .. "<CR>zz"
+  local idx = vim.fn.getqflist({ idx = 0 }).idx
+  local cur = idx > 0 and vim.fn.getqflist({ idx = idx, items = 0 }).items[1] or nil
+  local on_it = cur ~= nil and cur.bufnr == vim.api.nvim_get_current_buf() and cur.lnum == vim.fn.line('.')
+  return '<cmd>' .. (on_it and cmd or 'cc') .. '<CR>zz'
 end
-vim.keymap.set("n", "<C-k>", function() return qf_step("cnext") end, { expr = true, desc = "Next quickfix item" })
-vim.keymap.set("n", "<C-j>", function() return qf_step("cprev") end, { expr = true, desc = "Previous quickfix item" })
-vim.keymap.set("n", "<M-n>", function() return qf_step("cnext") end, { expr = true, desc = "Next quickfix item" })
-vim.keymap.set("n", "<M-N>", function() return qf_step("cprev") end, { expr = true, desc = "Previous quickfix item" })
-vim.keymap.set("n", "<leader>qo", "<cmd>copen<cr>", { desc = "Open quickfix list" })
-vim.keymap.set("n", "<leader>qc", "<cmd>cclose<cr>", { desc = "Close quickfix list" })
-vim.keymap.set("n", "<leader>k", "<cmd>lnext<CR>zz") -- Move to the next location list item
-vim.keymap.set("n", "<leader>j", "<cmd>lprev<CR>zz") -- Move to the previous location list item
+map('n', { '<C-k>', '<M-n>' }, function() return qf_step('cnext') end, { expr = true, desc = 'Next quickfix item' })
+map('n', { '<C-j>', '<M-N>' }, function() return qf_step('cprev') end, { expr = true, desc = 'Previous quickfix item' })
+map('n', '<leader>qo', '<cmd>copen<CR>', { desc = 'Open quickfix list' })
+map('n', '<leader>qc', '<cmd>cclose<CR>', { desc = 'Close quickfix list' })
+map('n', '<leader>k', '<cmd>lnext<CR>zz', { desc = 'Next location list item' })
+map('n', '<leader>j', '<cmd>lprev<CR>zz', { desc = 'Previous location list item' })
+map('n', '<leader>qf', function() vim.diagnostic.setqflist({ open = true }) end, { desc = 'Diagnostics to quickfix' })
+map('n', '<leader>qq', function() vim.diagnostic.setloclist({ open = true }) end, { desc = 'Diagnostics to location list' })
+map('n', '<leader>vd', vim.diagnostic.open_float, { desc = 'Line diagnostics' })
 
--- Splits and buffers
-vim.keymap.set("n", "<C-,>", "<C-w>w", { desc = "Cycle splits" })
-vim.keymap.set("n", "<C-.>", "<C-^>", { desc = "Swap to alternate buffer" })
+map('n', '<C-,>', '<C-w>w', { desc = 'Cycle splits' })
+map('n', '<C-.>', '<C-^>', { desc = 'Alternate buffer' })
+map('n', '<leader>t', '<cmd>tabnew<CR>', { desc = 'New tab' })
+map('n', '<leader><Tab>', '<cmd>tabnext<CR>', { desc = 'Next tab' })
+map('n', '<leader>tc', '<cmd>tabclose<CR>', { desc = 'Close tab' })
 
--- Tabs
-vim.keymap.set("n", "<leader>t", "<cmd>tabnew<CR>zz")
-vim.keymap.set("n", "<leader><Tab>", "<cmd>tabnext<CR>zz")
-vim.keymap.set("n", "<leader>tc", "<cmd>tabclose<CR>zz")
+-- [count]Q places cursors without follow-mode, and only follow-mode replays
+-- motions and Visual sequences per cursor. "1q=" forces it on.
+map('n', '<leader>Q', '1Q1q=', { desc = 'Cursor on every search match, follow-mode on' })
 
+map('n', '<leader>u', function()
+  vim.cmd.packadd('nvim.undotree')
+  require('undotree').open()
+end, { desc = 'Toggle undotree' })
 
--- Search and replace
-vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]]) -- Search and replace the word under the cursor
+map('n', '<leader><leader>', '<cmd>source<CR>', { desc = 'Source current file' })
+map('n', '<leader>ih', function()
+  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+end, { desc = 'Toggle inlay hints' })
+map('n', '<leader>f', function() require('config.format').buffer(0) end, { desc = 'Format buffer' })
 
--- Multicursor (:h multicursor), builtin in 0.13 -- no plugin.
--- `Q` and `[count]Q` place cursors but leave follow-mode OFF, and only
--- follow-mode replays motions and Visual sequences per-cursor. That is why
--- `diw` cascades after "1Q" but `viwd` silently collapses to one cursor.
--- `{Visual}Q` is the one builtin entry point that enables it for you.
--- "1q=" forces follow-mode on rather than toggling it.
-vim.keymap.set("n", "<leader>Q", "1Q1q=",
-    { desc = "Cursor on every search match, follow-mode on" })
+local COMMENT_LINE = [[\v^\s*(//|#|--|"|'|/\*|\*)]]
+map('n', ']c', function() vim.fn.search(COMMENT_LINE, 'W') end, { desc = 'Next comment' })
+map('n', '[c', function() vim.fn.search(COMMENT_LINE, 'bW') end, { desc = 'Previous comment' })
 
--- Undotree: the builtin nvim.undotree pack (0.13, replaces mbbill/undotree).
--- open() toggles; inside the window, moving the cursor changes the undo state.
-vim.keymap.set("n", "<leader>u", function()
-    vim.cmd.packadd("nvim.undotree")
-    require("undotree").open()
-end, { desc = "Toggle undotree" })
-
--- Source file
-vim.keymap.set("n", "<leader><leader>", function()
-    vim.cmd("so")
-end) -- Source the file
-
--- Inlay hints
-vim.keymap.set("n", "<leader>ih", function()
-    vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
-end, { desc = "Toggle inlay hints" })
-
--- Completion: Tab cycles next, Shift-Tab cycles prev, Enter accepts.
--- Tab is the ONLY way to OPEN the popup; nothing auto-triggers it. (While it
--- is open, lua/config/lsp.lua re-queries the server on each keystroke when
--- the last reply was truncated — see the InsertCharPre autocmd there.)
--- With an LSP: vim.lsp.completion.get() (native, textEdit ranges honored;
---   `<C-x><C-o>` via an LSP omnifunc concatenates the prefix with some servers).
--- Without an LSP (unity-build C/C++): route by context —
---   * after a member operator (`.`/`->`/`::`) -> `<C-x><C-o>` omni completion,
---     which is the built-in `ccomplete` (omnifunc set by runtime ftplugin/c.vim);
---     it does real struct/union member completion via the tags file.
---   * otherwise -> `<C-n>` keyword completion: per 'complete' it merges buffer
---     words, other buffers and tags, so it also catches local variables and
---     parameters, which are NOT in the tags file.
-
----True if the text before the cursor ends with a member-access operator
----(`.`, `->`, `::`) + an optional partial identifier — including when the
----operator follows `)` or `]` (`get_x().`, `arr[i].`). After ANY member
----operator we want omni completion: if the type resolves it returns the
----type's members, and if it can't it returns nothing. Keyword completion
----here would instead dump the whole tag file ("wild"), which is never what
----you want after a `.`. A float literal like `3.` also routes to omni and
----harmlessly yields an empty result.
----@return boolean
+-- Completion only ever opens from <Tab>. With an LSP: native LSP completion.
+-- Without one: omni after `.`/`->`/`::`, the buffer's completefunc when it has
+-- one (C, see config/c_complete.lua), else keyword completion.
 local function at_member_access()
-  local col = vim.fn.col(".")
-  local before = vim.fn.getline("."):sub(1, col - 1)
-  return before:match("%.%s*[%w_]*$") ~= nil
-    or before:match("%->%s*[%w_]*$") ~= nil
-    or before:match("::%s*[%w_]*$") ~= nil
+  local before = vim.fn.getline('.'):sub(1, vim.fn.col('.') - 1)
+  return before:match('%.%s*[%w_]*$') or before:match('%->%s*[%w_]*$') or before:match('::%s*[%w_]*$')
 end
 
-vim.keymap.set("i", "<Tab>", function()
-  if vim.fn.pumvisible() == 1 then return "<C-n>" end
+map('i', '<Tab>', function()
+  if vim.fn.pumvisible() == 1 then return '<C-n>' end
   if next(vim.lsp.get_clients({ bufnr = 0 })) then
-    vim.schedule(function() vim.lsp.completion.get() end)
-    return ""
+    vim.schedule(vim.lsp.completion.get)
+    return ''
   end
-  -- No LSP attached (e.g. unity-build C/C++): route by context.
-  if at_member_access() then return "<C-x><C-o>" end
-  -- Plain identifier: the smart treesitter+tags completefunc when one is set
-  -- (C/C++ — see lua/config/c_complete.lua), else plain keyword completion.
-  if vim.bo.completefunc ~= "" then return "<C-x><C-u>" end
-  return "<C-n>"
-end, { expr = true, desc = "Tab: LSP completion, else omni/smart/keyword completion" })
-vim.keymap.set("i", "<S-Tab>", function()
-  if vim.fn.pumvisible() == 1 then return "<C-p>" end
-  return "<S-Tab>"
-end, { expr = true, desc = "Shift-Tab: cycle prev in popup" })
-vim.keymap.set("i", "<CR>", function()
-  if vim.fn.pumvisible() == 1 then
-    if vim.fn.complete_info({ "selected" }).selected ~= -1 then
-      return "<C-y>"
-    end
-    return "<C-e><CR>"
-  end
-  return "<CR>"
-end, { expr = true, desc = "Enter: accept selection or insert newline" })
-vim.keymap.set("i", "<C-]>", "<C-x><C-]>", { desc = "Trigger tag completion" })
-
--- Comment navigation
-vim.keymap.set("n", "]c", function()
-    vim.fn.search("\\v^\\s*(//|#|--|\"|'|/\\*|\\*)", "W")
-end, { desc = "Next comment" })
-
-vim.keymap.set("n", "[c", function()
-    vim.fn.search("\\v^\\s*(//|#|--|\"|'|/\\*|\\*)", "bW")
-end, { desc = "Previous comment" })
+  if at_member_access() then return '<C-x><C-o>' end
+  if vim.bo.completefunc ~= '' then return '<C-x><C-u>' end
+  return '<C-n>'
+end, { expr = true, desc = 'Complete' })
+map('i', '<S-Tab>', function()
+  return vim.fn.pumvisible() == 1 and '<C-p>' or '<S-Tab>'
+end, { expr = true, desc = 'Previous completion' })
+map('i', '<CR>', function()
+  if vim.fn.pumvisible() == 0 then return '<CR>' end
+  return vim.fn.complete_info({ 'selected' }).selected ~= -1 and '<C-y>' or '<C-e><CR>'
+end, { expr = true, desc = 'Accept completion or newline' })
+map('i', '<C-]>', '<C-x><C-]>', { desc = 'Tag completion' })

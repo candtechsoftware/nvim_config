@@ -1,4 +1,3 @@
--- Rust Analyzer configuration
 return {
   cmd = { 'rust-analyzer' },
   filetypes = { 'rust' },
@@ -7,10 +6,10 @@ return {
     ['rust-analyzer'] = {
       completion = {
         callable = {
-          snippets = 'none',  -- No snippet-style completions
+          snippets = 'none',
         },
         postfix = {
-          enable = false,  -- Disable postfix completions
+          enable = false,
         },
       },
       checkOnSave = {

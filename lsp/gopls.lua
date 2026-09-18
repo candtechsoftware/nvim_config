@@ -1,4 +1,3 @@
--- Go Language Server configuration
 return {
   cmd = { 'gopls' },
   filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
@@ -10,7 +9,7 @@ return {
         shadow = true,
       },
       staticcheck = true,
-      usePlaceholders = false,  -- No snippet placeholders
+      usePlaceholders = false,
     },
   },
 }

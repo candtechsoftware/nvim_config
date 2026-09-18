@@ -1,84 +1,30 @@
--- :ClangdSetup — bootstrap clangd for a unity-build project.
---
--- Unity builds have no build-system compile_commands.json and member files
--- don't compile standalone, so clangd needs to be told the preamble each file
--- is compiled under. This command scans the project for unity translation
--- units (sources that #include other .c/.cpp files), turns each TU's ordered
--- includes into an `-include` chain, and writes a multi-fragment .clangd at
--- the project root: shared flags globally, every TU's chain scoped to the dirs
--- it covers via `If: PathMatch` fragments — each dir getting only the part of
--- the chain the unity build has compiled by the time it reaches that dir, so a
--- base/ file is never force-fed the app header that comes after it.
--- Diagnostics keep real syntax errors but suppress the unity false-positive
--- noise (undeclared/unknown-type/redefinition families).
---
--- It also writes a bare compile_commands.json listing the project's sources.
--- That file carries NO flags (the .clangd fragments supply those for every
--- path, CDB command or fallback alike) — it exists because a compilation
--- database is the only thing clangd's background indexer takes a file list
--- from. With .clangd alone nothing was ever indexed: `.cache/clangd/index`
--- stayed empty in every project here, and goto-definition could only reach
--- the open file and the -include'd headers, i.e. it landed on prototypes and
--- never on the definition in another unity member. Shards land in
--- <root>/.cache/clangd/ (gitignore it, and compile_commands.json).
---
--- A compile_commands.json a build system already writes is left alone. Its
--- entries carry the real flags, which a bare one cannot supply: MinusTable's
--- build_mac.sh rewrites the database on every build, and overwriting it took
--- -Isrc and -Ithirdparty/libpq/include away from every file until the next
--- build. Either database gives the indexer the same file list, so the build's
--- wins.
---
--- :ClangdSetup! overwrites the .clangd, never a build system's database.
+-- :ClangdSetup writes a .clangd for a unity-build project. Each unity TU's
+-- ordered includes become an -include chain, scoped by PathMatch fragments to
+-- the dirs that TU covers. It also writes a flagless compile_commands.json,
+-- because clangd's background indexer only takes its file list from a CDB.
+-- A CDB a build system wrote is kept. :ClangdSetup! overwrites the .clangd.
 
 local M = {}
 
 local SRC_EXT = { c = true, cc = true, cpp = true, cxx = true, m = true, mm = true }
--- Shared with ctags, telescope and hh.macros. One miss here does not just bloat
--- the generated .clangd — it CORRUPTS it, by merging a vendored tree's unity TU
--- into the project's own. See lua/utils/skip_dirs.lua for the measurements.
-local SKIP_DIRS = require('utils.skip_dirs').NAMES
+local SKIP_DIRS = require('config.project').SKIP_DIRS
 
--- Candidate -I dirs tried (relative to root) when an include doesn't resolve
--- against the includer's own dir. Only ones that resolve something are
--- emitted. 'code' is 4coder convention; missing dirs cost one stat.
+-- Tried under the root when an include does not resolve next to its includer.
 local INCLUDE_BASES = { '', 'src', 'include', 'code' }
-
--- Build-output roots searched as a LAST resort for generated headers. These
--- live under SKIP_DIRS entries on purpose — build trees are full of artifacts
--- that must stay out of the TU scan and the header index — but a code
--- generator's output is a real dependency of the source: wayland-scanner emits
--- xdg-shell-protocol.h into build/, and modules/linux/gfx/gfx_wayland.c
--- includes it. Without this, that include resolves nowhere, no -I is emitted,
--- and clangd reports a missing header for a file the real build compiles fine.
+-- Build-output roots, searched last, for generated headers.
 local GENERATED_BASES = { 'build', 'out', 'gen', 'generated' }
 
--- Tokens that mark sources for OTHER platforms — those can never compile on
--- the named host, so their diagnostics get fully silenced. Matched as
--- DELIMITED tokens of a path component (`/`, `_`, `-` or `.` bound them), not
--- as bare substrings.
---
--- Substrings were wrong in both directions. Too narrow on mac: MinusTable's
--- windows entry point is src/win_main.c, which no substring of win32/windows
--- catches, so clangd parsed it as mac ObjC and reported two parse errors in a
--- file this host cannot compile at all. Too broad on linux and windows, where
--- `mac` is a substring of `macro`: 19 files across these projects were
--- silenced and dropped from the index for that reason alone, among them the
--- base_macro_push.h / base_macro_pop.h pair that base_inc.h opens and closes
--- every module with — so on linux those two never even reached the preamble
--- chain. A bare `win` token stays safe the same way: window.c and twin.c
--- tokenize to `window` and `twin`, neither of which is `win`.
---
--- The boundary is a delimiter, not a letter class, so a token glued straight
--- onto more text (win64, x11drv) is NOT matched. Nothing in these projects is
--- named that way; add the literal token here if that ever changes.
+local SYSNAME = vim.uv.os_uname().sysname
+
+-- Path tokens (delimited by / _ - .) naming sources for other platforms.
 local FOREIGN_PLATFORM = {
   Darwin = 'win|win32|windows|linux|lnx|wayland|x11',
   Linux = 'win|win32|windows|mac|macos|darwin|cocoa|metal',
   Windows_NT = 'mac|macos|darwin|cocoa|metal|linux|lnx|wayland|x11',
 }
+local FOREIGN = FOREIGN_PLATFORM[SYSNAME] or FOREIGN_PLATFORM.Windows_NT
 
--- #include/#import forms; second element marks system (<...>) includes.
+-- The second element marks system (<...>) includes.
 local INCLUDE_PATTERNS = {
   { '^%s*#%s*include%s+"([^"]+)"', false },
   { '^%s*#%s*import%s+"([^"]+)"', false },
@@ -86,19 +32,12 @@ local INCLUDE_PATTERNS = {
   { '^%s*#%s*import%s+<([^>]+)>', true },
 }
 
--- Diagnostics that fire on every unity member file parsed standalone even
--- with a good -include chain (out-of-order refs, partial preambles). Names
--- verified against clang 22 Diagnostic*.inc — `implicit_function_declaration`
--- no longer exists, it's `implicit_function_decl_c99` now.
+-- Diagnostics every unity member reports when parsed standalone, even with a
+-- good -include chain. Names are clang 22's.
 local SUPPRESS = {
   'implicit_function_decl_c99',
   'implicit_function_decl',
   'implicit-function-declaration',
-  -- Cascade from an implicit declaration: the un-declared function is assumed
-  -- to return int, so returning/assigning/passing its result against the real
-  -- (unity-visible) type trips an incompatible-conversion error even though
-  -- the implicit_function_decl that caused it is itself suppressed. Covers the
-  -- err_ (int->aggregate) and ext_ (-Wincompatible-pointer-types) variants.
   'typecheck_convert_incompatible',
   'undeclared_var_use',
   'undeclared_var_use_suggest',
@@ -110,16 +49,12 @@ local SUPPRESS = {
   'call_incomplete_argument',
   'call_incomplete_return',
   'field_incomplete_or_sizeless',
-  -- Redefinitions: unity members re-included across preamble fragments, or
-  -- aggregates without include guards. The real build catches true dupes.
   'redefinition',
   'redefinition_different_kind',
   'redefinition_different_typedef',
   'static_non_static',
   'nested_redefinition',
-  -- Function-like macros defined in unity .cpp members (4coder-style
-  -- push_array etc.) parse as identifiers when the macro isn't in the
-  -- preamble; these are what that failure mode degrades into.
+  -- What a function-like macro missing from the preamble degrades into.
   'unexpected_typedef',
   'unexpected_typedef_ident',
   'ref_non_value',
@@ -134,8 +69,13 @@ local SUPPRESS = {
   'typecheck_nonviable_condition_incomplete',
 }
 
----@param path string directory path (with or without trailing slash)
----@return boolean
+local BUILD_FILES = {
+  Makefile = true, makefile = true, GNUmakefile = true,
+  ['CMakeLists.txt'] = true, ['build.ninja'] = true,
+  Justfile = true, justfile = true,
+}
+local BUILD_SCRIPT_EXT = { sh = true, zsh = true, bash = true, command = true, bat = true }
+
 local function skipped(path)
   path = path .. '/'
   if path:find('/%.git/') or path:find('%.dSYM/') then return true end
@@ -145,79 +85,30 @@ local function skipped(path)
   return false
 end
 
----@param name string
----@return string|nil
 local function ext_of(name)
   return name:match('%.(%w+)$')
 end
 
----#include/#import directives from the first 300 lines of a file.
----System (<...>) includes matter for chain ORDER: in the real unity TU,
----framework headers are parsed before the project's macros exist; a chain
----that -includes macro headers first makes clang parse Apple/system headers
----with those macros active (e.g. 4coder's `internal` colliding with
----framework identifiers). System includes after the first preprocessor
----conditional are skipped — those are platform-gated and the parser doesn't
----evaluate conditions.
----@param path string
----@return {raw:string, is_src:boolean, system:boolean|nil}[]
-local function parse_includes(path)
-  local ok, lines = pcall(vim.fn.readfile, path, '', 300)
-  if not ok then return {} end
-  local incs, saw_cond = {}, false
-  for _, line in ipairs(lines) do
-    if line:match('^%s*#%s*if') then saw_cond = true end
-    for _, pat in ipairs(INCLUDE_PATTERNS) do
-      local raw, system = line:match(pat[1]), pat[2]
-      if raw then
-        if not (system and saw_cond) then
-          local e = ext_of(raw)
-          incs[#incs + 1] = {
-            raw = raw,
-            is_src = not system and (e ~= nil and SRC_EXT[e]) or false,
-            system = system or nil,
-          }
-        end
-        break
-      end
-    end
-  end
-  return incs
+local function is_source(name)
+  return SRC_EXT[ext_of(name) or ''] == true
 end
 
--- Root-level build files consulted for the ARC signal (see arc_required).
-local BUILD_FILES = {
-  ['Makefile'] = true, ['makefile'] = true, ['GNUmakefile'] = true,
-  ['CMakeLists.txt'] = true, ['build.ninja'] = true,
-  ['Justfile'] = true, ['justfile'] = true,
-}
-local BUILD_SCRIPT_EXT = { sh = true, zsh = true, bash = true, command = true, bat = true }
+local function is_header(name)
+  return name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$')
+end
 
----Is `name` a root build file worth reading for build flags?
----Scripts are matched by SHAPE, not by an exact list: a project that builds on
----more than one OS splits the script per platform, and the mac one is the only
----place -fobjc-arc ever appears. MinusTable's is build_mac.sh — no exact-name
----list predicted it, so its ARC guard never fired and every ObjC member of the
----unity TU was parsed under manual retain/release.
----@param name string
----@return boolean
+-- Build scripts are matched by shape, since per-platform ones (build_mac.sh)
+-- have no fixed name.
 local function build_file(name)
   if BUILD_FILES[name] or name:match('%.mk$') then return true end
-  local ext = name:match('%.(%w+)$')
-  return BUILD_SCRIPT_EXT[ext or ''] == true and name:lower():find('build', 1, true) ~= nil
+  return BUILD_SCRIPT_EXT[ext_of(name) or ''] == true and name:lower():find('build', 1, true) ~= nil
 end
 
----Read up to `nlines` of a file and test it against Lua patterns.
----@param path string
----@param nlines integer
----@param pats string[]
----@return boolean[] one flag per pattern, true when some line matched it
 local function file_matches(path, nlines, pats)
   local hits = {}
   for i = 1, #pats do hits[i] = false end
   local ok, lines = pcall(vim.fn.readfile, path, '', nlines)
-  if not ok then return hits end
-  for _, line in ipairs(lines) do
+  for _, line in ipairs(ok and lines or {}) do
     for i, p in ipairs(pats) do
       if not hits[i] and line:find(p) then hits[i] = true end
     end
@@ -225,37 +116,19 @@ local function file_matches(path, nlines, pats)
   return hits
 end
 
----Does the real build compile Objective-C with ARC?
----
----This is DETECTED, never assumed, because both answers are wrong for the
----other kind of project. An ARC backend usually hard-guards itself
----(`#if !__has_feature(objc_arc)` / `#error ... requires ARC`, e.g.
----the_std's src/render/metal/render_metal.h) and that #error is a REAL
----diagnostic, not a unity false positive — no SUPPRESS entry can silence it,
----so every member file of the TU that pulls in the backend reports it until
-----fobjc-arc is passed. Feed -fobjc-arc to a manual-retain/release project
----instead and you get the mirror image: an error on every [obj retain].
----
----Two signals, either suffices: the root build script naming -fobjc-arc (or
----Xcode's CLANG_ENABLE_OBJC_ARC), or an ObjC source whose sibling header
----carries the __has_feature(objc_arc) + #error guard.
----@param root string
----@param objc_srcs string[] absolute paths of scanned .m/.mm files
----@return boolean
+-- Detected, never assumed: an ARC backend's `#error requires ARC` is a real
+-- error, and -fobjc-arc breaks manual retain/release code.
 local function arc_required(root, objc_srcs)
   for name, typ in vim.fs.dir(root) do
     if typ == 'file' and build_file(name) then
-      local hits = file_matches(root .. '/' .. name, 500,
-        { '%-fobjc%-arc', 'CLANG_ENABLE_OBJC_ARC' })
+      local hits = file_matches(root .. '/' .. name, 500, { '%-fobjc%-arc', 'CLANG_ENABLE_OBJC_ARC' })
       if hits[1] or hits[2] then return true end
     end
   end
   for _, src in ipairs(objc_srcs) do
     local hdr = src:gsub('%.mm?$', '.h')
     if vim.uv.fs_stat(hdr) then
-      -- Both, so a merely ARC-AWARE file (`#if defined(__OBJC__) &&
-      -- __has_feature(objc_arc)` around an optional branch) isn't read as a
-      -- requirement — only a guard that hard-errors without ARC is.
+      -- Only a guard that hard-errors without ARC counts, not ARC-aware code.
       local hits = file_matches(hdr, 300, { '__has_feature%s*%(%s*objc_arc', '^%s*#%s*error' })
       if hits[1] and hits[2] then return true end
     end
@@ -263,20 +136,10 @@ local function arc_required(root, objc_srcs)
   return false
 end
 
----@param root string
----@param abs string
----@return string path relative to root when under it, else the absolute path
----Is `rel` (project-relative path) a source for a platform other than this
----host? Mirrors the FOREIGN_PLATFORM fragment in render(): any delimited
----token of any path component naming a foreign platform.
----@param rel string
----@return boolean
 local function foreign_platform(rel)
-  local sysname = vim.uv.os_uname().sysname
-  local alts = FOREIGN_PLATFORM[sysname] or FOREIGN_PLATFORM.Windows_NT
   for comp in rel:gmatch('[^/]+') do
     for token in comp:gmatch('[^_%-%.]+') do
-      for alt in alts:gmatch('[^|]+') do
+      for alt in FOREIGN:gmatch('[^|]+') do
         if token == alt then return true end
       end
     end
@@ -285,42 +148,16 @@ local function foreign_platform(rel)
 end
 
 local function relpath(root, abs)
-  if abs:sub(1, #root + 1) == root .. '/' then
-    return abs:sub(#root + 2)
-  end
+  if abs:sub(1, #root + 1) == root .. '/' then return abs:sub(#root + 2) end
   return abs
 end
 
--- Optional per-project file naming include roots OUTSIDE the project tree.
--- INCLUDE_BASES only probes dirs under the root, which is right for a
--- self-contained project and wrong for one that builds against a checkout
--- elsewhere: ~/projects/notes/renderer includes "base/base_inc.h" and
--- "os/os_inc.h", and its build.sh resolves those with
--- `-I$STD_DIR/src` where STD_DIR defaults to $HOME/projects/the_std. Nothing
--- under renderer/ can resolve them, so 36 of its -include entries came out
--- unresolved. There is no reliable way to infer this — build.sh sets it from
--- an env var — so it is declared, one path per line:
---
---   # renderer/.clangd-include-dirs
---   $HOME/projects/the_std/src
---   $HOME/projects/the_std
---
--- Blank lines and `#` comments are ignored; `~`, `$VAR` and `${VAR}` expand;
--- relative paths resolve against the project root. Listed dirs join the -I
--- probe set, so the ones that actually resolve an include become -I flags in
--- the generated .clangd (the ones that don't cost nothing).
-local INCLUDE_DIRS_FILE = '.clangd-include-dirs'
-
----Read the project's declared external include roots.
----@param root string
----@return string[] dirs  absolute paths that exist
+-- <root>/.clangd-include-dirs lists include roots outside the project, one per
+-- line: # comments, ~ and $VAR expand, relative paths resolve against the root.
 local function extra_include_dirs(root)
-  local path = root .. '/' .. INCLUDE_DIRS_FILE
-  if not vim.uv.fs_stat(path) then return {} end
-  local ok, lines = pcall(vim.fn.readfile, path)
-  if not ok then return {} end
+  local ok, lines = pcall(vim.fn.readfile, root .. '/.clangd-include-dirs')
   local dirs, seen = {}, {}
-  for _, line in ipairs(lines) do
+  for _, line in ipairs(ok and lines or {}) do
     local s = line:gsub('%s*#.*$', ''):gsub('^%s+', ''):gsub('%s+$', '')
     if s ~= '' then
       s = vim.fn.expand(s)
@@ -335,86 +172,38 @@ local function extra_include_dirs(root)
   return dirs
 end
 
----Build the project model: scan sources, resolve includes, find unity TUs.
----@param root string
----@return table|nil model, string|nil err
+local function add_to_index(index, paths)
+  for _, p in ipairs(paths) do
+    p = vim.fs.normalize(p)
+    local b = vim.fs.basename(p)
+    index[b] = index[b] or {}
+    table.insert(index[b], p)
+  end
+end
+
+-- The one indexed path ending in /raw, and the -I base it implies.
+local function suffix_lookup(index, raw)
+  local matches = {}
+  for _, p in ipairs(index[vim.fs.basename(raw)] or {}) do
+    if p:sub(-(#raw + 1)) == '/' .. raw then matches[#matches + 1] = p end
+  end
+  if #matches ~= 1 then return nil end
+  return matches[1], matches[1]:sub(1, #matches[1] - #raw - 1)
+end
+
 local function scan(root)
-  -- Include resolver: quoted includes resolve against the includer's dir
-  -- first (no -I needed), then against candidate -I bases. A base that
-  -- actually resolves something is recorded so it ends up as a -I flag.
   local bases = {}
   for _, b in ipairs(INCLUDE_BASES) do
     local dir = b == '' and root or (root .. '/' .. b)
     if vim.uv.fs_stat(dir) then bases[#bases + 1] = dir end
   end
-  -- Declared external roots come last, so an in-project header always wins
-  -- over a same-named one in a sibling checkout.
+  -- External roots last, so an in-project header wins.
   vim.list_extend(bases, extra_include_dirs(root))
   local used_bases = {}
 
-  -- Last-resort resolver: index every header and source in the project by
-  -- basename and accept a unique suffix match (e.g. `4coder_base_types.h` ->
-  -- code/custom/). The implied base dir becomes a -I flag so sibling includes
-  -- resolve too. Sources matter as much as headers: engine's src/main.cpp
-  -- includes `base/base_inc.cpp` from modules/, and a header-only index left
-  -- that aggregate unresolved, so it was scanned as a separate unity TU and
-  -- the third_party headers it includes never reached the preamble chain.
-  local header_index
-  local function header_lookup(raw)
-    if not header_index then
-      header_index = {}
-      local hdrs = vim.fs.find(function(name, path)
-        local e = ext_of(name)
-        return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$')
-          or (e ~= nil and SRC_EXT[e])) and not skipped(path)
-      end, { path = root, type = 'file', limit = 1000 })
-      for _, h in ipairs(hdrs) do
-        h = vim.fs.normalize(h)
-        local b = vim.fs.basename(h)
-        header_index[b] = header_index[b] or {}
-        table.insert(header_index[b], h)
-      end
-    end
-    local cands = header_index[vim.fs.basename(raw)] or {}
-    local matches = {}
-    for _, h in ipairs(cands) do
-      if h:sub(-(#raw + 1)) == '/' .. raw then matches[#matches + 1] = h end
-    end
-    if #matches ~= 1 then return nil end
-    return matches[1], matches[1]:sub(1, #matches[1] - #raw - 1)
-  end
-
-  -- Generated-header index, built only if a normal resolve fails, and only
-  -- over the build roots that exist. Separate from header_index so build
-  -- output can never shadow a real project header of the same name.
-  local gen_index
-  local function generated_lookup(raw)
-    if not gen_index then
-      gen_index = {}
-      for _, b in ipairs(GENERATED_BASES) do
-        local dir = root .. '/' .. b
-        if vim.uv.fs_stat(dir) then
-          local hdrs = vim.fs.find(function(name, path)
-            return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$'))
-              and not path:find('/%.git/')
-          end, { path = dir, type = 'file', limit = 500 })
-          for _, h in ipairs(hdrs) do
-            h = vim.fs.normalize(h)
-            local base = vim.fs.basename(h)
-            gen_index[base] = gen_index[base] or {}
-            table.insert(gen_index[base], h)
-          end
-        end
-      end
-    end
-    local matches = {}
-    for _, h in ipairs(gen_index[vim.fs.basename(raw)] or {}) do
-      if h:sub(-(#raw + 1)) == '/' .. raw then matches[#matches + 1] = h end
-    end
-    if #matches ~= 1 then return nil end
-    return matches[1], matches[1]:sub(1, #matches[1] - #raw - 1)
-  end
-
+  -- Last resorts, indexed on first use: any project header or source by a
+  -- unique path suffix, then generated headers under the build roots.
+  local header_index, gen_index
   local function resolve(raw, filedir)
     local cand = vim.fs.normalize(vim.fs.joinpath(filedir, raw))
     if vim.uv.fs_stat(cand) then return cand end
@@ -425,30 +214,41 @@ local function scan(root)
         return cand
       end
     end
-    local abs, base = header_lookup(raw)
-    if abs then
-      used_bases[base] = true
-      return abs
+    if not header_index then
+      header_index = {}
+      add_to_index(header_index, vim.fs.find(function(name, path)
+        return (is_header(name) or is_source(name)) and not skipped(path)
+      end, { path = root, type = 'file', limit = 1000 }))
     end
-    abs, base = generated_lookup(raw)
-    if abs then
-      used_bases[base] = true
-      return abs
+    local abs, base = suffix_lookup(header_index, raw)
+    if not abs then
+      if not gen_index then
+        gen_index = {}
+        for _, b in ipairs(GENERATED_BASES) do
+          local dir = root .. '/' .. b
+          if vim.uv.fs_stat(dir) then
+            add_to_index(gen_index, vim.fs.find(function(name, path)
+              return is_header(name) and not path:find('/%.git/')
+            end, { path = dir, type = 'file', limit = 500 }))
+          end
+        end
+      end
+      abs, base = suffix_lookup(gen_index, raw)
     end
-    return nil
+    if abs then used_bases[base] = true end
+    return abs
   end
 
   local files = vim.fs.find(function(name, path)
-    local e = ext_of(name)
-    return (e ~= nil and SRC_EXT[e]) and not skipped(path)
+    return is_source(name) and not skipped(path)
   end, { path = root, type = 'file', limit = 200 })
   if #files == 0 then
     return nil, 'no .c/.cc/.cpp files found under ' .. root
   end
 
-  -- info[abs] = { incs = {raw, abs, is_src}[], src_inc_count = n }
-  -- Lazily loaded so the transitive walk can read headers too, capped at 500
-  -- file reads total to stay bounded on huge trees.
+  -- Includes per file, read lazily so the chain walk can read headers too,
+  -- capped at 500 reads. Only the first 300 lines are read, and system
+  -- includes after the first #if are platform-gated, so they are skipped.
   local info, reads = {}, 0
   local function load(abs)
     if info[abs] then return info[abs] end
@@ -456,91 +256,75 @@ local function scan(root)
     reads = reads + 1
     local dir = vim.fs.dirname(abs)
     local entry = { incs = {}, src_inc_count = 0 }
-    for _, inc in ipairs(parse_includes(abs)) do
-      entry.incs[#entry.incs + 1] = {
-        raw = inc.raw,
-        abs = (not inc.system) and resolve(inc.raw, dir) or nil,
-        is_src = inc.is_src,
-        system = inc.system,
-      }
-      if inc.is_src then entry.src_inc_count = entry.src_inc_count + 1 end
+    local ok, lines = pcall(vim.fn.readfile, abs, '', 300)
+    local saw_cond = false
+    for _, line in ipairs(ok and lines or {}) do
+      if line:match('^%s*#%s*if') then saw_cond = true end
+      for _, pat in ipairs(INCLUDE_PATTERNS) do
+        local raw, system = line:match(pat[1]), pat[2]
+        if raw then
+          if not (system and saw_cond) then
+            local is_src = not system and is_source(raw)
+            entry.incs[#entry.incs + 1] = {
+              raw = raw,
+              abs = not system and resolve(raw, dir) or nil,
+              is_src = is_src,
+              system = system or nil,
+            }
+            if is_src then entry.src_inc_count = entry.src_inc_count + 1 end
+          end
+          break
+        end
+      end
     end
     info[abs] = entry
     return entry
   end
 
-  -- A file is a unity TU if it includes >=1 source file and is not itself
-  -- included by another file (filters nested unity files like base_inc.c).
+  -- A unity TU includes a source file and is not itself included by one.
   local included = {}
   for i, f in ipairs(files) do
     files[i] = vim.fs.normalize(f)
     local e = load(files[i])
-    if e then
-      for _, inc in ipairs(e.incs) do
-        if inc.is_src and inc.abs then included[inc.abs] = true end
-      end
+    for _, inc in ipairs(e and e.incs or {}) do
+      if inc.is_src and inc.abs then included[inc.abs] = true end
     end
   end
   local tus = {}
   for _, abs in ipairs(files) do
     local e = info[abs]
-    if e and e.src_inc_count > 0 and not included[abs] then
-      tus[#tus + 1] = abs
-    end
+    if e and e.src_inc_count > 0 and not included[abs] then tus[#tus + 1] = abs end
   end
 
-  -- Does a C/C++ file pull a .m/.mm into the unity build? Then the real
-  -- build compiles those TUs as Objective-C (the_std passes -ObjC on mac)
-  -- and clangd must match, or `#error requires Objective-C` guards fire.
+  -- A unity build that pulls in .m/.mm compiles as Objective-C, and clangd
+  -- has to match.
   local objc_unity, objc_srcs = false, {}
   for _, abs in ipairs(files) do
-    local e, self_ext = info[abs], ext_of(abs)
-    if self_ext == 'm' or self_ext == 'mm' then
+    local ext = ext_of(abs)
+    if ext == 'm' or ext == 'mm' then
       objc_srcs[#objc_srcs + 1] = abs
-    elseif e then
-      for _, inc in ipairs(e.incs) do
+    elseif info[abs] then
+      for _, inc in ipairs(info[abs].incs) do
         local ie = inc.is_src and ext_of(inc.raw) or nil
         if ie == 'm' or ie == 'mm' then objc_unity = true end
       end
     end
   end
-  -- ...and does that build use ARC? (see arc_required — it decides whether
-  -- -fobjc-arc goes in the ObjC fragments below).
-  local objc_arc = objc_unity and arc_required(root, objc_srcs)
 
-  -- Per-TU: the -include chain, and per covered directory how MUCH of that
-  -- chain the unity build has already compiled by the time it first reaches
-  -- that directory. Both come out of ONE ordered pass, because the second is
-  -- just a position in the first.
   local model = {
     root = root, tus = {}, used_bases = used_bases,
-    objc_unity = objc_unity, objc_arc = objc_arc,
+    objc_unity = objc_unity, objc_arc = objc_unity and arc_required(root, objc_srcs),
   }
+
   for _, tu in ipairs(tus) do
-    -- The chain is the TU's ordered header includes, plus the headers of every
-    -- source aggregate it pulls in, in place. base_inc.cpp includes xxhash.h
-    -- and stb_image.h before its own .cpp files, so base_string.cpp sees
-    -- XXH3_64bits_withSeed only if those ride along; and a TU whose first
-    -- include is itself an aggregate (4coder_default_bindings.cpp ->
-    -- 4coder_default_include.cpp) has no direct headers at all. Leaf sources
-    -- are descended into for coverage but contribute no headers.
-    --
-    -- The per-dir depth is what keeps each fragment's preamble HONEST.
-    -- MinusTable's src/main.c is base_inc.h, render_core.h, metal.h, app.h in
-    -- that order; handing all four to src/base/ force-includes three headers
-    -- the real TU compiles long AFTER it, and clangd then reports a Vec4F32
-    -- tag mismatch and an implicit int inside base_inc.h itself. src/base/ is
-    -- reached while the chain holds one header, so one header is what it gets:
-    -- the same per-directory mapping build_mac.sh spells out by hand.
-    --
-    -- clangd resolves fallback-command flags relative to each FILE's
-    -- directory, not the .clangd location, so relative -include/-I paths
-    -- silently fail for any file outside the root dir. Emit absolute paths.
+    -- chain: the TU's ordered header includes, plus those of every source
+    -- aggregate it pulls in, in place. dirs[d]: how much of the chain the
+    -- unity build has compiled when it first reaches d, so no dir is fed a
+    -- header the real build compiles after it. Paths stay absolute because
+    -- clangd resolves flags relative to each file.
     local chain, dedup = {}, {}
     local seen, dirs, collected = {}, {}, {}
 
-    -- A dir gets AT LEAST the chain standing when the walk reaches it; a dir
-    -- already claimed under a shorter chain is raised, never lowered.
     local function claim(abs)
       local d = relpath(root, vim.fs.dirname(abs))
       dirs[d] = math.max(dirs[d] or 0, #chain)
@@ -565,19 +349,14 @@ local function scan(root)
       local e = load(abs)
       if not e then return end
       for _, inc in ipairs(e.incs) do
-        local foreign = inc.abs and foreign_platform(relpath(root, inc.abs))
-        if foreign then
-          -- gfx_inc.cpp's `#if OS_WINDOWS` headers must not join a Mac preamble
+        if inc.abs and foreign_platform(relpath(root, inc.abs)) then
+          -- Another platform's header never joins this host's preamble.
         elseif not inc.is_src then
           local key = inc.abs or inc.raw
           if not dedup[key] then
             dedup[key] = true
-            -- System entries stay as-is; -include resolves them through the
-            -- normal header/framework search (Cocoa/Cocoa.h etc. just work).
-            chain[#chain + 1] = {
-              path = key,
-              unresolved = not inc.system and inc.abs == nil,
-            }
+            -- System includes resolve through clang's own search paths.
+            chain[#chain + 1] = { path = key, unresolved = not inc.system and inc.abs == nil }
           end
           if inc.abs then mark(inc.abs, depth + 1) end
         elseif inc.abs and load(inc.abs) and info[inc.abs].src_inc_count > 0 then
@@ -587,9 +366,9 @@ local function scan(root)
         end
       end
     end
+
     collect(tu, 1)
-    -- The TU itself is the file the real build hands the compiler, so it is
-    -- compiled under the whole chain rather than a prefix of it.
+    -- The TU itself compiles under the whole chain.
     dirs[relpath(root, vim.fs.dirname(tu))] = #chain
 
     model.tus[#model.tus + 1] = {
@@ -603,34 +382,26 @@ local function scan(root)
     }
   end
 
-  -- Every project dir holding a source or header. Used for the orphan-dir
-  -- fallback: a module that exists but isn't yet pulled into any unity TU
-  -- (e.g. an `*_inc.h` aggregate nothing includes — src/render before an
-  -- example app wires it in) is in zero coverage sets, so it'd match only
-  -- the global `.h` fragment and parse with NO preamble: every base type
-  -- and keyword (internal, u32, Mat4) then reads as undefined.
-  local all_dirs = {}
+  -- Every dir holding a source or header, for the orphan-dir fallback.
+  local all_dirs, headers_by_dir = {}, {}
   for _, abs in ipairs(files) do
     all_dirs[relpath(root, vim.fs.dirname(abs))] = true
   end
   local hdrs = vim.fs.find(function(name, path)
-    return (name:match('%.h$') or name:match('%.hh$') or name:match('%.hpp$'))
-      and not skipped(path)
+    return is_header(name) and not skipped(path)
   end, { path = root, type = 'file', limit = 1000 })
-  local headers_by_dir = {}
   for _, h in ipairs(hdrs) do
     h = vim.fs.normalize(h)
     local dir = relpath(root, vim.fs.dirname(h))
     all_dirs[dir] = true
     headers_by_dir[dir] = headers_by_dir[dir] or {}
-    headers_by_dir[dir][#headers_by_dir[dir] + 1] = h
+    table.insert(headers_by_dir[dir], h)
   end
   model.all_dirs = all_dirs
   model.headers_by_dir = headers_by_dir
-  -- Every project source (SKIP_DIRS excluded): the compile_commands.json list.
   model.files = files
 
-  -- Primary TU = widest coverage; ties prefer main.* then stable path order.
+  -- The primary TU is the widest; ties prefer main.*, then path order.
   table.sort(model.tus, function(a, b)
     if a.coverage ~= b.coverage then return a.coverage > b.coverage end
     local am = vim.fs.basename(a.abs):match('^main%.') and 1 or 0
@@ -641,10 +412,6 @@ local function scan(root)
   return model
 end
 
----@param chain {path:string, unresolved:boolean}[]
----@param from string TU the chain came from (for the comment)
----@param out string[]
----@param total? integer full chain length, when `chain` is a truncated prefix
 local function emit_chain(chain, from, out, total)
   if #chain == 0 then return end
   local note = ''
@@ -658,32 +425,23 @@ local function emit_chain(chain, from, out, total)
   end
 end
 
----@param dir string project-relative dir
----@return string clangd PathMatch regex for files DIRECTLY in dir (coverage
----enumerates every dir explicitly, so subtree matching would double-apply
----chains wherever TU claims nest, e.g. code/.* vs code/custom/.*)
+-- Files directly in dir only: every covered dir is listed on its own, so
+-- subtree matching would apply nested chains twice.
 local function path_pattern(dir)
   return dir:gsub('%.', '\\.') .. '/[^/]*'
 end
 
----Render the .clangd content for a scanned model.
----@param model table
----@return string[] lines, table summary
 local function render(model)
   local primary = model.tus[1]
 
-  -- -I dirs: project root always, plus any base dir that resolved includes.
-  -- Absolute, for the same reason as the -include chain above.
   local idirs = { '-I' .. model.root }
   for b in pairs(model.used_bases) do
     if b ~= model.root then idirs[#idirs + 1] = '-I' .. b end
   end
   table.sort(idirs)
 
-  -- Language standards are NEVER global: clangd parses standalone headers
-  -- as Objective-C++, where a C std is an invalid argument ("-std=c99 not
-  -- allowed with Objective-C++" on every .h). Stds are emitted as
-  -- per-extension fragments below; headers follow the dominant TU language.
+  -- Standards go in per-extension fragments, never globally: clangd parses a
+  -- bare header as Objective-C++, where a C std is an invalid argument.
   local n_c, n_cpp = 0, 0
   for _, tu in ipairs(model.tus) do
     if tu.ext == 'c' or tu.ext == 'm' then n_c = n_c + 1 else n_cpp = n_cpp + 1 end
@@ -701,19 +459,11 @@ local function render(model)
   vim.list_extend(out, {
     '    - -DDEBUG',
     '    - -ferror-limit=0',
-    '    - -w',  -- errors only; pedantic warnings are noise in unity members
+    '    - -w',
     '    - -Wno-error=implicit-function-declaration',
     '    - -Wno-implicit-function-declaration',
     '    - -Wno-error=incompatible-pointer-types',
     '    - -Wno-incompatible-pointer-types',
-  })
-  -- No `Remove:` block here. It strips flags from the *compile command*, and
-  -- the only compile_commands.json in these projects is the bare one this
-  -- command writes (see render_cdb): `clang -c <file>`, no flags at all, just
-  -- like the `clang -- <file>` fallback used for files outside it. Neither
-  -- carries -Wall or -Werror, so removing them was a no-op that read like a
-  -- real setting. `-w` above is what actually silences warnings.
-  vim.list_extend(out, {
     'Diagnostics:',
     '  UnusedIncludes: None',
     '  MissingIncludes: None',
@@ -724,109 +474,54 @@ local function render(model)
     '  Suppress:',
   })
   for _, s in ipairs(SUPPRESS) do out[#out + 1] = '    - ' .. s end
+  -- Fragments merge in order, so this later Skip overrides the Build above.
   vim.list_extend(out, {
     'Index:',
     '  Background: Build',
-  })
-
-  -- Keep the background index off the trees the TU scan already refuses to
-  -- look at. `Background: Build` above only *permits* indexing — the file
-  -- list comes from compile_commands.json (render_cdb), which excludes
-  -- SKIP_DIRS already. The fragment stays as a guard for a database that does
-  -- not (a real build system's, or a hand-edited one): applied per-file over
-  -- the WHOLE root, `Build` would in a monorepo also index every vendored and
-  -- generated source under SKIP_DIRS. That is
-  -- not a marginal cost: in ~/projects/notes it is 4735 of 6282 C/C++/headers
-  -- (75%), including a 63MB slang-core-module-generated.h and three copies of
-  -- a 1.7MB kb_text_shape.h, and clangd re-walks it in background threads
-  -- while you type. Nothing in the model refers to these files — scan() skips
-  -- SKIP_DIRS when finding TUs — so indexing them buys no completion or
-  -- goto-def that the project actually uses. Vendored HEADERS a TU includes
-  -- (third_party/xxhash/xxhash.h from base_inc.cpp) are unaffected: clangd
-  -- checks Index.Background per translation unit, and the header is indexed
-  -- as part of the TU's shard, so workspace/symbol still finds XXH3_*.
-  --
-  -- Emitted as the FIRST conditional fragment, after the global block: clangd
-  -- merges fragments in order, so a later `Skip` is what overrides the global
-  -- `Build` for these paths. Headers under GENERATED_BASES that a real TU
-  -- includes still resolve — the -I dirs and -include chains are unaffected;
-  -- only the unprompted indexing of the subtree stops.
-  local skip_alts = table.concat(SKIP_DIRS, '|')
-  vim.list_extend(out, {
     '---',
     '# Vendored/build trees: excluded from the TU scan, so exclude them from',
     '# the background index too (see SKIP_DIRS in lua/config/clangd_setup.lua).',
     'If:',
-    "  PathMatch: ['(.*/)?(" .. skip_alts .. ")/.*']",
+    "  PathMatch: ['(.*/)?(" .. table.concat(SKIP_DIRS, '|') .. ")/.*']",
     'Index:',
     '  Background: Skip',
   })
 
-  ---Append an `If: PathMatch -> CompileFlags: Add` fragment.
   local function flags_fragment(pathmatch, flags)
-    vim.list_extend(out, {
-      '---',
-      'If:',
-      '  PathMatch: ' .. pathmatch,
-      'CompileFlags:',
-      '  Add: ' .. flags,
-    })
+    vim.list_extend(out, { '---', 'If:', '  PathMatch: ' .. pathmatch, 'CompileFlags:', '  Add: ' .. flags })
   end
 
-  -- Per-extension language standards (see comment above on why not global).
-  -- Objective-C language mode mirrors the real mac build when the unity TU
-  -- pulls in .m/.mm files: C and C++ sources must parse as ObjC/ObjC++ or
-  -- their `#error requires Objective-C` guards fire. Mac hosts only — on
-  -- linux/windows the unity TU takes the non-mac platform branch and compiles
-  -- as plain C/C++.
-  local sysname = vim.uv.os_uname().sysname
-  local objc = model.objc_unity and sysname == 'Darwin'
-  -- Memory model must match the real build too, not just the language: an ARC
-  -- backend's `#error ... requires ARC` guard is a genuine diagnostic that no
-  -- Suppress entry can hide, so without this flag it fires on every member of
-  -- the TU that includes it. Detected, not assumed — see arc_required.
+  -- Objective-C mode and ARC mirror the real mac build.
+  local objc = model.objc_unity and SYSNAME == 'Darwin'
   local arc = (objc and model.objc_arc) and ', -fobjc-arc' or ''
   flags_fragment('[.*\\.c, .*\\.m]', objc and '[-xobjective-c, -std=c99' .. arc .. ']' or '[-std=c99]')
   flags_fragment('[.*\\.(cpp|cc|cxx|mm)]',
     objc and '[-xobjective-c++, -std=c++17' .. arc .. ']' or '[-std=c++17]')
+  -- Headers follow the dominant TU language.
   if n_c >= n_cpp then
-    -- C project: force headers to C (ObjC when the unity build is ObjC),
-    -- else clangd's ObjC++ header mode rejects C-isms (and a C std would
-    -- be an invalid argument).
     local hdr_lang = objc and '-xobjective-c-header' or '-xc-header'
     flags_fragment('[.*\\.h]', '[' .. hdr_lang .. ', -std=c99' .. arc .. ']')
   else
-    -- C++ project: headers follow the source language. If the mac unity build
-    -- is ObjC++, headers need __OBJC__ too (e.g. AppKit-backed platform code).
     flags_fragment('[.*\\.(h|hh|hpp)]',
       objc and '[-xobjective-c++-header, -std=c++17' .. arc .. ']' or '[-std=c++17]')
   end
 
-  local foreign = FOREIGN_PLATFORM[sysname] or FOREIGN_PLATFORM.Windows_NT
   vim.list_extend(out, {
     '---',
     '# Foreign-platform sources: cannot compile on this host, silence fully.',
     'If:',
-    "  PathMatch: ['(.*/)?([^/]*[_.-])?(" .. foreign .. ")([_.-][^/]*)?(/.*)?']",
+    "  PathMatch: ['(.*/)?([^/]*[_.-])?(" .. FOREIGN .. ")([_.-][^/]*)?(/.*)?']",
     'Diagnostics:',
     "  Suppress: ['*']",
   })
 
-  -- One PathMatch fragment per TU (primary included), scoped to the dirs
-  -- that TU covers and no earlier TU claimed. Chains are never global:
-  -- applying one TU's preamble to another TU's subtree is what produces
-  -- "redefinition of X" noise (e.g. an app-layer chain stacked onto
-  -- platform-layer .mm files).
+  -- One fragment per TU, scoped to the dirs it covers that no earlier TU
+  -- claimed. A chain applied to another TU's subtree causes redefinitions.
   local claimed = {}
   local fragments, collisions = 0, {}
 
-  -- A module-aggregate TU (modules/render/render_inc.cpp) is written to be
-  -- included by a parent unity TU after the base preamble; until an app TU
-  -- wires it in, its own chain never defines the base types (u32,
-  -- inline_function), so its members degrade into "expected ';'" parse
-  -- errors — real-error territory no Suppress entry should hide. When a
-  -- TU's transitive includes don't reach the primary TU's first chain
-  -- header, prefix the primary preamble onto its own chain.
+  -- A module-aggregate TU whose includes never reach the primary TU's first
+  -- header lacks the base types, so it gets the primary preamble prefixed.
   local base_hdr
   for _, h in ipairs(primary and primary.chain or {}) do
     if primary.seen[h.path] then
@@ -835,20 +530,14 @@ local function render(model)
     end
   end
 
-  ---Headers declared in `dir` and each of its parents, nearest-root first.
-  ---Used as the module-local part of a preamble when a TU's own include chain
-  ---supplies no headers (see the `gained == 0` fallback below and the
-  ---orphan-dir pass further down).
-  ---@param dir string  project-relative dir
-  ---@return string[]  absolute header paths
+  -- Headers in dir and each of its parents, sorted.
   local function local_headers(dir)
     local headers, seen, parts = {}, {}, {}
     if dir ~= '.' then
       for p in dir:gmatch('[^/]+') do parts[#parts + 1] = p end
     end
     for i = 1, #parts do
-      local parent = table.concat(parts, '/', 1, i)
-      for _, h in ipairs((model.headers_by_dir and model.headers_by_dir[parent]) or {}) do
+      for _, h in ipairs(model.headers_by_dir[table.concat(parts, '/', 1, i)] or {}) do
         if not seen[h] then
           seen[h] = true
           headers[#headers + 1] = h
@@ -859,8 +548,7 @@ local function render(model)
     return headers
   end
 
-  for i = 1, #model.tus do
-    local tu = model.tus[i]
+  for _, tu in ipairs(model.tus) do
     local frag_dirs = {}
     for d in pairs(tu.dirs) do
       if d ~= '.' and not claimed[d] then
@@ -883,21 +571,8 @@ local function render(model)
           gained = gained + 1
         end
       end
-      -- An aggregate TU that pulls in only .c files contributes no headers of
-      -- its own, so the merge above leaves the PRIMARY TU's preamble as the
-      -- entire chain — and the fragment still claims this TU's dirs. In
-      -- ~/projects/notes that is renderer/src/render/render_inc.c, whose body
-      -- is `#include "render/render.c"` and two more sources: every file under
-      -- renderer/src/render was force-included with all 19 headers of the
-      -- unrelated research/ash/phase-4 shell (lexer, parser, eval, repl, ...)
-      -- and none of renderer's own. 21 of 106 fragments were built this way,
-      -- concentrated in renderer/ and appgui/ — clangd parsed a foreign
-      -- project into the preamble of every file in them, and resolved the
-      -- module's real types not at all.
-      --
-      -- Keep the primary base (those aggregates genuinely do need it — that is
-      -- what base_hdr detects) and append the module's own local/parent
-      -- headers, the same set the orphan-dir pass below uses.
+      -- An aggregate of only sources adds no headers of its own, so its dirs
+      -- get their local headers instead.
       if gained == 0 then
         for _, d in ipairs(frag_dirs) do
           for _, h in ipairs(local_headers(d)) do
@@ -914,9 +589,8 @@ local function render(model)
     if #frag_dirs == 0 then
       collisions[#collisions + 1] = tu.rel
     elseif #chain > 0 then
-      -- Group the dirs by how much of the chain stood when the unity build
-      -- reached them (see scan). A merged chain — the base_hdr case above — is
-      -- not this TU's own include order, so every dir there takes all of it.
+      -- Group dirs by chain depth. A merged chain is not this TU's own
+      -- include order, so every dir takes all of it.
       local by_depth = {}
       for _, d in ipairs(frag_dirs) do
         local n = chain == tu.chain and tu.dirs[d] or 0
@@ -929,22 +603,17 @@ local function render(model)
       for _, n in ipairs(depths) do
         fragments = fragments + 1
         vim.list_extend(out, { '---', 'If:', '  PathMatch:' })
-        for _, d in ipairs(by_depth[n]) do
-          out[#out + 1] = '    - ' .. path_pattern(d)
-        end
+        for _, d in ipairs(by_depth[n]) do out[#out + 1] = '    - ' .. path_pattern(d) end
         vim.list_extend(out, { 'CompileFlags:', '  Add:' })
         emit_chain(vim.list_slice(chain, 1, n), from, out, #chain)
       end
     end
   end
-  -- Orphan dirs: hold sources/headers but sit in no TU's coverage — a real
-  -- module not yet included by any app/test TU (src/render before an example
-  -- wires it in). Give them the primary TU's base preamble plus local/parent
-  -- module headers so implementation files still see local types. A TU
-  -- claiming the dir later supersedes this on the next :ClangdSetup! run.
+
+  -- Dirs no TU covers yet get the primary preamble plus their local headers.
   if primary and #primary.chain > 0 then
     local orphans = {}
-    for d in pairs(model.all_dirs or {}) do
+    for d in pairs(model.all_dirs) do
       if d ~= '.' and not claimed[d] then orphans[#orphans + 1] = d end
     end
     table.sort(orphans)
@@ -983,18 +652,18 @@ local function render(model)
         'If:',
         '  PathMatch:',
       })
-      for _, d in ipairs(no_local_headers) do
-        out[#out + 1] = '    - ' .. path_pattern(d)
-      end
+      for _, d in ipairs(no_local_headers) do out[#out + 1] = '    - ' .. path_pattern(d) end
       vim.list_extend(out, { 'CompileFlags:', '  Add:' })
       emit_chain(primary.chain, primary.rel, out)
     end
   end
 
   if #collisions > 0 then
-    out[#out + 1] = ''
-    out[#out + 1] = '# TUs sharing dirs with the ones above (multiple TUs here — hand-tune'
-    out[#out + 1] = '# with extra If: PathMatch fragments if their subtrees need it):'
+    vim.list_extend(out, {
+      '',
+      '# TUs sharing dirs with the ones above (multiple TUs here — hand-tune',
+      '# with extra If: PathMatch fragments if their subtrees need it):',
+    })
     for _, c in ipairs(collisions) do out[#out + 1] = '#   ' .. c end
   end
 
@@ -1007,23 +676,8 @@ local function render(model)
   }
 end
 
----Render compile_commands.json: one entry per project source, no flags.
----
----clangd's background indexer enumerates the files of a compilation database
----and nothing else, so this is what turns `Index: Background: Build` from a
----permission into an actual index. The commands are deliberately bare —
----`clang -c <file>` — because every flag lives in .clangd, whose fragments
----apply to database commands exactly as they do to the fallback command;
----one source of truth means a re-run cannot leave the two disagreeing.
----
----Foreign-platform sources are left out: they cannot parse on this host, and
----an indexed win32 copy of os_file_read would only turn every `gd` on it into
----a two-way picker against the mac one. Unity TUs (main.c) are in: indexing
----one parses every member it includes, so a definition inside a member is
----indexed at its real location before that member is ever opened.
----@param model table
----@return string[] lines
----@return integer count
+-- One flagless entry per source, since .clangd supplies every flag. Foreign
+-- sources are left out so the index never holds a second copy of a function.
 local function render_cdb(model)
   local entries = {}
   for _, abs in ipairs(model.files) do
@@ -1040,12 +694,8 @@ local function render_cdb(model)
   return out, #entries
 end
 
----A compile_commands.json this command did not write. Ours is always
----`clang -c <file>`, so the first entry settles it; anything else came from a
----build system and carries flags worth more than the ones we would replace
----them with. A missing, empty or unparseable file is not one of those.
----@param path string
----@return boolean
+-- Ours is always `clang -c <file>`; anything else came from a build system and
+-- carries real flags.
 local function build_system_cdb(path)
   if not vim.uv.fs_stat(path) then return false end
   local ok, db = pcall(vim.json.decode, table.concat(vim.fn.readfile(path), '\n'))
@@ -1054,26 +704,11 @@ local function build_system_cdb(path)
   return not (type(args) == 'table' and #args == 3 and args[1] == 'clang' and args[2] == '-c')
 end
 
----@param opts? {force?: boolean, dir?: string}
 function M.generate(opts)
   opts = opts or {}
-  -- The git root is the wrong root for a monorepo — ~/notes holds appgui/,
-  -- research/soui/, research/ash/phase-N/ and more, each its own unity build
-  -- with its own src/ include base. Rooted at the git dir, scan() picks ONE
-  -- primary TU for all of them, prefixes that project's preamble onto every
-  -- other subtree, and stops at its 200-file limit before most subprojects are
-  -- even seen: research/soui got no fragment at all, so render_metal.mm parsed
-  -- with no preamble and reported 34 errors.
-  --
-  -- So the default is the OUTERMOST dir holding a build file between the buffer
-  -- and the git root. Every project here builds from a script at its own root
-  -- (soui/build_mac.sh); outermost rather than nearest so a nested test script
-  -- (phase-6/test/build_tests.sh) doesn't win. No build file: the git root.
-  -- An explicit dir still overrides: `:ClangdSetup renderer`.
-  --
-  -- clangd's root_markers list `.clangd` (see lsp/clangd.lua) and vim.fs.root
-  -- takes the NEAREST match, so the written file also becomes the LSP root —
-  -- which is what scopes the background index to the subproject.
+  -- Default root: the outermost dir holding a build file between the buffer
+  -- and the git root, so each subproject of a monorepo gets its own .clangd.
+  -- .clangd is a clangd root marker, so it also scopes the LSP root.
   local root
   if opts.dir and opts.dir ~= '' then
     root = vim.fn.fnamemodify(vim.fs.normalize(opts.dir), ':p'):gsub('/$', '')
@@ -1120,17 +755,13 @@ function M.generate(opts)
     cdb_msg = ('; compile_commands.json lists %d source(s) for the background index'):format(cdb_count)
   end
 
-  -- A clangd already running here reloads .clangd on its own but has cached
-  -- "no compilation database" for this root, so it never starts the index:
-  -- stop it and re-enable once it is gone (enable() alone is a no-op for a
-  -- live client; 200ms is what :LspRestart allows for the exit). With nothing
-  -- running, enable() re-fires activation on open buffers, so clangd attaches
-  -- to this buffer without :edit.
+  -- A running clangd has cached "no compilation database" for this root and
+  -- will not index until restarted. enable() is a no-op for a live client.
   local running = vim.lsp.get_clients({ name = 'clangd' })
   if #running == 0 then
     vim.lsp.enable('clangd')
   else
-    for _, client in ipairs(running) do vim.lsp.stop_client(client.id) end
+    for _, client in ipairs(running) do client:stop() end
     vim.defer_fn(function() vim.lsp.enable('clangd') end, 200)
   end
 
@@ -1144,8 +775,7 @@ function M.generate(opts)
         summary.collisions > 0 and (', %d TU(s) need hand-tuning (see file comments)')
           :format(summary.collisions) or '')
   end
-  msg = msg .. cdb_msg
-  vim.notify(msg, vim.log.levels.INFO)
+  vim.notify(msg .. cdb_msg, vim.log.levels.INFO)
 end
 
 function M.setup()

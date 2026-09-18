@@ -1,65 +1,44 @@
--- Comment tag highlights: NOTE(alex), TODO(alex), PERF(alex), etc.
-
+-- NOTE(alex), TODO, PERF, FIXME, HACK and XXX in their own colors.
 local M = {}
 
--- matchadd is window-local. Track ids per-window so the same window
--- doesn't accumulate duplicate matches every time FileType fires.
-local match_ids = {}
+local TAGS = {
+  { 'CommentTagNote', 'NOTE', '#2ab34f' },
+  { 'CommentTagTodo', 'TODO', '#ffa900' },
+  { 'CommentTagPerf', 'PERF', '#2895c7' },
+  { 'CommentTagFixme', 'FIXME', '#ff0000' },
+  { 'CommentTagHack', 'HACK', '#ff44dd' },
+  { 'CommentTagHack', 'XXX', '#ff44dd' },
+}
+
+-- matchadd is window-local; remember which windows already have the matches.
+local has_matches = {}
 
 local function set_highlights()
-    local set = vim.api.nvim_set_hl
-    set(0, "CommentTagNote",  { fg = "#2ab34f" })
-    set(0, "CommentTagTodo",  { fg = "#ffa900" })
-    set(0, "CommentTagPerf",  { fg = "#2895c7" })
-    set(0, "CommentTagFixme", { fg = "#ff0000" })
-    set(0, "CommentTagHack",  { fg = "#FF44DD" })
-end
-
-local function setup_matches()
-    local winid = vim.api.nvim_get_current_win()
-    if match_ids[winid] then return end
-    match_ids[winid] = {}
-
-    local function add(group, pattern)
-        local id = vim.fn.matchadd(group, pattern)
-        table.insert(match_ids[winid], id)
-    end
-
-    add("CommentTagNote",  [[\v<NOTE(\([^)]*\))?:?]])
-    add("CommentTagTodo",  [[\v<TODO(\([^)]*\))?:?]])
-    add("CommentTagPerf",  [[\v<PERF(\([^)]*\))?:?]])
-    add("CommentTagFixme", [[\v<FIXME(\([^)]*\))?:?]])
-    add("CommentTagHack",  [[\v<HACK(\([^)]*\))?:?]])
-    add("CommentTagHack",  [[\v<XXX(\([^)]*\))?:?]])
+  for _, tag in ipairs(TAGS) do
+    vim.api.nvim_set_hl(0, tag[1], { fg = tag[3] })
+  end
 end
 
 function M.setup()
-    local group = vim.api.nvim_create_augroup("CommentTags", { clear = true })
-
-    -- Grouped like the two below it. Ungrouped, re-sourcing this file stacked a
-    -- second ColorScheme handler every time.
-    vim.api.nvim_create_autocmd("ColorScheme", {
-        group = group,
-        pattern = "*",
-        callback = set_highlights,
-    })
-
-    -- The tag colors are plain hex, not links, so a colorscheme's `hi clear`
-    -- wipes them; set them once now in case no ColorScheme event follows.
-    set_highlights()
-
-    vim.api.nvim_create_autocmd({ "FileType", "WinEnter" }, {
-        group = group,
-        callback = setup_matches,
-    })
-
-    vim.api.nvim_create_autocmd("WinClosed", {
-        group = group,
-        callback = function(ev)
-            local wid = tonumber(ev.match)
-            if wid then match_ids[wid] = nil end
-        end,
-    })
+  local group = vim.api.nvim_create_augroup('CommentTags', {})
+  -- Plain colors, not links, so every :colorscheme's `hi clear` wipes them.
+  set_highlights()
+  vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = set_highlights })
+  vim.api.nvim_create_autocmd({ 'FileType', 'WinEnter' }, {
+    group = group,
+    callback = function()
+      local win = vim.api.nvim_get_current_win()
+      if has_matches[win] then return end
+      has_matches[win] = true
+      for _, tag in ipairs(TAGS) do
+        vim.fn.matchadd(tag[1], [[\v<]] .. tag[2] .. [[(\([^)]*\))?:?]])
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
+    callback = function(ev) has_matches[tonumber(ev.match)] = nil end,
+  })
 end
 
 return M

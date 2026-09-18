@@ -1,221 +1,96 @@
--- ctags-based navigation for C/C++ projects that have NOT opted in to clangd.
--- The project index is opt-in and manual: run :Ctags to (re)generate it —
--- there is no open-time or save-time automatic generation (see the comments
--- in setup() for why both were removed). Goto-definition itself is just the
--- built-in tag jump — <C-]>, or `gd` set in after/ftplugin/c.lua.
+-- Tags for C-family buffers: &tags points at a per-project file in the cache
+-- dir, built on demand with :Ctags. `gd` jumps through it (after/ftplugin/c.lua).
 local M = {}
 
-local root_util = require("utils.project_root")
-local skip_dirs = require("utils.skip_dirs")
+local project = require('config.project')
 
--- Root markers for the tags index, deliberately NOT the shared default list.
---
--- `vim.fs.root` returns the NEAREST ancestor holding any marker, so putting
--- the clangd markers alongside the generic ones makes a C subproject win over
--- the repo it lives in — which is the point. In a monorepo the default list
--- (first match walking up: `.git`) resolved every file in
--- ~/projects/notes/renderer to ~/projects/notes, so `&tags` pointed at a 12MB
--- index built from all four subprojects while clangd was correctly rooted at
--- renderer/. Completion paid ~10ms per <Tab> reading symbols from projects the
--- buffer cannot even reference.
---
--- Scoped to this module on purpose: `utils.project_root` is also what
--- telescope and lua/launch use to pick a search/launch root, and those should
--- keep resolving to the whole repo unless that is changed deliberately.
-local TAG_MARKERS = vim.list_extend(
-  { ".clangd", "compile_commands.json", "compile_flags.txt" },
-  root_util.markers
-)
+-- The clangd markers make a C subproject its own root inside a larger repo.
+local TAG_MARKERS = vim.list_extend({ '.clangd', 'compile_commands.json', 'compile_flags.txt' }, project.MARKERS)
+local TAGS_DIR = vim.fs.joinpath(vim.fn.stdpath('cache'), 'tags')
 
--- Saves of these filetypes trigger a background tags refresh.
-local TAG_FILETYPES = {
-  c = true, cpp = true, objc = true, objcpp = true,
-}
-
--- Tags files live under Neovim's cache dir, one per project, instead of in
--- the project tree — so a large generated `tags` file never pollutes the
--- repo (no stray file to gitignore). Each project gets its own file keyed
--- by a hash of its root; a FileType autocmd points &tags at it.
-local TAGS_DIR = vim.fs.joinpath(vim.fn.stdpath("cache"), "tags")
-
----Resolve the cache tags file path for a project root.
----@param root string
----@return string
 local function tags_path(root)
-  local name = vim.fs.basename(root):gsub("[^%w._-]", "_")
-  return vim.fs.joinpath(TAGS_DIR, name .. "-" .. vim.fn.sha256(root):sub(1, 12))
+  local name = vim.fs.basename(root):gsub('[^%w._-]', '_')
+  return vim.fs.joinpath(TAGS_DIR, name .. '-' .. vim.fn.sha256(root):sub(1, 12))
 end
 
----Project root and cache tags path for a buffer, or nil if it is not a
----C-family filetype.
----@param buf integer
----@return string? root
----@return string? tags
-local function resolve(buf)
-  if not TAG_FILETYPES[vim.bo[buf].filetype] then return end
-  local root = root_util.find({ buf = buf, markers = TAG_MARKERS })
-  return root, tags_path(root)
-end
-
----Point &path/&suffixesadd at the project's include dirs, so `gf` and `:find`
----resolve `#include` targets.
----@param buf integer
----@param root string
+-- &path gets the project's include dirs so `gf` and :find resolve #includes.
 local function set_c_path(buf, root)
   local file = vim.api.nvim_buf_get_name(buf)
-  local dir = file ~= "" and vim.fs.dirname(file) or vim.uv.cwd()
-  local paths = { ".", dir }
-  for _, c in ipairs({ "inc", "include", "src", "lib" }) do
-    local p = vim.fs.joinpath(root, c)
-    if vim.uv.fs_stat(p) then table.insert(paths, p) end
+  local paths = { '.', file ~= '' and vim.fs.dirname(file) or vim.uv.cwd() }
+  for _, dir in ipairs({ 'inc', 'include', 'src', 'lib' }) do
+    local p = vim.fs.joinpath(root, dir)
+    if vim.uv.fs_stat(p) then paths[#paths + 1] = p end
   end
-  local ext = vim.fs.joinpath(root, "external")
+  local ext = vim.fs.joinpath(root, 'external')
   if vim.uv.fs_stat(ext) then
-    for name, ty in vim.fs.dir(ext) do
-      if ty == "directory" then
-        for _, sub in ipairs({ "include", "src" }) do
+    for name, type in vim.fs.dir(ext) do
+      if type == 'directory' then
+        for _, sub in ipairs({ 'include', 'src' }) do
           local p = vim.fs.joinpath(ext, name, sub)
-          if vim.uv.fs_stat(p) then table.insert(paths, p) end
+          if vim.uv.fs_stat(p) then paths[#paths + 1] = p end
         end
       end
     end
   end
-  vim.bo[buf].path = table.concat(paths, ",")
-  vim.bo[buf].suffixesadd = ".h,.hpp,.hh,.hxx,.inl"
+  vim.bo[buf].path = table.concat(paths, ',')
+  vim.bo[buf].suffixesadd = '.h,.hpp,.hh,.hxx,.inl'
 end
 
--- Roots with an in-flight `ctags` run, keyed by root path — so a second
--- trigger for the same project is skipped while other projects can still
--- generate in parallel. A trigger that arrives mid-run sets `pending[root]`
--- and is re-fired from the completion callback, so a save during a long scan
--- is never silently dropped.
-local generating = {}
-local pending = {}
--- One "ctags is not installed" message per session, not one per save.
-local warned_missing = false
+-- A :Ctags issued while that root is still generating runs again when it ends.
+local running, queued = {}, {}
 
----Regenerate a project's cache tags file in the background.
----
----Failures are reported regardless of `notify`; only the success message is
----opt-in. Previously the open-time generate passed notify=false, so a missing
----`ctags` binary or a nonzero exit produced no tags file, no message, and — via
----the fs_stat guard on BufWritePost — no retry on any later save. The project
----silently had no member completion and no `gd` for the whole session, with
----nothing on screen to say why.
----@param root string  project root to scan
----@param notify boolean  report *success* via vim.notify (errors always report)
 local function generate(root, notify)
-  if generating[root] then
-    pending[root] = true
+  if running[root] then
+    queued[root] = true
     return
   end
-  if vim.fn.executable("ctags") == 0 then
-    -- Once per session: this is now reachable from every save, and a message
-    -- per `:w` would be worse than the silence it replaces.
-    if not warned_missing then
-      warned_missing = true
-      -- Deferred, not direct: generate() runs from a FileType autocmd, and an
-      -- error-level notify raised synchronously inside one aborts the rest of
-      -- the autocmd chain and surfaces as a Vim(append) error with a Lua
-      -- traceback (reproducible by opening a C file through netrw, where the
-      -- FileType autocmd is nested inside NetrwBrowseChgDir). The scheduled
-      -- message lands after the autocmd unwinds, so it reads as the plain
-      -- warning it is.
-      vim.schedule(function()
-        vim.notify("ctags: executable not found in PATH — no tags, so `gd` and member completion are unavailable",
-          vim.log.levels.WARN)
-      end)
-    end
+  if vim.fn.executable('ctags') == 0 then
+    vim.notify('ctags: executable not found in PATH, so tag `gd` and member completion are unavailable',
+      vim.log.levels.WARN)
     return
   end
+
+  -- Absolute paths, since the tags file lives outside the project. +St adds the
+  -- typeref and signature fields member completion reads.
   local tags = tags_path(root)
-  -- --tag-relative=no + an absolute root => absolute paths in the tags file,
-  -- required because the file lives outside the project tree (Vim resolves
-  -- relative tag paths against the tags file's own directory). --fields=+St
-  -- adds the typeref (t) and signature (S) fields the built-in `ccomplete`
-  -- omnifunc needs for member completion; pinned so a user .ctags.d can't
-  -- drop them.
-  -- Excludes come from the shared list in lua/utils/skip_dirs.lua, because `-R`
-  -- otherwise walks the whole tree, and in a monorepo like ~/projects/notes
-  -- (1.7G) most of that is build output and vendored code. The tag COUNT barely
-  -- moves (1673 of 44379 came from these dirs) — the win is the scan itself not
-  -- stat-ing its way through build trees full of object files and multi-MB
-  -- generated headers on every :Ctags.
-  --
-  -- This list used to be typed out here, and was the fourth hand-maintained
-  -- copy of the same names. When `3rd_party` was added to the other three it
-  -- was missed here, so `:Ctags` kept indexing vendored trees the rest of the
-  -- config had already learned to skip. Hence the shared module.
-  local cmd = vim.list_extend(
-    { "ctags", "-R", "--tag-relative=no", "--exclude=.git" },
-    skip_dirs.flags("--exclude=%s"))
-  vim.list_extend(cmd, { "--fields=+St", "-f", tags, root })
-  generating[root] = true
-  vim.system(cmd, { text = true }, function(obj)
-    vim.schedule(function()
-      -- Cleared inside the schedule, together with the `pending` handoff.
-      -- Clearing it in the libuv callback instead left a window where a save
-      -- saw generating == nil, started its own run, and then the scheduled
-      -- block fired the queued one too — two full-tree scans for one save.
-      generating[root] = nil
-      if obj.code == 0 then
-        if notify then
-          vim.notify("ctags: regenerated " .. tags, vim.log.levels.INFO)
-        end
-      else
-        local msg = (obj.stderr ~= "" and obj.stderr) or ("exit " .. tostring(obj.code))
-        vim.notify("ctags failed: " .. msg, vim.log.levels.ERROR)
-      end
-      -- A save landed while this run was in flight — index it now.
-      if pending[root] then
-        pending[root] = nil
-        generate(root, false)
-      end
-    end)
-  end)
+  local cmd = { 'ctags', '-R', '--tag-relative=no', '--exclude=.git' }
+  for _, dir in ipairs(project.SKIP_DIRS) do
+    cmd[#cmd + 1] = '--exclude=' .. dir
+  end
+  vim.list_extend(cmd, { '--fields=+St', '-f', tags, root })
+
+  running[root] = true
+  vim.system(cmd, { text = true }, vim.schedule_wrap(function(obj)
+    running[root] = nil
+    if obj.code ~= 0 then
+      local msg = (obj.stderr ~= '' and obj.stderr) or ('exit ' .. tostring(obj.code))
+      vim.notify('ctags failed: ' .. msg, vim.log.levels.ERROR)
+    elseif notify then
+      vim.notify('ctags: regenerated ' .. tags, vim.log.levels.INFO)
+    end
+    if queued[root] then
+      queued[root] = nil
+      generate(root, false)
+    end
+  end))
 end
 
 function M.setup()
-  vim.fn.mkdir(TAGS_DIR, "p")
+  vim.fn.mkdir(TAGS_DIR, 'p')
 
-  -- C/C++/Obj-C buffers: point &tags at the project's cache tags file (the
-  -- project-local defaults stay appended as a fallback) and set &path for `gf`.
-  --
-  -- NO automatic index generation. Opening a C file used to kick off a full
-  -- `ctags -R` over that file's WHOLE project tree — and since files are
-  -- resolved to their own project root, browsing into files from several
-  -- projects in one session (`:e`/`:vs` across `~/projects/*`) fired one
-  -- full-tree scan per project and overloaded the machine. Completion of the
-  -- open files does not need any of that: the <Tab> completefunc parses the
-  -- open buffers via treesitter (see lua/config/c_complete.lua). The project
-  -- index is now opt-in only, via :Ctags, for when cross-file `gd`/member
-  -- completion (or vendored symbols like vulkan) is actually wanted.
-  vim.api.nvim_create_autocmd("FileType", {
-    group = vim.api.nvim_create_augroup("ctags_tagpath", { clear = true }),
+  vim.api.nvim_create_autocmd('FileType', {
+    group = vim.api.nvim_create_augroup('ctags_tagpath', { clear = true }),
+    pattern = { 'c', 'cpp', 'objc', 'objcpp' },
     callback = function(args)
-      local root, tags = resolve(args.buf)
-      if not root then return end
-      -- &tags points at the (possibly not-yet-built) cache file so a manual
-      -- :Ctags index is picked up the moment it exists; cheap and harmless
-      -- when it doesn't. &path keeps `gf`/`:find` resolving #include targets.
-      vim.bo[args.buf].tags = tags .. "," .. vim.go.tags
+      local root = project.root(args.buf, TAG_MARKERS)
+      vim.bo[args.buf].tags = tags_path(root) .. ',' .. vim.go.tags
       set_c_path(args.buf, root)
     end,
   })
 
-  -- :Ctags — regenerate the current project's tags file on demand. Works
-  -- even before a tags file exists, so it also opts a new project in.
-  vim.api.nvim_create_user_command("Ctags", function()
-    -- Same markers as the FileType hook, so :Ctags always writes the index
-    -- that &tags is already pointing at.
-    generate(root_util.find({ markers = TAG_MARKERS }), true)
-  end, { desc = "Regenerate the project tags file" })
-
-  -- No BufWritePost auto-refresh. Saves used to re-run a full-tree `ctags -R`
-  -- (debounced), which for a project with a large vendored tree meant steady
-  -- background CPU churn on every `:w`. The index is refreshed on demand with
-  -- :Ctags instead — run it when you want cross-file navigation to pick up
-  -- new symbols.
+  vim.api.nvim_create_user_command('Ctags', function()
+    generate(project.root(0, TAG_MARKERS), true)
+  end, { desc = 'Regenerate the project tags file' })
 end
 
 return M

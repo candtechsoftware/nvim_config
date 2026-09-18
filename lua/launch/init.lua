@@ -1,4 +1,4 @@
--- Per-project commands, read from <root>/launch.json:
+-- Per-project commands, read from <root>/launch.json (JSONC):
 --
 --   {
 --     "<F1>": "./build.sh",
@@ -7,78 +7,45 @@
 --   }
 --
 -- Each key is a normal-mode mapping, bound while a file from the project is
--- current. `out` names the buffer the output goes to, *compilation* by
--- default. A mac/linux/windows table overrides the top-level entries there.
--- Without a launch.json, :Make and <leader>b run the build command that
--- utils/make_detect.lua detects.
---
--- Execution lives in launch/run.lua. This file is config: find the root, read
--- launch.json, bind keys.
-
+-- current. `out` names the output buffer, *compilation* by default. A
+-- mac/linux/windows table overrides the top-level entries on that platform.
+-- Without a launch.json, :Make and <leader>b run the detected build command.
 local M = {}
 
 local run = require('launch.run')
-local find_project_root = require('utils.project_root').find
-local detect_build = require('utils.make_detect').detect
+local project = require('config.project')
+local detect_build = require('launch.make').detect
 
 local DEFAULT_OUT = '*compilation*'
 
-local function get_os()
-  local uname = vim.uv.os_uname().sysname:lower()
-  if uname == 'darwin' then return 'mac'
-  elseif uname == 'linux' then return 'linux'
-  else return 'windows'
-  end
-end
-
-local OS = get_os()
+local sysname = vim.uv.os_uname().sysname:lower()
+local OS = sysname == 'darwin' and 'mac' or sysname == 'linux' and 'linux' or 'windows'
 local PLATFORMS = { mac = true, linux = true, windows = true }
 
-local current_launch_root = nil
-
--- The active root's launch.json entries, each { key, cmd, out, prev }. prev is
--- the mapping the key shadowed, put back when the project changes.
+local current_root = nil
+-- The current root's entries, each { key, cmd, out, prev }. prev is the
+-- mapping the key shadowed, restored when the project changes.
 local entries = {}
-
--- Root lookups cached per buffer directory. BufEnter fires on every buffer
--- switch and find_project_root scandirs each ancestor directory, so a
--- directory already resolved is not walked again. DirChanged and
--- :LaunchReload clear the cache.
+-- BufEnter fires on every buffer switch, so roots are cached per directory.
 local root_by_dir = {}
+local reported_bad_json = {}
 
----The project the current buffer belongs to. Output buffers, quickfix and
----help are not project files, so they keep the current project: a build key
----pressed in the output pane rebuilds the same project.
----@return string
+-- Output buffers, quickfix and help keep the current project, so a build key
+-- pressed in the output pane rebuilds the same project.
 local function buffer_root()
-  if vim.bo.buftype ~= '' and current_launch_root then
-    return current_launch_root
+  if vim.bo.buftype ~= '' and current_root then
+    return current_root
   end
   local name = vim.api.nvim_buf_get_name(0)
   local dir = name ~= '' and vim.fs.dirname(name) or vim.fs.normalize(vim.uv.cwd() or '')
-  local root = root_by_dir[dir]
-  if root == nil then
-    root = find_project_root()
-    root_by_dir[dir] = root
+  if root_by_dir[dir] == nil then
+    root_by_dir[dir] = project.root()
   end
-  return root
+  return root_by_dir[dir]
 end
 
---------------------------------------------------------------------------------
--- launch.json
---------------------------------------------------------------------------------
-
----Strip JSONC down to JSON: `//` and `/* */` comments, and trailing commas.
----
----launch.json is canonically JSONC — VS Code permits both — and vim.json.decode
----accepts neither, so a perfectly ordinary hand-written file used to fail to
----parse and silently produce no targets at all.
----
----Done as a single character scan tracking string state, not as a gsub. A
----regex for trailing commas cannot tell `[1,]` from the literal text `","` in
----a command string like `awk -F, '{print}'`, and would corrupt the second.
----@param s string
----@return string
+-- JSONC to JSON: drop comments and trailing commas. A character scan, since a
+-- pattern cannot tell a trailing comma from one inside a command string.
 local function strip_jsonc(s)
   local out = {}
   local i, n = 1, #s
@@ -105,8 +72,6 @@ local function strip_jsonc(s)
       end
       i = i + 2
     elseif ch == ']' or ch == '}' then
-      -- Drop a trailing comma: walk back over emitted whitespace and remove a
-      -- comma if that is what precedes this closer.
       local k = #out
       while k > 0 and out[k]:match('%s') do k = k - 1 end
       if k > 0 and out[k] == ',' then table.remove(out, k) end
@@ -121,13 +86,7 @@ local function strip_jsonc(s)
   return table.concat(out)
 end
 
-local reported_bad_json = {}
-
----Read <root>/launch.json into a list of { key, cmd, out }, sorted by key.
----Reached from BufEnter, so problems are reported once per root rather than
----on every buffer switch; a clean read re-arms the report.
----@param root string
----@return table[]
+-- Problems are reported once per root; a clean read re-arms the report.
 local function load_entries(root)
   local path = root .. '/launch.json'
   if vim.fn.filereadable(path) ~= 1 then return {} end
@@ -171,24 +130,18 @@ local function load_entries(root)
   return loaded
 end
 
---------------------------------------------------------------------------------
--- keys
---------------------------------------------------------------------------------
+local function apply_launch(root)
+  if root == current_root then return end
 
-local function clear_keymaps()
   for _, entry in ipairs(entries) do
     pcall(vim.keymap.del, 'n', entry.key)
-    if entry.prev then
-      pcall(vim.fn.mapset, entry.prev)
-    end
+    if entry.prev then pcall(vim.fn.mapset, entry.prev) end
   end
-end
 
----Bind each entry's key, keeping the mapping it shadows (<leader>b, <F5>, ...)
----in entry.prev. Without that the next project switch would delete the
----config's own mapping outright, gone until restart.
----@param root string
-local function bind_keys(root)
+  current_root = root
+  entries = load_entries(root)
+
+  -- Keep the shadowed mapping (<leader>b, <F5>, ...) so it comes back.
   for _, entry in ipairs(entries) do
     local prev = vim.fn.maparg(entry.key, 'n', false, true)
     entry.prev = not vim.tbl_isempty(prev) and prev or nil
@@ -197,26 +150,12 @@ local function bind_keys(root)
   end
 end
 
----@param root string
-local function apply_launch(root)
-  if root == current_launch_root then return end
-  clear_keymaps()
-  current_launch_root = root
-  entries = load_entries(root)
-  bind_keys(root)
-end
-
----Re-read launch.json and rebind, e.g. after editing it.
 local function reload()
   root_by_dir, reported_bad_json = {}, {}
   local root = buffer_root()
-  current_launch_root = nil
+  current_root = nil
   apply_launch(root)
 end
-
---------------------------------------------------------------------------------
--- commands
---------------------------------------------------------------------------------
 
 local STARTER = [[
 {
@@ -234,14 +173,12 @@ local STARTER = [[
 }
 ]]
 
----@param entry table
----@return string
 local function describe(entry)
   return ('%-12s %-15s %s'):format(entry.key, entry.out, entry.cmd)
 end
 
 local function info()
-  local lines = { 'root  ' .. vim.fn.fnamemodify(current_launch_root, ':~') }
+  local lines = { 'root  ' .. vim.fn.fnamemodify(current_root, ':~') }
   for _, entry in ipairs(entries) do
     lines[#lines + 1] = describe(entry)
   end
@@ -269,7 +206,7 @@ local function pick()
     return
   end
   vim.ui.select(entries, { prompt = 'Launch', format_item = describe }, function(entry)
-    if entry then run.start(entry, current_launch_root) end
+    if entry then run.start(entry, current_root) end
   end)
 end
 
@@ -279,20 +216,13 @@ local function stop_all()
     or 'launch: nothing running', vim.log.levels.INFO)
 end
 
----:Make [args]: the detected build command, for a project without a
----launch.json, into the same buffer launch.json builds use.
 local function make(o)
-  local cmd = detect_build(current_launch_root, vim.bo.filetype)
+  local cmd = detect_build(current_root, vim.bo.filetype)
   if o.args ~= '' then cmd = cmd .. ' ' .. o.args end
-  -- The Jai fallback compiles `%`. Expand it as :make would, to an absolute
-  -- path since the command runs in the root.
+  -- The command runs in the root, so `%` expands to an absolute path.
   cmd = cmd:gsub('%%', vim.fn.expand('%:p'))
-  run.start({ key = ':Make', cmd = cmd, out = DEFAULT_OUT }, current_launch_root)
+  run.start({ key = ':Make', cmd = cmd, out = DEFAULT_OUT }, current_root)
 end
-
---------------------------------------------------------------------------------
--- setup
---------------------------------------------------------------------------------
 
 function M.setup()
   run.setup()
@@ -311,9 +241,6 @@ function M.setup()
     group = group,
     callback = function() apply_launch(buffer_root()) end,
   })
-
-  -- A cwd change invalidates every unnamed-buffer entry and any root that
-  -- fell back to cwd, so drop the whole cache. DirChanged is rare.
   vim.api.nvim_create_autocmd('DirChanged', {
     group = group,
     callback = function()
@@ -333,7 +260,7 @@ function M.setup()
     end
     for _, entry in ipairs(entries) do
       if entry.key == o.args then
-        run.start(entry, current_launch_root)
+        run.start(entry, current_root)
         return
       end
     end

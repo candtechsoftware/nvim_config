@@ -1,7 +1,5 @@
--- C/C++ Language Server configuration (unity-build projects)
--- Attach is gated: workspace_required + these root_markers mean clangd only
--- starts in projects that opted in (run :ClangdSetup to generate a .clangd).
--- Everywhere else the ctags/treesitter completion keeps working unchanged.
+-- Only starts where a root marker exists: run :ClangdSetup to opt a unity-build
+-- project in. Everywhere else the ctags/treesitter completion is used.
 return {
   cmd = {
     'clangd',
@@ -13,5 +11,5 @@ return {
   },
   filetypes = { 'c', 'cpp', 'objc', 'objcpp' },
   root_markers = { '.clangd', 'compile_commands.json', 'compile_flags.txt' },
-  workspace_required = true,  -- no marker => no attach (not even single-file mode)
+  workspace_required = true,
 }
