@@ -44,7 +44,7 @@ require('config.comment_tags').setup()
 require('config.perf').setup()
 require('launch').setup()
 
-vim.cmd.colorscheme('ll')
+vim.cmd.colorscheme('cl')
 
 -- The new cmdline and message UI. Still only exposed as a private module.
 require('vim._core.ui2').enable({})

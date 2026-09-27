@@ -1,4 +1,4 @@
--- Only settings that differ from the Neovim defaults. 'guicursor' belongs to colors/ll.lua.
+-- Only settings that differ from the Neovim defaults. The colorscheme owns 'guicursor'.
 vim.o.fillchars = 'eob: '
 vim.o.statusline = ' %f %l:%c %{%v:lua.vim.ui.progress_status()%}'
 

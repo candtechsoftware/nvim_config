@@ -36,7 +36,7 @@ lua/launch/             launch.json keys, output buffers, build errors
 lua/hh/                 scope shading, project macro highlighting, picker dim
                         (set up by the colorscheme)
 lsp/                    one file per language server
-colors/ll.lua           the colorscheme
+colors/cl.lua           default colorscheme (charcoal, rust, amber)
 after/ ftdetect/ queries/ syntax/
 ```
 

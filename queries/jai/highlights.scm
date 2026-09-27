@@ -19,16 +19,13 @@
   "for"
   "then"
   "else"
-  "null"
   "case"
   "enum"
-  "true"
   "cast"
   "while"
   "break"
   "using"
   "defer"
-  "false"
   "union"
   "return"
   "struct"
@@ -122,15 +119,6 @@ type: (identifier) @type
 modifier: (identifier) @keyword.modifier
 keyword: (identifier) @keyword
 
-; Builtin types
-((types (identifier) @type.builtin)
-  (#any-of? @type.builtin
-    "bool" "int" "string" "void"
-    "s8" "s16" "s32" "s64"
-    "u8" "u16" "u32" "u64"
-    "float" "float32" "float64"
-    "Type" "Any"))
-
 ; Type definitions
 (struct_declaration (identifier) @type.definition ":" ":")
 (enum_declaration (identifier) @type.definition ":" ":")
@@ -146,6 +134,16 @@ keyword: (identifier) @keyword
 ; Type declaration patterns: name :: struct/enum/union
 ((identifier) @type.definition
   . ":" . ":" . ["struct" "enum" "union" "#type"])
+
+; Builtin types, wherever they appear. Last so they win over the patterns above:
+; return lists parse as identifier_type, and u32.[] is a literal.
+((identifier) @type.builtin
+  (#any-of? @type.builtin
+    "bool" "int" "string" "void"
+    "s8" "s16" "s32" "s64"
+    "u8" "u16" "u32" "u64"
+    "float" "float32" "float64"
+    "Type" "Any"))
 
 ; ============================================================================
 ; FIELDS & PROPERTIES
