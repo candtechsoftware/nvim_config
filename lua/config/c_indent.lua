@@ -35,7 +35,6 @@ local WIDTHS = {
   ['~/projects/notes'] = 4,
   ['~/projects/old_std'] = 4,
   ['~/projects/sekaiju'] = 4,
-  ['~/projects/std'] = 4,
   ['~/projects/tasked'] = 4,
   ['~/projects/test_asset_pack'] = 4,
   ['~/projects/test_game'] = 4,
