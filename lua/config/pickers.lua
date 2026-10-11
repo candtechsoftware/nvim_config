@@ -138,7 +138,7 @@ end
 local function document_symbols()
   if has_lsp() then return vim.lsp.buf.document_symbol() end
   local file = vim.api.nvim_buf_get_name(0)
-  local res = vim.system({ 'ctags', '-f', '-', '--sort=no', '--fields=+nK', file }, { text = true }):wait()
+  local res = vim.system({ 'ctags', require('config.ctags').LANGMAP, '-f', '-', '--sort=no', '--fields=+nK', file }, { text = true }):wait()
   local items = {}
   for line in (res.stdout or ''):gmatch('[^\n]+') do
     local name, kind, lnum = line:match('^([^\t]+)\t.*;"\t([^\t]+)\tline:(%d+)')

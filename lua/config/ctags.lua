@@ -8,6 +8,9 @@ local project = require('config.project')
 local TAG_MARKERS = vim.list_extend({ '.clangd', 'compile_commands.json', 'compile_flags.txt' }, project.MARKERS)
 local TAGS_DIR = vim.fs.joinpath(vim.fn.stdpath('cache'), 'tags')
 
+-- ctags skips .metal files unless told they are C++.
+M.LANGMAP = '--langmap=C++:+.metal'
+
 local function tags_path(root)
   local name = vim.fs.basename(root):gsub('[^%w._-]', '_')
   return vim.fs.joinpath(TAGS_DIR, name .. '-' .. vim.fn.sha256(root):sub(1, 12))
@@ -53,7 +56,7 @@ local function generate(root, notify)
   -- Absolute paths, since the tags file lives outside the project. +St adds the
   -- typeref and signature fields member completion reads.
   local tags = tags_path(root)
-  local cmd = { 'ctags', '-R', '--tag-relative=no', '--exclude=.git' }
+  local cmd = { 'ctags', '-R', M.LANGMAP, '--tag-relative=no', '--exclude=.git' }
   for _, dir in ipairs(project.SKIP_DIRS) do
     cmd[#cmd + 1] = '--exclude=' .. dir
   end
@@ -80,7 +83,7 @@ function M.setup()
 
   vim.api.nvim_create_autocmd('FileType', {
     group = vim.api.nvim_create_augroup('ctags_tagpath', { clear = true }),
-    pattern = { 'c', 'cpp', 'objc', 'objcpp' },
+    pattern = { 'c', 'cpp', 'objc', 'objcpp', 'metal' },
     callback = function(args)
       local root = project.root(args.buf, TAG_MARKERS)
       vim.bo[args.buf].tags = tags_path(root) .. ',' .. vim.go.tags

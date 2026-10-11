@@ -61,3 +61,15 @@
   (qualified_identifier
     name: (identifier) @constant)
   (#set! priority 200))
+
+; Metal function and address-space qualifiers. The parser takes the qualifier
+; for the type and leaves the real type in an ERROR node.
+((type_identifier) @keyword.modifier
+  .
+  (ERROR
+    (identifier) @type)
+  (#any-of? @keyword.modifier
+    "vertex" "fragment" "kernel"
+    "constant" "device" "thread" "threadgroup" "threadgroup_imageblock"
+    "ray_data" "object_data")
+  (#set! priority 200))

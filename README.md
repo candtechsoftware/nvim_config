@@ -29,7 +29,7 @@ lua/config/
   clangd_setup.lua      :ClangdSetup
   ctags.lua             :Ctags, &tags and &path for C
   c_complete.lua        treesitter + ctags completion for C without an LSP
-  c_indent.lua          C indent widths and the case-label indent fix
+  c_indent.lua          the case-label indent fix for C
   format.lua            odinfmt, Prettier, Prettier indent options
   notes.lua dividers.lua comment_tags.lua perf.lua
 lua/launch/             launch.json keys, output buffers, build errors
@@ -68,8 +68,7 @@ ranked local, file, open buffers, project, plus struct members after `.` and
 `->`. Treesitter resolves the variable's type and the tags file supplies the
 members.
 
-Indent width is 2 unless the project is listed in `lua/config/c_indent.lua`
-or has an `.editorconfig`.
+Indent width is 2 unless the project has an `.editorconfig`.
 
 ## Formatting
 

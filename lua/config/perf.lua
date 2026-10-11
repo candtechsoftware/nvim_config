@@ -93,7 +93,7 @@ function M.probe()
   -- What a long session accumulates: every loaded C buffer is walked by the
   -- <Tab> completefunc, and each project root gets its own clangd.
   local loaded, listed, cfamily = 0, 0, 0
-  local C = { c = true, cpp = true, objc = true, objcpp = true }
+  local C = { c = true, cpp = true, objc = true, objcpp = true, metal = true }
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(b) then
       loaded = loaded + 1

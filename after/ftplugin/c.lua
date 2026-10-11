@@ -1,10 +1,9 @@
 local c_indent = require('config.c_indent')
 local c_complete = require('config.c_complete')
 
-local sw = c_indent.width()
-vim.bo.shiftwidth = sw
-vim.bo.tabstop = sw
-vim.bo.softtabstop = sw
+vim.bo.shiftwidth = 2
+vim.bo.tabstop = 2
+vim.bo.softtabstop = 2
 vim.bo.cinoptions = 't0,:s,l1,(0,Ws'
 vim.bo.indentexpr = c_indent.indent
 vim.bo.smartindent = false

@@ -8,7 +8,7 @@ local M = {}
 local ID_QUERY = '[(identifier) (field_identifier) (type_identifier)] @id'
 local DECL_QUERY = '[(declaration) (parameter_declaration)] @decl'
 local SCOPE_NODES = { function_definition = true, lambda_expression = true }
-local C_FILETYPES = { c = true, cpp = true, objc = true, objcpp = true }
+local C_FILETYPES = { c = true, cpp = true, objc = true, objcpp = true, metal = true }
 
 local MAX_IDENTS = 4000
 local MAX_OPEN_IDENTS = 2000

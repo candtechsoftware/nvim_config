@@ -8,22 +8,22 @@ vim.g.colors_name = 'hmin'
 -- keywords, types and macros in gold, literals olive, comments gray, and
 -- everything else the brown text.
 local c = {
-  bg = '#0c0c0c',
-  fg = '#a08563',
+  bg = '#1a1a1a',
+  fg = '#c3a784',
 
-  gold = '#9c751c',    -- keywords, types, macros
-  olive = '#657d36',   -- strings, chars, numbers, constants
-  comment = '#686868',
+  gold = '#bf9644',    -- keywords, types, macros
+  olive = '#859f57',   -- strings, chars, numbers, constants
+  comment = '#888888',
 
-  line = '#1f1f27',    -- cursor line, status bar, popups
-  sel = '#315268',     -- visual, current match, popup selection
-  sel_dim = '#1e2f3a', -- other search matches
-  soft = '#272825',    -- borders and filler
+  line = '#2e2e37',    -- cursor line, status bar, popups
+  sel = '#42647b',     -- visual, current match, popup selection
+  sel_dim = '#2e3f4b', -- other search matches
+  soft = '#373835',    -- borders and filler
   cursor = '#00ee00',
   cursor_insert = '#ee7700',
   red = '#ff0000',
   yellow = '#ffbb00',
-  dim = '#5b4d3c',     -- line numbers, every window behind a picker
+  dim = '#7b6c5a',     -- line numbers, every window behind a picker
 }
 
 local hl = vim.api.nvim_set_hl
@@ -151,9 +151,9 @@ end
 -- Nested scope backgrounds for lua/hh/scope.lua, warming with depth.
 local scope_bgs = {
   c.bg,
-  '#12100d',
-  '#181410',
-  '#1e1813',
+  '#211e1b',
+  '#27231e',
+  '#2d2722',
 }
 for i, bg in ipairs(scope_bgs) do
   hl(0, 'HHScope' .. i, { bg = bg })

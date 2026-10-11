@@ -10,7 +10,7 @@ local scope_ns = vim.api.nvim_create_namespace('hh_scope_highlight')
 local DEBOUNCE_MS = 50
 
 local FILETYPES = {
-  'c', 'cpp', 'objc', 'objcpp', 'jai', 'lua',
+  'c', 'cpp', 'objc', 'objcpp', 'metal', 'jai', 'lua',
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact',
 }
 

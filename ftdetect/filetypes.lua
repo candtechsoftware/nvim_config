@@ -6,8 +6,11 @@ vim.filetype.add({
     vshader = 'glsl', fshader = 'glsl', gshader = 'glsl',
     hlsl = 'hlsl', hlsli = 'hlsl', fx = 'hlsl', fxh = 'hlsl', psh = 'hlsl', cginc = 'hlsl', compute = 'hlsl', shader = 'hlsl',
     m = 'objc', mm = 'objcpp',
+    metal = 'metal',
     jai = 'jai',
   },
 })
 
 vim.treesitter.language.register('objc', 'objcpp')
+-- Metal is C++14 plus a few qualifiers, which after/queries/cpp highlights.
+vim.treesitter.language.register('cpp', 'metal')

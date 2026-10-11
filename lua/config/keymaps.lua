@@ -61,7 +61,7 @@ map('n', ']c', function() vim.fn.search(COMMENT_LINE, 'W') end, { desc = 'Next c
 map('n', '[c', function() vim.fn.search(COMMENT_LINE, 'bW') end, { desc = 'Previous comment' })
 
 -- Completion only ever opens from <Tab>. With an LSP: native LSP completion.
--- Without one: omni after `.`/`->`/`::`, the buffer's completefunc when it has
+-- Without one: configured omni after `.`/`->`/`::`, the buffer's completefunc when it has
 -- one (C, see config/c_complete.lua), else keyword completion.
 local function at_member_access()
   local before = vim.fn.getline('.'):sub(1, vim.fn.col('.') - 1)
@@ -70,11 +70,11 @@ end
 
 map('i', '<Tab>', function()
   if vim.fn.pumvisible() == 1 then return '<C-n>' end
-  if next(vim.lsp.get_clients({ bufnr = 0 })) then
+  if next(vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/completion' })) then
     vim.schedule(vim.lsp.completion.get)
     return ''
   end
-  if at_member_access() then return '<C-x><C-o>' end
+  if at_member_access() and vim.bo.omnifunc ~= '' then return '<C-x><C-o>' end
   if vim.bo.completefunc ~= '' then return '<C-x><C-u>' end
   return '<C-n>'
 end, { expr = true, desc = 'Complete' })

@@ -2,24 +2,26 @@
 -- patterns. A colorscheme opts in with `require('hh.macros').setup()`.
 local M = {}
 
-local C_FT = { c = true, cpp = true, objc = true, objcpp = true }
-local SOURCE_GLOBS = { '*.h', '*.c', '*.hpp', '*.cpp', '*.cc', '*.hh', '*.m', '*.mm' }
+local C_FT = { c = true, cpp = true, objc = true, objcpp = true, metal = true }
+local SOURCE_GLOBS = { '*.h', '*.c', '*.hpp', '*.cpp', '*.cc', '*.hh', '*.m', '*.mm', '*.metal' }
 local SKIP_DIRS = require('config.project').SKIP_DIRS
 
 -- matchadd patterns run on every displayed line of every redraw. Past this
 -- many names that costs more than the highlighting is worth.
 local MAX_MACROS = 4000
 
--- [root] = { 'MACRO_NAME', ... }
+-- [dir] = { 'MACRO_NAME', ... }
 local macro_cache = {}
--- [root] = { done_cb, ... } while a scan is in flight, so N windows spawn one
+-- [dir] = { done_cb, ... } while a scan is in flight, so N windows spawn one
 -- scan and all of them get painted when it lands.
 local scan_waiters = {}
 -- [winid] = { match id, ... }
 local match_ids = {}
 
-local function project_root(buf)
-  return vim.fs.root(buf, { '.git', 'compile_commands.json', '.clangd' })
+-- The project root and the buffer's own directory under it.
+local function project_dirs(buf)
+  return vim.fs.root(buf, { '.git', 'compile_commands.json', '.clangd' }),
+    vim.fs.dirname(vim.api.nvim_buf_get_name(buf))
 end
 
 local function parse_defines(out)
@@ -34,7 +36,7 @@ local function parse_defines(out)
   return names
 end
 
-local function scan_cmd(root)
+local function scan_cmd(dir)
   if vim.fn.executable('rg') == 1 then
     local cmd = { 'rg', '--no-heading', '--no-line-number', '-N', '-I',
       '-e', '^\\s*#\\s*define\\s+[A-Za-z_][A-Za-z0-9_]*' }
@@ -45,7 +47,7 @@ local function scan_cmd(root)
     for _, d in ipairs(SKIP_DIRS) do
       vim.list_extend(cmd, { '-g', '!**/' .. d .. '/**' })
     end
-    cmd[#cmd + 1] = root
+    cmd[#cmd + 1] = dir
     return cmd
   end
   local cmd = { 'grep', '-rhE',
@@ -56,41 +58,47 @@ local function scan_cmd(root)
   for _, d in ipairs(SKIP_DIRS) do
     cmd[#cmd + 1] = '--exclude-dir=' .. d
   end
-  cmd[#cmd + 1] = root
+  cmd[#cmd + 1] = dir
   return cmd
 end
 
--- Calls `done(names)` on the main loop. Cached per root.
-local function scan_macros(root, done)
-  if macro_cache[root] then
-    done(macro_cache[root])
+-- Calls `done(names)` on the main loop. Cached per directory.
+local function scan_macros(dir, done)
+  if macro_cache[dir] then
+    done(macro_cache[dir])
     return
   end
-  if scan_waiters[root] then
-    table.insert(scan_waiters[root], done)
+  if scan_waiters[dir] then
+    table.insert(scan_waiters[dir], done)
     return
   end
-  scan_waiters[root] = { done }
+  scan_waiters[dir] = { done }
 
-  vim.system(scan_cmd(root), { text = true }, vim.schedule_wrap(function(res)
-    local callbacks = scan_waiters[root] or {}
-    scan_waiters[root] = nil
+  vim.system(scan_cmd(dir), { text = true }, vim.schedule_wrap(function(res)
+    local callbacks = scan_waiters[dir] or {}
+    scan_waiters[dir] = nil
     -- rg exits 1 when it finds nothing, which is a valid empty result.
     local names = parse_defines(res.stdout or '')
-    if #names > MAX_MACROS then
-      vim.notify(
-        ('hh.macros: %d #define names under %s, over the %d limit, so project macro\n'
-          .. 'highlighting is OFF here. A count this high usually means a vendored tree\n'
-          .. 'is missing from SKIP_DIRS in lua/config/project.lua. :HHMacroDump shows what was found.'
-        ):format(#names, root, MAX_MACROS),
-        vim.log.levels.WARN)
-      names = {}
-    end
-    macro_cache[root] = names
+    macro_cache[dir] = names
     for _, cb in ipairs(callbacks) do
       cb(names)
     end
   end))
+end
+
+-- Calls `done(dir, names)` with the widest directory from `dir` down to
+-- `buf_dir` that holds at most MAX_MACROS names. The root of a repo of many
+-- projects (~/notes) holds too many, the one project inside it does not.
+-- `buf_dir` itself is passed even when it holds too many.
+local function project_macros(dir, buf_dir, done)
+  scan_macros(dir, function(names)
+    local child = buf_dir:sub(#dir + 2):match('^[^/]+')
+    if #names <= MAX_MACROS or not child then
+      done(dir, names)
+    else
+      project_macros(dir .. '/' .. child, buf_dir, done)
+    end
+  end)
 end
 
 local function clear_matches(winid)
@@ -130,12 +138,13 @@ local function add_matches(winid)
   add('YgKeyword',
     '\\<\\(thread_local\\|force_inline\\|no_inline\\|read_only\\|write_only\\|shared\\|exported\\)\\>')
 
-  local root = project_root(vim.api.nvim_win_get_buf(winid))
+  local root, buf_dir = project_dirs(vim.api.nvim_win_get_buf(winid))
   if not root then return end
 
-  scan_macros(root, function(macros)
+  project_macros(root, buf_dir, function(_, macros)
     -- The window may be gone or re-matched while the scan was in flight.
     if not vim.api.nvim_win_is_valid(winid) or match_ids[winid] ~= ids then return end
+    if #macros > MAX_MACROS then return end
     -- Priority 200 beats the Function patterns; chunks of 50 stay under the
     -- regex engine's limits.
     for i = 1, #macros, 50 do
@@ -180,15 +189,16 @@ function M.setup()
   })
 
   vim.api.nvim_create_user_command('HHMacroDump', function()
-    local root = project_root(0)
+    local root, buf_dir = project_dirs(0)
     if not root then
       vim.notify('HH: no project root (need .git, compile_commands.json, or .clangd)',
         vim.log.levels.WARN)
       return
     end
-    scan_macros(root, function(macros)
-      vim.notify(('HH: root = %s\nHH: %d #define names\nHH: first 20 = %s')
-        :format(root, #macros, table.concat(vim.list_slice(macros, 1, 20), ', ')),
+    project_macros(root, buf_dir, function(dir, macros)
+      vim.notify(('HH: root = %s\nHH: %d #define names%s\nHH: first 20 = %s')
+        :format(dir, #macros, #macros > MAX_MACROS and ', too many to highlight' or '',
+          table.concat(vim.list_slice(macros, 1, 20), ', ')),
         vim.log.levels.INFO)
     end)
   end, { desc = 'Show the #define names the macro indexer found' })
