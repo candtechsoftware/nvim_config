@@ -220,7 +220,7 @@ local function make(o)
   local cmd = detect_build(current_root, vim.bo.filetype)
   if o.args ~= '' then cmd = cmd .. ' ' .. o.args end
   -- The command runs in the root, so `%` expands to an absolute path.
-  cmd = cmd:gsub('%%', vim.fn.expand('%:p'))
+  cmd = cmd:gsub('%%', function() return vim.fn.shellescape(vim.fn.expand('%:p')) end)
   run.start({ key = ':Make', cmd = cmd, out = DEFAULT_OUT }, current_root)
 end
 
@@ -250,6 +250,7 @@ function M.setup()
   })
 
   vim.keymap.set('n', '<leader>o', run.toggle_pane, { desc = 'Toggle launch output pane' })
+  vim.keymap.set('n', '<leader>r', run.repeat_last, { desc = 'Run the last build or launch command again' })
   vim.keymap.set('n', '<leader>x', stop_all, { desc = 'Stop running launch jobs' })
   vim.keymap.set('n', '<leader>ft', pick, { desc = 'Pick a launch.json command' })
 
@@ -289,6 +290,7 @@ function M.setup()
   })
 
   cmd('LaunchList', info, { desc = 'List launch.json commands and running jobs' })
+  cmd('Recompile', run.repeat_last, { desc = 'Run the last build or launch command again' })
   cmd('LaunchQF', run.quickfix, { desc = "Re-parse the last output buffer's errors into quickfix" })
   cmd('LaunchInit', init_file, { desc = 'Write a starter launch.json, or open the existing one' })
   cmd('LaunchReload', reload, { desc = 'Re-read launch.json after editing it' })

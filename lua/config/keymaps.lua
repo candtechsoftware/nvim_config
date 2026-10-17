@@ -26,7 +26,8 @@ local function qf_step(cmd)
   return '<cmd>' .. (on_it and cmd or 'cc') .. '<CR>zz'
 end
 map('n', { '<C-k>', '<M-n>' }, function() return qf_step('cnext') end, { expr = true, desc = 'Next quickfix item' })
-map('n', { '<C-j>', '<M-N>' }, function() return qf_step('cprev') end, { expr = true, desc = 'Previous quickfix item' })
+map('n', { '<C-j>', '<M-p>', '<M-N>' }, function() return qf_step('cprev') end,
+  { expr = true, desc = 'Previous quickfix item' })
 map('n', '<leader>qo', '<cmd>copen<CR>', { desc = 'Open quickfix list' })
 map('n', '<leader>qc', '<cmd>cclose<CR>', { desc = 'Close quickfix list' })
 map('n', '<leader>k', '<cmd>lnext<CR>zz', { desc = 'Next location list item' })

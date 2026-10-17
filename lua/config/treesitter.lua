@@ -28,7 +28,7 @@ local PARSERS = {
 
 local ENSURE_INSTALLED = {
   'cpp', 'rust', 'go', 'javascript', 'typescript', 'tsx',
-  'json', 'yaml', 'toml', 'bash', 'glsl', 'hlsl', 'objc',
+  'json', 'yaml', 'toml', 'bash', 'glsl', 'hlsl', 'objc', 'jai',
 }
 
 local function installed(lang)

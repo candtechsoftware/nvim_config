@@ -85,7 +85,7 @@ In a cmdline popup: `<Tab>` picks, `<Up>`/`<Down>` walk history.
 | Key | Mode | Action |
 |---|---|---|
 | `<C-k>` / `<C-j>` | n | Next/prev quickfix item; the first press on a new list lands on item 1 |
-| `<M-n>` / `<M-N>` | n | Same, 4coder's Alt-N (left Option as Alt) |
+| `<M-n>` / `<M-p>` | n | Same, Emacs-style next/previous error (`<M-N>` also goes back) |
 | `<leader>k` / `<leader>j` | n | Next/prev location list item |
 | `<leader>qo` / `<leader>qc` | n | Open/close quickfix |
 | `<leader>qf` / `<leader>qq` | n | Diagnostics to quickfix / location list |
@@ -109,10 +109,11 @@ In a cmdline popup: `<Tab>` picks, `<Up>`/`<Down>` walk history.
 |---|---|---|
 | *launch.json keys* | n | Run that command into its output buffer |
 | `<leader>b` | n | `:Make` with the detected build command, unless launch.json binds it |
+| `<leader>r` | n | Repeat the last build or launch command (`:Recompile`) |
 | `<leader>o` | n | Toggle the output pane (the job keeps running) |
 | `<leader>x` | n | Stop running jobs |
 | `<leader>ft` | n | Pick a launch.json command |
-| `<CR>` / `q` / `<C-c>` | n | In an output buffer: jump to the error / close the window / stop the job |
+| `<CR>` / `g` / `q` / `<C-c>` | n | In output: jump to error / rerun / close / stop the job |
 
 ## Notes (config/notes.lua)
 

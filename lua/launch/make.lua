@@ -23,10 +23,22 @@ local function c_build(root)
   end
 end
 
--- `%` is the current file, expanded by :Make.
+local function jai_executable()
+  for _, name in ipairs({ 'jai-macos', 'jai', 'jai-linux' }) do
+    if vim.fn.executable(name) == 1 then return name end
+  end
+  -- Keep the eventual shell error useful when Jai is not installed.
+  return 'jai-macos'
+end
+
+-- `%` is the current file, shell-escaped and expanded by :Make. A build.jai
+-- metaprogram is the project build; first.jai is the conventional entry point
+-- for a project without one.
 local function jai_build(root)
-  if exists(root, 'build.jai') then return 'jai-macos build.jai' end
-  return 'jai-macos %'
+  local entry = exists(root, 'build.jai') and 'build.jai'
+    or exists(root, 'first.jai') and 'first.jai'
+    or '%'
+  return jai_executable() .. ' ' .. entry
 end
 
 local JS = { javascript = true, typescript = true, javascriptreact = true, typescriptreact = true }
@@ -54,7 +66,7 @@ function M.detect(root, ft)
   if exists(root, 'Cargo.toml') then return 'cargo build' end
   local cmd = node_build(root) or c_build(root)
   if cmd then return cmd end
-  if exists(root, 'build.jai') then return 'jai-macos build.jai' end
+  if exists(root, 'build.jai') or exists(root, 'first.jai') then return jai_build(root) end
   return 'make'
 end
 

@@ -96,9 +96,11 @@ starter.
 one job per buffer. Starting a command stops whatever was writing there.
 Output is a plain buffer fed from a PTY, so it can be searched and yanked.
 When a command exits, its error locations become the quickfix list and are
-marked in the files. `<M-n>` steps through them, and `<CR>` on an output line
-jumps to it. One errorformat covers Jai, clang, gcc, zig, MSVC, Odin, Rust,
-CMake and ESLint.
+marked in the files. `<M-n>` / `<M-p>` step through them, and `<CR>` on an
+output line jumps to it. Press `g` in an output buffer, `<leader>r` anywhere,
+or run `:Recompile` to repeat the latest command. One errorformat covers Jai,
+clang, gcc, zig, MSVC, Odin, Rust, CMake and ESLint.
 
 With no `launch.json`, `<leader>b` runs `:Make`, the build command detected
-from the project's files (`lua/launch/make.lua`).
+from the project's files (`lua/launch/make.lua`). For Jai it builds
+`build.jai`, then `first.jai`, falling back to the current file.

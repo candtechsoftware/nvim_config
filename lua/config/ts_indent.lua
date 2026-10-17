@@ -292,7 +292,7 @@ function M.get_indent(lnum)
 end
 
 function M.attach()
-  vim.bo.indentexpr = function() return M.get_indent(vim.v.lnum) end
+  vim.bo.indentexpr = "v:lua.require'config.ts_indent'.get_indent(v:lnum)"
   vim.bo.smartindent = false
   vim.bo.cindent = false
 end

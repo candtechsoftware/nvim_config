@@ -161,6 +161,11 @@ local function new_buf(out)
     { buf = buf, desc = 'launch: close the window, the job keeps running' })
   vim.keymap.set('n', '<C-c>', function() M.stop(out) end,
     { buf = buf, desc = 'launch: stop this job' })
+  -- Emacs compilation-mode uses `g` to run the command behind the output
+  -- buffer again. Keep this local so ordinary buffers retain Vim's `g`
+  -- prefix.
+  vim.keymap.set('n', 'g', function() M.restart(out) end,
+    { buf = buf, desc = 'launch: run this command again' })
   -- Deleting the buffer stops its job and frees the name for the next run.
   vim.api.nvim_create_autocmd('BufUnload', {
     buf = buf,
@@ -183,7 +188,10 @@ function M.start(entry, root)
   local o = outs[entry.out] or { buf = new_buf(entry.out) }
   outs[entry.out] = o
   o.key, o.cmd, o.root, o.partial = entry.key, entry.cmd, root, ''
-  vim.api.nvim_buf_set_lines(o.buf, 0, -1, false, {})
+  -- Leave the command visible, especially for a quiet long-running build.
+  -- The final blank line is the unfinished line that write() replaces.
+  local shown_cmd = entry.cmd:gsub('[\r\n]+', ' ')
+  vim.api.nvim_buf_set_lines(o.buf, 0, -1, false, { '$ ' .. shown_cmd, '' })
   last_out = entry.out
   show(o.buf)
 
@@ -209,6 +217,26 @@ function M.start(entry, root)
   else
     o.job = job
   end
+end
+
+-- Run an output buffer's command again. The command and root live on the
+-- output, so this also works after changing buffers or directories.
+function M.restart(out)
+  local o = outs[out]
+  if not o then
+    vim.notify('launch: no command to run again for ' .. out, vim.log.levels.WARN)
+    return false
+  end
+  M.start({ key = o.key, cmd = o.cmd, out = out }, o.root)
+  return true
+end
+
+function M.repeat_last()
+  if not last_out then
+    vim.notify('launch: no previous command', vim.log.levels.WARN)
+    return false
+  end
+  return M.restart(last_out)
 end
 
 function M.stop(out)
