@@ -41,16 +41,24 @@ local function installed(lang)
   return #vim.api.nvim_get_runtime_file('parser/' .. lang .. '.*', false) > 0
 end
 
-local function fetch_queries(base, lang, done)
+local async = vim.async
+
+local function system(cmd)
+  local result = async.await(3, vim.system, cmd, {})
+  -- vim.system completes off the main loop. Resume there before using Nvim APIs.
+  async.await(1, vim.schedule)
+  return result
+end
+
+local function fetch_queries(base, lang)
   local dst = SITE .. '/queries/' .. lang
   vim.fn.mkdir(dst, 'p')
   local cmd = { 'curl', '-fsS' }
   for _, name in ipairs(QUERY_FILES) do
     vim.list_extend(cmd, { '-o', dst .. '/' .. name .. '.scm', base .. '/' .. name .. '.scm' })
   end
-  vim.system(cmd, {}, vim.schedule_wrap(function(res)
-    done(res.code ~= 0 and res.stderr or nil)
-  end))
+  local result = system(cmd)
+  if result.code ~= 0 then error(vim.trim(result.stderr or 'query download failed'), 0) end
 end
 
 local function copy_queries(repo, dir, lang, inherits)
@@ -68,52 +76,55 @@ local function copy_queries(repo, dir, lang, inherits)
   end
 end
 
--- Clone, compile and install each of `langs` in turn, without blocking the editor.
-local function install(langs, i)
-  i = i or 1
-  local lang = langs[i]
-  if not lang then return end
-  local info = PARSERS[lang]
-  if not info then
-    vim.notify('Unknown parser: ' .. lang, vim.log.levels.ERROR)
-    return install(langs, i + 1)
-  end
-  local repo = vim.fn.tempname()
-  local dir = info.location and (repo .. '/' .. info.location) or repo
-  local src = dir .. '/src'
+-- Clone, compile and install each parser sequentially without blocking Nvim.
+local function install(langs)
+  async.run(function()
+    for i, lang in ipairs(langs) do
+      local info = PARSERS[lang]
+      if not info then
+        vim.notify('Unknown parser: ' .. lang, vim.log.levels.ERROR)
+      else
+        local repo = vim.fn.tempname()
+        local ok, err = async.pawait(async.run(function()
+          local dir = info.location and (repo .. '/' .. info.location) or repo
+          local src = dir .. '/src'
+          local clone = system({ 'git', 'clone', '--depth', '1', '--filter=blob:none', info.url, repo })
+          if clone.code ~= 0 then error(vim.trim(clone.stderr or 'git clone failed'), 0) end
+          if vim.fn.filereadable(src .. '/parser.c') == 0 then error('no src/parser.c', 0) end
 
-  local function finish(err)
-    vim.fn.delete(repo, 'rf')
-    if err then
-      vim.notify(('Failed to install %s parser: %s'):format(lang, err), vim.log.levels.ERROR)
-    else
-      vim.treesitter.language.add(lang)
-      vim.notify(('Installed %s parser (%d/%d)'):format(lang, i, #langs))
-    end
-    install(langs, i + 1)
-  end
+          local cpp = vim.fn.filereadable(src .. '/scanner.cc') == 1
+          local cmd = {
+            cpp and 'c++' or 'cc', '-shared', '-fPIC', '-O2', '-I', src,
+            '-o', SITE .. '/parser/' .. lang .. '.so', src .. '/parser.c',
+          }
+          if cpp then
+            table.insert(cmd, src .. '/scanner.cc')
+          elseif vim.fn.filereadable(src .. '/scanner.c') == 1 then
+            table.insert(cmd, src .. '/scanner.c')
+          end
+          -- macOS leaves tree-sitter's symbols for the host; Linux ld rejects this.
+          if vim.fn.has('mac') == 1 then vim.list_extend(cmd, { '-undefined', 'dynamic_lookup' }) end
+          vim.fn.mkdir(SITE .. '/parser', 'p')
+          local build = system(cmd)
+          if build.code ~= 0 then error(vim.trim(build.stderr or 'parser build failed'), 0) end
 
-  vim.system({ 'git', 'clone', '--depth', '1', '--filter=blob:none', info.url, repo }, {}, vim.schedule_wrap(function(clone)
-    if clone.code ~= 0 or vim.fn.filereadable(src .. '/parser.c') == 0 then
-      return finish(clone.code ~= 0 and clone.stderr or 'no src/parser.c')
+          if info.queries then
+            fetch_queries(info.queries, lang)
+          else
+            copy_queries(repo, dir, lang, info.inherits)
+          end
+        end))
+
+        vim.fn.delete(repo, 'rf')
+        if ok then
+          vim.treesitter.language.add(lang)
+          vim.notify(('Installed %s parser (%d/%d)'):format(lang, i, #langs))
+        else
+          vim.notify(('Failed to install %s parser: %s'):format(lang, tostring(err)), vim.log.levels.ERROR)
+        end
+      end
     end
-    local cpp = vim.fn.filereadable(src .. '/scanner.cc') == 1
-    local cmd = { cpp and 'c++' or 'cc', '-shared', '-fPIC', '-O2', '-I', src, '-o', SITE .. '/parser/' .. lang .. '.so', src .. '/parser.c' }
-    if cpp then
-      table.insert(cmd, src .. '/scanner.cc')
-    elseif vim.fn.filereadable(src .. '/scanner.c') == 1 then
-      table.insert(cmd, src .. '/scanner.c')
-    end
-    -- macOS needs this to leave tree-sitter's symbols for the host nvim; Linux ld rejects it.
-    if vim.fn.has('mac') == 1 then vim.list_extend(cmd, { '-undefined', 'dynamic_lookup' }) end
-    vim.fn.mkdir(SITE .. '/parser', 'p')
-    vim.system(cmd, {}, vim.schedule_wrap(function(build)
-      if build.code ~= 0 then return finish(build.stderr) end
-      if info.queries then return fetch_queries(info.queries, lang, finish) end
-      copy_queries(repo, dir, lang, info.inherits)
-      finish(nil)
-    end))
-  end))
+  end):detach()
 end
 
 local function names()
@@ -182,11 +193,8 @@ function M.setup()
     local ok, parser = pcall(vim.treesitter.get_parser)
     print(('filetype=%s parser=%s'):format(vim.bo.filetype, ok and parser and parser:lang() or 'none'))
   end, { desc = 'Show treesitter parser' })
-  vim.keymap.set('n', '<leader>hh', function()
-    local captures = vim.treesitter.get_captures_at_cursor(0)
-    print(#captures == 0 and 'No captures' or '@' .. table.concat(captures, ' @'))
-  end, { desc = 'Show treesitter captures' })
   vim.keymap.set('n', '<leader>hi', '<cmd>Inspect<CR>', { desc = 'Inspect highlight under cursor' })
+  vim.keymap.set('x', '<leader>hi', ':Inspect<CR>', { desc = 'Inspect highlights in selection' })
 end
 
 return M

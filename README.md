@@ -42,7 +42,7 @@ lua/config/
   options.lua           options, cmdline autocompletion, no bold/italic/underline
   keymaps.lua           editing, quickfix stepping, <Tab> completion routing
   lsp.lua               servers, completion, clangd unity-build goto-definition
-  pickers.lua           fff, plus native :Recent :Grep :Branch, symbols, git
+  pickers.lua           fff, plus native oldfiles, :Grep/:Branch, symbols, git
   treesitter.lua        highlighting, :TSInstall/:TSUpdate/:TSList
   ts_indent.lua         indents.scm engine (used by Jai)
   project.lua           project root, vendored dirs every scanner skips
@@ -68,6 +68,11 @@ builtin commands cover the rest: `:checkhealth vim.lsp`,
 
 Diagnostics are received but never drawn: `<leader>vd`, `<leader>qf` and
 `<leader>qq` still show them, and `:lua vim.diagnostic.enable()` turns them on.
+
+Jai uses Nvim's built-in `.jai` detection, the local `syntax/jai.vim` fallback,
+the native Tree-sitter parser installed by `:TSInstall jai`, and Jails from
+`lsp/jails.lua`. The old `jai.vim` package is unnecessary because the local
+syntax is its current rule set plus function-call highlighting.
 
 ## C / C++
 

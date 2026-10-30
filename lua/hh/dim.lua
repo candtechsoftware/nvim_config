@@ -9,6 +9,8 @@
 local M = {}
 
 local ns = vim.api.nvim_create_namespace('hh_dim')
+local generation = 0
+local current_group
 
 local function apply(hl_ns)
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -21,11 +23,16 @@ end
 
 function M.setup(opts)
   local scheme = vim.g.colors_name
+  if current_group then pcall(vim.api.nvim_del_augroup_by_id, current_group) end
   for group in pairs(vim.api.nvim_get_hl(0, {})) do
     vim.api.nvim_set_hl(ns, group, { fg = opts.fg })
   end
 
-  local group = vim.api.nvim_create_augroup('HHDim', {})
+  -- ColorScheme cleanup is scheduled, so each generation needs its own group.
+  -- Reusing one id lets an old callback delete the new scheme's autocmds.
+  generation = generation + 1
+  local group = vim.api.nvim_create_augroup('HHDim' .. generation, {})
+  current_group = group
   vim.api.nvim_create_autocmd('FileType', {
     group = group,
     pattern = 'fff_input',
@@ -45,7 +52,8 @@ function M.setup(opts)
     callback = vim.schedule_wrap(function()
       if vim.g.colors_name ~= scheme then
         apply(0)
-        vim.api.nvim_del_augroup_by_id(group)
+        pcall(vim.api.nvim_del_augroup_by_id, group)
+        if current_group == group then current_group = nil end
       end
     end),
   })

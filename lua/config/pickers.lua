@@ -55,23 +55,6 @@ local function jai_symbols()
   end)
 end
 
--- Listed buffers by last use, then v:oldfiles, under cwd.
-local function recent_files()
-  local cwd = vim.fn.getcwd() .. '/'
-  local bufs = vim.fn.getbufinfo({ buflisted = 1 })
-  table.sort(bufs, function(a, b) return a.lastused > b.lastused end)
-  local paths = vim.tbl_map(function(b) return b.name end, bufs)
-  vim.list_extend(paths, vim.v.oldfiles)
-  local files, seen = {}, {}
-  for _, path in ipairs(paths) do
-    if not seen[path] and vim.startswith(path, cwd) and vim.uv.fs_stat(path) then
-      seen[path] = true
-      files[#files + 1] = path:sub(#cwd + 1)
-    end
-  end
-  return files
-end
-
 local function git(args)
   local root = project.search_root()
   return vim.system(vim.list_extend({ 'git' }, args), { cwd = root, text = true }):wait(), root
@@ -218,17 +201,6 @@ function M.setup()
     vim.cmd('silent grep! ' .. o.args .. ' ' .. vim.fn.fnameescape(project.search_root()))
     vim.cmd('botright cwindow')
   end, { nargs = '+', desc = 'rg into quickfix, including gitignored files' })
-  cmd('Recent', function(o) vim.cmd.edit(o.args) end, {
-    nargs = 1,
-    complete = function(arg)
-      local files = recent_files()
-      local matches = arg == '' and files or vim.fn.matchfuzzy(files, arg)
-      return vim.tbl_map(function(file)
-        return { word = file, kind = 'f', menu = 'recent', info = vim.fn.getcwd() .. '/' .. file }
-      end, matches)
-    end,
-    desc = 'Edit a recent file under cwd',
-  })
   cmd('Branch', function(o)
     -- git switch reports on stderr whether it succeeds or not.
     local res = git({ 'switch', o.args })
@@ -264,7 +236,7 @@ function M.setup()
   map('n', '<leader>js', jai_symbols, { desc = 'Search Jai module symbols' })
 
   map('n', '<leader>fb', ':b ', { desc = 'Buffers' })
-  map('n', '<leader>fo', ':Recent ', { desc = 'Recent files under cwd' })
+  map('n', '<leader>fo', '<cmd>browse oldfiles<CR>', { desc = 'Browse old files' })
   map('n', '<leader>pg', ':Grep ', { desc = 'Grep including gitignored files' })
   map('n', '<leader>ds', document_symbols, { desc = 'Document symbols' })
   map('n', '<leader>ws', workspace_symbols, { desc = 'Workspace symbols' })

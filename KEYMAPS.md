@@ -39,14 +39,14 @@ Nothing opens the popup on its own. `<Tab>` does.
 
 ## Multicursor (builtin, `:h multicursor`)
 
-Follow-mode replays motions and Visual sequences at every cursor. `Q` and
-`[count]Q` leave it off, so `diw` cascades but `viwd` does not.
+Follow-mode replays motions and Visual sequences at every cursor. `Q` toggles
+one cursor; `zq{motion}` places cursors throughout a range.
 
 | Key | Mode | Action |
 |---|---|---|
 | `<leader>Q` | n | Cursor on every search match, follow-mode on |
 | `Q` | n | Toggle a cursor here |
-| `[count]Q` | n | Cursor at every match of the last search |
+| `zq{motion}` | n | Cursor at every match in the motion |
 | `Q` | v | Cursor on each selected line, follow-mode on |
 | `q=` | n | Toggle follow-mode |
 | `<C-l>` / `gQ` | n | Clear / restore cursors |
@@ -68,7 +68,7 @@ location list.
 | `<leader>fr` | n | Resume the last fff picker |
 | `<leader>jg` / `<leader>js` | n | Grep Jai modules / by symbol kind (fff) |
 | `<leader>fb` | n | Buffers, most recent first (`:b`) |
-| `<leader>fo` | n | Recent files under the cwd (`:Recent`) |
+| `<leader>fo` | n | Browse old files (`:browse oldfiles`) |
 | `<leader>pg` | n | Grep including gitignored files into quickfix (`:Grep`) |
 | `<leader>ds` | n | Document symbols to the location list (LSP, else ctags on the file) |
 | `<leader>ws` | n | Workspace symbols (LSP into quickfix, else `:tag` completion) |
@@ -140,7 +140,6 @@ In a cmdline popup: `<Tab>` picks, `<Up>`/`<Down>` walk history.
 | Key | Mode | Action |
 |---|---|---|
 | `<leader>ts` | n | Show the buffer's parser |
-| `<leader>hh` | n | Captures under the cursor |
-| `<leader>hi` | n | `:Inspect` |
+| `<leader>hi` | n,v | `:Inspect` under the cursor / across the selection |
 | `<leader>vs` / `<leader>vS` | n,v / v | Start/grow / shrink structural selection |
 | `]N` / `[N` | v | Extend structural selection across next / previous sibling nodes |
