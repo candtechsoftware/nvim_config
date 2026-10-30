@@ -270,7 +270,9 @@ function M.setup()
     nargs = '?',
     desc = 'Run a launch.json command by key',
     complete = function()
-      return vim.tbl_map(function(entry) return entry.key end, entries)
+      return vim.tbl_map(function(entry)
+        return { word = entry.key, kind = 'L', menu = entry.out, info = entry.cmd }
+      end, entries)
     end,
   })
 
@@ -285,7 +287,9 @@ function M.setup()
     nargs = '?',
     desc = "Stop one output buffer's job, or all",
     complete = function()
-      return vim.tbl_map(function(row) return row.out end, run.list())
+      return vim.tbl_map(function(row)
+        return { word = row.out, kind = 'J', menu = 'running', info = row.cmd }
+      end, run.list())
     end,
   })
 

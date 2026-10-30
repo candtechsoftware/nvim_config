@@ -18,6 +18,7 @@ Leader is `<Space>`. Built-in Neovim defaults are listed where the config relies
 | `<leader>f` | n | Format: odinfmt for Odin, Prettier then eslint fixAll for JS/TS |
 | `<leader>u` | n | Undotree (builtin `nvim.undotree`) |
 | `<leader>ih` | n | Toggle inlay hints |
+| `<leader>vs` / `<leader>vS` | n,v / v | Select parent / child treesitter node |
 | `<leader><leader>` | n | Source the current file |
 | `]c` / `[c` | n | Next/prev comment line |
 | `<C-,>` | n | Cycle splits |
@@ -141,3 +142,5 @@ In a cmdline popup: `<Tab>` picks, `<Up>`/`<Down>` walk history.
 | `<leader>ts` | n | Show the buffer's parser |
 | `<leader>hh` | n | Captures under the cursor |
 | `<leader>hi` | n | `:Inspect` |
+| `<leader>vs` / `<leader>vS` | n,v / v | Start/grow / shrink structural selection |
+| `]N` / `[N` | v | Extend structural selection across next / previous sibling nodes |

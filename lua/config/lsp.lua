@@ -122,7 +122,7 @@ end
 local function set_folding(buf)
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
     vim.wo[win].foldmethod = 'expr'
-    vim.wo[win].foldexpr = 'v:lua.vim.lsp.foldexpr()'
+    vim.wo[win].foldexpr = vim.lsp.foldexpr
     vim.wo[win].foldlevel = 99
   end
 end

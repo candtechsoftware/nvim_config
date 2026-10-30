@@ -14,6 +14,26 @@ a C compiler (for treesitter parsers) and the language servers in `lsp/`.
 
 Keymaps are in [KEYMAPS.md](KEYMAPS.md).
 
+## Nightly features
+
+This config currently uses 0.13's `vim.pack`, multicursor, UI2, native
+undotree, filesystem-watcher `autoread`, `scrolloffpad`, structural treesitter
+selection, rich command completion items, `winpinned`, and yank/put operation
+highlighting. Useful builtins that need no config include:
+
+- `:restart` / `ZR` restarts Nvim while restoring the session; `:restart!`
+  starts clean.
+- `al` and `il` select the whole buffer or current trimmed line in Visual or
+  operator-pending mode.
+- `q:`, `q/` and `q?` are now normal buffers: splits, async work and
+  `inccommand` keep working inside them.
+- `:log lsp`, `:uptime`, `:browse oldfiles`, and `z=` expose native log,
+  runtime, old-file and spelling UIs.
+- `:packadd nvim.difftool` adds `:DiffTool left right`, including directory
+  comparison and rename detection.
+- `vim.ui.img` displays images in supported terminals; run
+  `:checkhealth vim.health` to see whether the current terminal qualifies.
+
 ## Layout
 
 ```

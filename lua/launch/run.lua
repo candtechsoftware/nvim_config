@@ -122,6 +122,8 @@ local function show(buf)
     pane_win = vim.api.nvim_open_win(buf, false, { split = 'below', win = -1, height = HEIGHT })
     local wo = vim.wo[pane_win]
     wo.winfixheight = true
+    -- :only keeps the build visible; <leader>o and q still target it directly.
+    wo.winpinned = true
     wo.number = false
     wo.relativenumber = false
     wo.signcolumn = 'no'

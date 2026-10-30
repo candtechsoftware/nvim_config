@@ -73,7 +73,7 @@ function M.probe()
 
   add('fold     foldmethod=%s  foldexpr=%s', vim.wo.foldmethod, tostring(vim.wo.foldexpr))
   -- Only the LSP foldexpr can be timed: it is a Lua function callable per line.
-  if vim.wo.foldmethod == 'expr' and tostring(vim.wo.foldexpr):find('lsp.foldexpr', 1, true) then
+  if vim.wo.foldmethod == 'expr' and vim.wo.foldexpr == vim.lsp.foldexpr then
     local n = math.min(nlines, 2000)
     add('         foldexpr x%-5d   %7.2f ms', n, ms(function()
       for line = 1, n do vim.lsp.foldexpr(line) end
@@ -144,7 +144,7 @@ local toggles = {
   fold = function()
     local on = vim.wo.foldmethod ~= 'expr'
     vim.wo.foldmethod = on and 'expr' or 'manual'
-    vim.wo.foldexpr = on and 'v:lua.vim.lsp.foldexpr()' or ''
+    vim.wo.foldexpr = on and vim.lsp.foldexpr or ''
     return 'LSP foldexpr ' .. (on and 'ON' or 'OFF')
   end,
   diag = function(buf)

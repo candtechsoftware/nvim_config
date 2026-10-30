@@ -79,16 +79,42 @@ end
 
 -- Local branches, plus remote ones by their short name so `git switch` creates the tracking branch.
 local function branches()
-  local names, seen = {}, {}
-  local res = git({ 'branch', '--all', '--format=%(refname)' })
-  for ref in (res.stdout or ''):gmatch('[^\n]+') do
-    local name = ref:match('^refs/heads/(.+)') or ref:match('^refs/remotes/[^/]+/(.+)')
+  local items, seen = {}, {}
+  local res = git({
+    'for-each-ref', '--format=%(refname)%00%(HEAD)%00%(upstream:short)%00%(subject)',
+    'refs/heads', 'refs/remotes',
+  })
+  for line in (res.stdout or ''):gmatch('[^\n]+') do
+    local fields = vim.split(line, '\0', { plain = true })
+    local ref, head, upstream, subject = fields[1], fields[2], fields[3], fields[4]
+    local name = ref and (ref:match('^refs/heads/(.+)') or ref:match('^refs/remotes/[^/]+/(.+)'))
     if name and name ~= 'HEAD' and not seen[name] then
       seen[name] = true
-      names[#names + 1] = name
+      local remote = ref:match('^refs/remotes/') ~= nil
+      local tracking = upstream ~= '' and (' -> ' .. upstream) or (remote and ' remote' or '')
+      items[#items + 1] = {
+        word = name,
+        kind = head == '*' and '*' or 'B',
+        menu = tracking .. (subject ~= '' and ('  ' .. subject) or ''),
+        info = table.concat(vim.tbl_filter(function(s) return s ~= '' end, {
+          head == '*' and 'current branch' or '',
+          upstream ~= '' and ('tracks ' .. upstream) or '',
+          subject,
+        }), '\n'),
+      }
     end
   end
-  return names
+  return items
+end
+
+local function fuzzy_items(items, arg)
+  if arg == '' then return items end
+  local by_word, words = {}, {}
+  for _, item in ipairs(items) do
+    by_word[item.word] = item
+    words[#words + 1] = item.word
+  end
+  return vim.tbl_map(function(word) return by_word[word] end, vim.fn.matchfuzzy(words, arg))
 end
 
 local function git_status()
@@ -196,7 +222,10 @@ function M.setup()
     nargs = 1,
     complete = function(arg)
       local files = recent_files()
-      return arg == '' and files or vim.fn.matchfuzzy(files, arg)
+      local matches = arg == '' and files or vim.fn.matchfuzzy(files, arg)
+      return vim.tbl_map(function(file)
+        return { word = file, kind = 'f', menu = 'recent', info = vim.fn.getcwd() .. '/' .. file }
+      end, matches)
     end,
     desc = 'Edit a recent file under cwd',
   })
@@ -208,8 +237,7 @@ function M.setup()
   end, {
     nargs = 1,
     complete = function(arg)
-      local names = branches()
-      return arg == '' and names or vim.fn.matchfuzzy(names, arg)
+      return fuzzy_items(branches(), arg)
     end,
     desc = 'Switch git branch',
   })

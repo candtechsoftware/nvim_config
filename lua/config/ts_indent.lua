@@ -114,6 +114,7 @@ local function get_indents(bufnr, root, lang, srow, erow)
 end
 
 function M.get_indent(lnum)
+  lnum = lnum or vim.v.lnum
   local bufnr = vim.api.nvim_get_current_buf()
   local ok, parser = pcall(ts.get_parser, bufnr)
   if not ok or not parser or not lnum then return -1 end
@@ -292,7 +293,7 @@ function M.get_indent(lnum)
 end
 
 function M.attach()
-  vim.bo.indentexpr = "v:lua.require'config.ts_indent'.get_indent(v:lnum)"
+  vim.bo.indentexpr = M.get_indent
   vim.bo.smartindent = false
   vim.bo.cindent = false
 end

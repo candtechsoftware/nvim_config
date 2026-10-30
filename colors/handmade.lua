@@ -12,7 +12,7 @@ vim.g.colors_name = 'handmade'
 -- in teal, and braces and operators dimmed under the text. Literals stay olive
 -- and comments stay gray, the way they always were.
 local c = {
-  bg = '#0c0c0c',       -- defcolor_back
+  bg = '#000000',       -- defcolor_back
   fg = '#a08563',       -- defcolor_text_default
 
   keyword = '#ac7b0b',

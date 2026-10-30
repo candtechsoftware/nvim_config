@@ -2,13 +2,13 @@ vim.bo.shiftwidth = 2
 vim.bo.tabstop = 2
 vim.bo.softtabstop = 2
 vim.bo.cinoptions = 't0,:s,l1,(0,Ws'
-vim.bo.indentexpr = "v:lua.require'config.c_indent'.indent()"
+vim.bo.indentexpr = require('config.c_indent').indent
 vim.bo.smartindent = false
 
 -- Completion without an LSP: <Tab> (lua/config/keymaps.lua) uses omnifunc
 -- after `.`/`->`/`::` and completefunc on a plain identifier.
-vim.bo.completefunc = "v:lua.require'config.c_complete'.complete"
-vim.bo.omnifunc = "v:lua.require'config.c_complete'.omnifunc"
+vim.bo.completefunc = function(...) return require('config.c_complete').complete(...) end
+vim.bo.omnifunc = function(...) return require('config.c_complete').omnifunc(...) end
 -- No 'fuzzy', which would re-sort away completefunc's scope ranking.
 vim.bo.completeopt = 'menu,menuone,noselect'
 vim.bo.complete = 't,.'

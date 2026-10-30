@@ -42,9 +42,19 @@ map('n', '<leader>t', '<cmd>tabnew<CR>', { desc = 'New tab' })
 map('n', '<leader><Tab>', '<cmd>tabnext<CR>', { desc = 'Next tab' })
 map('n', '<leader>tc', '<cmd>tabclose<CR>', { desc = 'Close tab' })
 
--- [count]Q places cursors without follow-mode, and only follow-mode replays
--- motions and Visual sequences per cursor. "1q=" forces it on.
-map('n', '<leader>Q', '1Q1q=', { desc = 'Cursor on every search match, follow-mode on' })
+-- zqgn places a cursor at every match and 1q= forces follow-mode on.
+map('n', '<leader>Q', 'zqgn1q=', { desc = 'Cursor on every search match, follow-mode on' })
+
+-- Structural selection is native in 0.13. The builtin Visual ]N/[N mappings
+-- then extend the selection across sibling nodes.
+local function ts_select(target)
+  local ok, err = pcall(vim.treesitter.select, target)
+  if not ok then vim.notify(err, vim.log.levels.WARN) end
+end
+map({ 'n', 'x' }, '<leader>vs', function() ts_select('parent') end,
+  { desc = 'Select parent treesitter node' })
+map('x', '<leader>vS', function() ts_select('child') end,
+  { desc = 'Select child treesitter node' })
 
 map('n', '<leader>u', function()
   vim.cmd.packadd('nvim.undotree')

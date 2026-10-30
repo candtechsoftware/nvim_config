@@ -23,16 +23,34 @@ local PARSERS = {
   odin = { url = 'https://github.com/tree-sitter-grammars/tree-sitter-odin' },
   zig = { url = 'https://github.com/tree-sitter-grammars/tree-sitter-zig' },
   jai = { url = 'https://github.com/constantitus/tree-sitter-jai' },
-  objc = { url = 'https://github.com/tree-sitter-grammars/tree-sitter-objc', inherits = 'c' },
+  objc = {
+    url = 'https://github.com/tree-sitter-grammars/tree-sitter-objc',
+    -- @NOTE(cand) The grammar's own queries predate the capture rename (@method, @parameter), which no colorscheme links.
+    queries = 'https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/main/runtime/queries/objc',
+  },
 }
+
+local QUERY_FILES = { 'highlights', 'injections', 'folds', 'indents', 'locals' }
 
 local ENSURE_INSTALLED = {
   'cpp', 'rust', 'go', 'javascript', 'typescript', 'tsx',
-  'json', 'yaml', 'toml', 'bash', 'glsl', 'hlsl', 'objc', 'jai',
+  'json', 'yaml', 'toml', 'bash', 'glsl', 'hlsl', 'odin', 'objc', 'jai',
 }
 
 local function installed(lang)
   return #vim.api.nvim_get_runtime_file('parser/' .. lang .. '.*', false) > 0
+end
+
+local function fetch_queries(base, lang, done)
+  local dst = SITE .. '/queries/' .. lang
+  vim.fn.mkdir(dst, 'p')
+  local cmd = { 'curl', '-fsS' }
+  for _, name in ipairs(QUERY_FILES) do
+    vim.list_extend(cmd, { '-o', dst .. '/' .. name .. '.scm', base .. '/' .. name .. '.scm' })
+  end
+  vim.system(cmd, {}, vim.schedule_wrap(function(res)
+    done(res.code ~= 0 and res.stderr or nil)
+  end))
 end
 
 local function copy_queries(repo, dir, lang, inherits)
@@ -91,6 +109,7 @@ local function install(langs, i)
     vim.fn.mkdir(SITE .. '/parser', 'p')
     vim.system(cmd, {}, vim.schedule_wrap(function(build)
       if build.code ~= 0 then return finish(build.stderr) end
+      if info.queries then return fetch_queries(info.queries, lang, finish) end
       copy_queries(repo, dir, lang, info.inherits)
       finish(nil)
     end))
