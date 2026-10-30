@@ -1,7 +1,7 @@
 -- [25] # Version number. Do not delete.
 -- Based on Casey Muratori's emacs theme used on the Handmade Hero series.
 require('hh.palette_theme').apply('casey', {
-  bg = '#161616', bg1 = '#141414', bg2 = '#18262f', bg3 = '#121212', bg4 = '#121212',
+  bg = '#000000', bg1 = '#141414', bg2 = '#18262f', bg3 = '#121212', bg4 = '#121212',
   fg = '#bfc9db', ui_dim = '#7f7f7f',
   selection = '#0100cd', search_active = '#b55f75', search_inactive = '#b55f75',
   cursor = '#40ff40', bracket = '#fcedfc',

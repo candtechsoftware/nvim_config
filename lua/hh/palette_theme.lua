@@ -5,7 +5,7 @@ function M.apply(name, c)
   vim.cmd('hi clear')
   if vim.g.syntax_on then vim.cmd('syntax reset') end
   vim.o.termguicolors = true
-  vim.o.background = 'dark'
+  vim.o.background = c.background or 'dark'
   vim.g.colors_name = name
 
   local hl = vim.api.nvim_set_hl
@@ -27,7 +27,7 @@ function M.apply(name, c)
   hl(0, 'Directory', { fg = c.code_function })
   paint({ fg = c.code_function }, { 'Title', 'FloatTitle' })
 
-  paint({ bg = c.cursor }, { 'Cursor', 'lCursor' })
+  paint({ fg = c.cursor_fg or c.bg, bg = c.cursor }, { 'Cursor', 'lCursor' })
   hl(0, 'CursorNormal', { fg = c.cursor_fg or c.bg, bg = c.cursor })
   hl(0, 'CursorInsert', { fg = c.cursor_fg or c.bg, bg = c.cursor_insert or c.code_type })
   hl(0, 'CursorReplace', { fg = c.cursor_fg or c.bg, bg = c.cursor_replace or c.code_keyword })

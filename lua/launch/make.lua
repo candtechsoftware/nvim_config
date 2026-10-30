@@ -70,4 +70,21 @@ function M.detect(root, ft)
   return 'make'
 end
 
+-- The command that runs the program the build produced, or nil when the
+-- project has no convention for it. launch.json can bind <leader>br itself.
+function M.detect_run(root, ft)
+  local build = M.detect(root, ft)
+  local run
+
+  if build == 'zig build' then run = 'zig build run' end
+  if build == 'cargo build' then run = 'cargo run' end
+  if build:match('^jai') and exists(root, 'build.jai') then run = 'jai-macos build.jai - -run' end
+  if build:match('^make') then run = 'make run' end
+  if build:match('^npm') or build:match('^pnpm') or build:match('^yarn') then
+    run = build:gsub('build$', 'start')
+  end
+
+  return run
+end
+
 return M

@@ -24,6 +24,14 @@ local FOREIGN_PLATFORM = {
 }
 local FOREIGN = FOREIGN_PLATFORM[SYSNAME] or FOREIGN_PLATFORM.Windows_NT
 
+-- Macros an #if names to select this host's code.
+local HOST_PLATFORM = {
+  Darwin = '__APPLE__|__MACH__|OS_MAC|TARGET_OS_OSX|TARGET_OS_MAC',
+  Linux = '__linux__|__gnu_linux__|OS_LINUX',
+  Windows_NT = '_WIN32|_WIN64|OS_WINDOWS',
+}
+local HOST = HOST_PLATFORM[SYSNAME] or HOST_PLATFORM.Windows_NT
+
 -- The second element marks system (<...>) includes.
 local INCLUDE_PATTERNS = {
   { '^%s*#%s*include%s+"([^"]+)"', false },
@@ -136,6 +144,37 @@ local function arc_required(root, objc_srcs)
   return false
 end
 
+-- -I dirs the build scripts pass, so includes resolve as the real build
+-- resolves them, vendored dirs included.
+local function build_include_dirs(root)
+  local dirs, seen = {}, {}
+  for name, typ in vim.fs.dir(root) do
+    if typ == 'file' and build_file(name) then
+      local ok, lines = pcall(vim.fn.readfile, root .. '/' .. name, '', 500)
+      for _, line in ipairs(ok and lines or {}) do
+        for d in line:gmatch('%-I%s*([^%s"\']+)') do
+          if not d:match('^/') then d = root .. '/' .. d end
+          d = vim.fs.normalize(d)
+          if not seen[d] and vim.uv.fs_stat(d) then
+            seen[d] = true
+            dirs[#dirs + 1] = d
+          end
+        end
+      end
+    end
+  end
+  return dirs
+end
+
+-- An #if/#elif that selects this host: names a host macro, unnegated.
+local function host_gate(line)
+  if line:find('!', 1, true) or line:match('^%s*#%s*ifndef') then return false end
+  for m in HOST:gmatch('[^|]+') do
+    if line:find(m, 1, true) then return true end
+  end
+  return false
+end
+
 local function foreign_platform(rel)
   for comp in rel:gmatch('[^/]+') do
     for token in comp:gmatch('[^_%-%.]+') do
@@ -192,7 +231,7 @@ local function suffix_lookup(index, raw)
 end
 
 local function scan(root)
-  local bases = {}
+  local bases = build_include_dirs(root)
   for _, b in ipairs(INCLUDE_BASES) do
     local dir = b == '' and root or (root .. '/' .. b)
     if vim.uv.fs_stat(dir) then bases[#bases + 1] = dir end
@@ -247,8 +286,8 @@ local function scan(root)
   end
 
   -- Includes per file, read lazily so the chain walk can read headers too,
-  -- capped at 500 reads. Only the first 300 lines are read, and system
-  -- includes after the first #if are platform-gated, so they are skipped.
+  -- capped at 500 reads. Only the first 300 lines are read, and a system
+  -- include is skipped unless every #if around it selects this host.
   local info, reads = {}, 0
   local function load(abs)
     if info[abs] then return info[abs] end
@@ -257,13 +296,23 @@ local function scan(root)
     local dir = vim.fs.dirname(abs)
     local entry = { incs = {}, src_inc_count = 0 }
     local ok, lines = pcall(vim.fn.readfile, abs, '', 300)
-    local saw_cond = false
+    -- Per open #if: whether its active branch selects this host.
+    local gates = {}
     for _, line in ipairs(ok and lines or {}) do
-      if line:match('^%s*#%s*if') then saw_cond = true end
+      local directive = line:match('^%s*#%s*(%a+)')
+      if directive == 'if' or directive == 'ifdef' or directive == 'ifndef' then
+        gates[#gates + 1] = host_gate(line)
+      elseif directive == 'elif' then
+        gates[#gates] = host_gate(line)
+      elseif directive == 'else' then
+        gates[#gates] = false
+      elseif directive == 'endif' then
+        gates[#gates] = nil
+      end
       for _, pat in ipairs(INCLUDE_PATTERNS) do
         local raw, system = line:match(pat[1]), pat[2]
         if raw then
-          if not (system and saw_cond) then
+          if not (system and vim.list_contains(gates, false)) then
             local is_src = not system and is_source(raw)
             entry.incs[#entry.incs + 1] = {
               raw = raw,

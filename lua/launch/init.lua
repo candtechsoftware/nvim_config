@@ -15,8 +15,10 @@ local M = {}
 local run = require('launch.run')
 local project = require('config.project')
 local detect_build = require('launch.make').detect
+local detect_run = require('launch.make').detect_run
 
 local DEFAULT_OUT = '*compilation*'
+local RUN_OUT = '*run*'
 
 local sysname = vim.uv.os_uname().sysname:lower()
 local OS = sysname == 'darwin' and 'mac' or sysname == 'linux' and 'linux' or 'windows'
@@ -224,6 +226,20 @@ local function make(o)
   run.start({ key = ':Make', cmd = cmd, out = DEFAULT_OUT }, current_root)
 end
 
+-- The detected run command builds first (zig build run, cargo run, ...) and
+-- its output goes to *run*, so *compilation* keeps the last plain build.
+local function make_run()
+  local cmd = detect_run(current_root, vim.bo.filetype)
+
+  if cmd then
+    cmd = cmd:gsub('%%', vim.fn.expand('%:p'))
+    run.start({ key = ':MakeRun', cmd = cmd, out = RUN_OUT }, current_root)
+  else
+    vim.notify('launch: no run command known here, bind <leader>br in launch.json',
+      vim.log.levels.WARN)
+  end
+end
+
 function M.setup()
   run.setup()
 
@@ -233,6 +249,8 @@ function M.setup()
   -- <leader>b and give it back.
   cmd('Make', make, { nargs = '*', desc = 'Build with the detected build command' })
   vim.keymap.set('n', '<leader>b', '<cmd>Make<cr>', { desc = 'Build with the detected build command' })
+  cmd('MakeRun', make_run, { desc = 'Build and run with the detected commands' })
+  vim.keymap.set('n', '<leader>br', '<cmd>MakeRun<cr>', { desc = 'Build and run' })
 
   apply_launch(buffer_root())
 

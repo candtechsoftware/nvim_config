@@ -56,9 +56,23 @@ lua/launch/             launch.json keys, output buffers, build errors
 lua/hh/                 scope shading, project macro highlighting, picker dim
                         (set up by the colorscheme)
 lsp/                    one file per language server
-colors/hmin.lua         default colorscheme (handmade, cut to gold, olive, gray)
+colors/stb-brown-light.lua  default colorscheme (brown text on soft off-white)
 after/ ftdetect/ queries/ syntax/
 ```
+
+## STB themes
+
+Use `:colorscheme stb-dark` or `:colorscheme stb-light` (`stb` also selects
+the light variant). These port the original 4coder STB palettes: monochrome
+code, green comments and red escapes, with scope shading and picker dimming.
+Use `:colorscheme stb-night` for STB dark syntax on a near-black (`#0c0c0c`)
+background with darker menus, gutters and status bars.
+Use `:colorscheme stb-brown` for the same near-black surfaces with Handmade
+Hero's warm tan text (`#a08563`) and STB's green comments.
+Use `:colorscheme stb-brown-light` for darker brown text on a soft off-white background
+with STB light's darker green comments.
+To choose one at startup, change the `vim.cmd.colorscheme(...)` line in
+`init.lua`.
 
 ## LSP
 
